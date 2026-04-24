@@ -1,0 +1,224 @@
+# spec-kit-schedule — CP-SAT Multi-Agent Task Orchestrator
+
+> A [spec-kit](https://github.com/github/spec-kit) extension that uses **constraint programming** (Google OR-Tools CP-SAT) to produce **provably optimal** task-to-agent assignments with DAG precedence, hallucination-aware capacity caps, and file-conflict avoidance.
+
+## The Problem
+
+After `/speckit.tasks` generates your task breakdown, you face a scheduling decision: which tasks go to which agents, in what order, and how many can run in parallel without causing conflicts or overloading any single agent's context window?
+
+MAQA solves this with a **greedy heuristic** (first-available agent). This extension replaces that heuristic with a **formal optimization model** — a Multi-Skill Resource-Constrained Project Scheduling Problem (MS-RCPSP) — that **minimizes total project time while balancing load** across heterogeneous agents.
+
+## How It Works
+
+```
+/speckit.tasks  →  tasks.md
+                      │
+                      ▼
+/speckit.schedule  →  parse_tasks  →  scheduler (CP-SAT)  →  render_schedule  →  schedule.md
+                                             │                                        ▲
+                                             ▼                                        │
+                                         visualize  →  <feature>-{dag,gantt}.png  ────┘
+                                                                                      │
+                                                                                      ▼
+                                                                           /speckit.implement
+                                                                                (or MAQA)
+```
+
+1. **Parse** `tasks.md` into a typed task graph `G = (T, E)` with skill requirements, token estimates, file footprints, and DAG edges (fails fast on duplicate ids, unknown dependencies, or cycles).
+2. **Solve** a CP-SAT model that assigns each task to a compatible agent and determines start/end times. Preflight catches infeasibility before the solver runs, and a `networkx`-backed priority-rule heuristic provides a feasible warm-start.
+3. **Extract** the makespan-driving critical path (node-weighted longest path over the realised schedule graph, including same-agent and file-mutex resource arcs).
+4. **Render** `schedule.md` with agent assignments, execution waves, **Critical Path table**, Gantt, dependency DAG (with critical chain highlighted via `==>` arrows and a red class), and any warnings the solver surfaced.
+5. **(Optional)** Static `{feature}-dag.png` and `{feature}-gantt.png` via the matplotlib-backed visualiser (see `--image-prefix`).
+
+## The Optimization Model
+
+The model is a Multi-Skill RCPSP (Bellenguez-Morineau & Néron 2007) enhanced with:
+
+- **DAG precedence**: Tasks respect dependency ordering from phase barriers, explicit `(depends on T###)` annotations, same-file write order, and TDD rules.
+- **Heterogeneous agents**: Each agent has a skill set, speed factor, and capacity limits.
+- **Cardinality cap (κ)**: Max tasks per agent session — calibrated to empirical hallucination thresholds (RULER, NoLiMa, Chroma).
+- **Context budget (C)**: Max cumulative tokens per agent — prevents context-rot quality degradation.
+- **File mutex**: Non-`[P]` tasks writing the same file cannot execute in parallel across agents.
+- **Lexicographic objective**: First minimize makespan (total project time), then minimize the maximum agent load (fairness).
+
+## Installation
+
+One-shot, uv-based install (installs `uv` itself if absent, creates a
+reproducible virtualenv from `uv.lock`, and runs a smoke test):
+
+```bash
+./bin/install.sh
+```
+
+See [`INSTALL.md`](INSTALL.md) for the zip-sharing flow, contributor setup,
+and the `pip` fallback (`SKIP_UV=1 ./bin/install.sh`) for environments
+where `uv` is blocked.
+
+### Install as a spec-kit extension
+
+```bash
+# From a release archive:
+specify extension add --from /path/to/spec-kit-schedule.zip
+
+# From a local checkout:
+specify extension add --dev /path/to/spec-kit-schedule
+```
+
+Running `specify extension add` triggers the bundled `bin/install.sh`
+(declared in `extension.yml`) so teammates get a working environment
+without a separate `pip install` step.
+
+### Recommended Companion
+
+Install the **Explicit Task Dependencies** preset for machine-readable dependency annotations (e.g., `(depends on T001, T003)`).
+
+## Quick Start
+
+```bash
+# 1. Define your agent portfolio
+/speckit.schedule.portfolio
+
+# 2. After running /speckit.tasks, generate the optimal schedule
+/speckit.schedule
+
+# 3. (Optional) Visualize the result
+/speckit.schedule.visualize
+
+# 4. Execute using the wave plan
+/speckit.implement
+```
+
+Inside the repository the solver stages are regular Python modules and can be chained directly:
+
+```bash
+# 1. Parse + solve.
+python -m solver.parse_tasks tasks.md schedule-config.yml > in.json
+python -m solver.scheduler  < in.json                    > out.json
+
+# 2. (Optional) Static images — requires the `viz` extra (installed by
+#    default via bin/install.sh, or `uv sync --extra viz`).
+python -m solver.visualize out.json images/ --feature my-feature
+
+# 3. Render the markdown; --image-prefix embeds the PNGs next to the
+#    Mermaid blocks so both views live in the same document.
+python -m solver.render_schedule out.json my-feature \
+    --image-prefix images/my-feature > schedule.md
+```
+
+Add `--verbose` to the parse/solve stages for DEBUG logging on stderr.
+
+Example output is committed under `docs/example-schedule.md` plus
+`docs/images/example-{dag,gantt}.png`; regenerate with `make schedule`.
+
+## Agent Portfolio
+
+Configure your agents in `schedule-config.yml`. See `config-template.yml` for a fully annotated example, or `docs/example-config-mixed.yml` for a multi-provider portfolio.
+
+```yaml
+agents:
+  - id: "architect"
+    provider: "anthropic"
+    model: "claude-opus-4"
+    skills: ["design", "review", "schema"]
+    kappa: 6
+    context_budget: 32
+    speed_factor: 0.8
+```
+
+### Provider-agnostic by design
+
+The scheduler does not call any LLM API — it only emits a schedule. The
+`model` and `provider` strings are metadata passed through to
+`schedule.md` so the downstream executor (MAQA, `/speckit.implement`, a
+custom coordinator) can route each task to the right runner.
+
+Known `provider` tags: `anthropic`, `openai`, `github`, `google`,
+`ollama`, `azure`, `bedrock`, `groq`, `mistral`, `local`, `custom`.
+Unknown values are accepted too — useful for bespoke runners. Mix and
+match freely in a single portfolio:
+
+```yaml
+agents:
+  - { id: architect, provider: anthropic, model: claude-opus-4,   skills: [design, review, schema],   kappa: 6,  context_budget: 40, speed_factor: 0.8 }
+  - { id: backend,   provider: openai,    model: gpt-5,            skills: [python, backend, api],    kappa: 10, context_budget: 24, speed_factor: 1.0 }
+  - { id: frontend,  provider: github,    model: copilot-gpt-4.1,  skills: [frontend, react, css],    kappa: 10, context_budget: 16, speed_factor: 1.0 }
+  - { id: tester,    provider: google,    model: gemini-2.5-flash, skills: [test, e2e, unit-test],    kappa: 18, context_budget: 12, speed_factor: 1.4 }
+  - { id: local,     provider: ollama,    model: qwen2.5-coder:32b, skills: [review, docs],           kappa: 8,  context_budget: 16, speed_factor: 0.6 }
+```
+
+> **Re-calibrate `kappa` / `context_budget` per model.** The defaults in
+> `config-template.yml` are starting estimates anchored to the current
+> generation of frontier models; smaller or locally-hosted models
+> typically need stricter caps.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `/speckit.schedule` | Parse tasks.md → solve CP-SAT → produce schedule.md (+ optional PNG images) |
+| `/speckit.schedule.portfolio` | Create or edit agent portfolio configuration |
+| `/speckit.schedule.visualize` | Emit publication-grade `<feature>-dag.png` and `<feature>-gantt.png` from a solver output JSON and embed references in `schedule.md` |
+
+## MAQA Integration
+
+When both this extension and MAQA are installed, the schedule's Execution Wave Plan can replace MAQA's greedy batch assignment:
+
+```bash
+/speckit.maqa.coordinator --schedule .specify/specs/<feature>/schedule.md
+```
+
+## Mathematical Formulation
+
+For the complete formal model with sets, parameters, decision variables, constraints, and objective function in LaTeX notation, see [`docs/formulation.md`](docs/formulation.md).
+
+## Troubleshooting
+
+**Solver reports `INFEASIBLE` or raises `ScheduleInputError`.** The parser and solver run several sanity checks and prefer loud failure over silent degradation:
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `Duplicate task id …` | Two `- [ ] T###` lines share an id. | Renumber one of them. |
+| `Unresolved dependencies` | `(depends on TNNN)` references a missing task. | Fix the typo or declare the missing task. |
+| `Dependency cycle detected` | Explicit deps + same-file + TDD together form a cycle. | The message prints the cycle; reorder or remove the conflicting `depends on`. |
+| `No agent provides the required skill(s)` | `skill_rules` map a task to a skill that no agent owns. | Add the skill to an agent, or route the path to a different skill in `skill_rules`. |
+| `sum(estimated_tokens) exceeds sum(context_budget)` | The portfolio cannot hold the feature. | Increase `context_budget`, add agents, or split the feature. |
+| `N tasks require skill 'X' but total κ … is M` | Cardinality cap too low for that skill bucket. | Raise `kappa` on matching agents or add more. |
+
+**Load balance looks uneven.** Check the Warnings section in `schedule.md`: if `phase2_fallback` fired, Phase 2 timed out. Raise `solver.time_limit` or reduce the problem size.
+
+**Dependency DAG in schedule.md looks wrong.** The renderer draws three arrow styles:
+
+- `-->` (solid thin): parser edge (explicit `depends on`, phase barrier, same-file write order, or TDD rule).
+- `-.->` (dotted): resource-induced edge — same-agent consecutivity or file-mutex serialisation enforced by the solver.
+- `==>` (thick red): edge on the critical path; every such arc is also one of the two above, but drawn bold to mark the makespan-driver.
+
+If an arrow surprises you, inspect the `edges`, `resource_edges`, and `critical_path_edges` fields in the solver output JSON.
+
+## Limitations
+
+1. **Deterministic durations**: Task times are estimated heuristically. Real LLM completion times vary ±30–50%. The model uses deterministic values with a retry budget approach rather than stochastic programming.
+2. **Linear quality proxy**: The hallucination constraint uses cardinality + token caps as a linear approximation of the true non-linear quality degradation curve.
+3. **Bundle composition**: Task-to-bundle mapping derives from spec-kit's `[USn]` labels. An integrated set-partitioning layer would jointly optimize packaging and scheduling but adds significant complexity.
+
+## Development
+
+```bash
+make install     # uv bootstrap + sync (dev+viz) + smoke test
+make sync        # re-materialise the venv from uv.lock
+make test        # pytest
+make cov         # pytest + coverage
+make lint        # ruff
+make typecheck   # mypy (non-blocking)
+make smoke       # end-to-end docs example
+make schedule    # regenerate docs/example-schedule.md + docs/images/example-{dag,gantt}.png
+make package     # build dist/spec-kit-schedule.zip for teammates
+make clean       # drop caches, dist, venv
+```
+
+## License
+
+MIT
+
+## Author
+
+Julio César Franco Ardila — Senior Algorithm Engineer

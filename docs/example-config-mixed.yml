@@ -1,0 +1,99 @@
+# Example portfolio mixing providers: Anthropic Claude, GitHub Copilot,
+# Google Gemini, and a locally-hosted Ollama model. The scheduler is
+# provider-agnostic — `model` and `provider` fields are informational and
+# propagated to schedule.md so downstream executors (e.g. MAQA coordinator,
+# /speckit.implement) can route each task to the right runner.
+#
+# The κ / context_budget / speed_factor values below are STARTING estimates.
+# Re-calibrate against your real benchmarks; defaults are biased toward the
+# current generation of frontier models.
+
+agents:
+  - id: "architect"
+    provider: "anthropic"
+    model: "claude-opus-4"
+    skills: ["design", "review", "schema", "architecture"]
+    kappa: 6
+    context_budget: 40
+    speed_factor: 0.8
+
+  - id: "backend"
+    provider: "openai"
+    model: "gpt-5"
+    skills: ["python", "backend", "api", "database", "schema"]
+    kappa: 10
+    context_budget: 24
+    speed_factor: 1.0
+
+  - id: "frontend"
+    provider: "github"
+    model: "copilot-gpt-4.1"
+    skills: ["frontend", "react", "css", "html", "javascript"]
+    kappa: 10
+    context_budget: 16
+    speed_factor: 1.0
+
+  - id: "tester"
+    provider: "google"
+    model: "gemini-2.5-flash"
+    skills: ["test", "e2e", "contract-test", "unit-test"]
+    kappa: 18
+    context_budget: 12
+    speed_factor: 1.4
+
+  - id: "local-assistant"
+    provider: "ollama"
+    model: "qwen2.5-coder:32b"
+    skills: ["review", "docs"]
+    kappa: 8
+    context_budget: 16
+    speed_factor: 0.6
+
+skill_rules:
+  - pattern: "tests/"
+    skill: "test"
+  - pattern: "_test."
+    skill: "test"
+  - pattern: "src/models/"
+    skill: "schema"
+  - pattern: "migrations/"
+    skill: "schema"
+  - pattern: "src/api/"
+    skill: "api"
+  - pattern: "src/services/"
+    skill: "backend"
+  - pattern: "src/components/"
+    skill: "frontend"
+  - pattern: "src/pages/"
+    skill: "frontend"
+  - pattern: ".tsx"
+    skill: "frontend"
+  - pattern: ".jsx"
+    skill: "frontend"
+  - pattern: "docs/"
+    skill: "docs"
+  - pattern: ".md"
+    skill: "review"
+
+default_skill: "backend"
+
+token_estimates:
+  simple:   1500
+  medium:   3500
+  complex:  6000
+  review:   2000
+
+complexity_verbs:
+  simple:  ["add", "update", "rename", "move", "import", "export", "configure"]
+  medium:  ["implement", "create", "write", "build", "refactor"]
+  complex: ["design", "architect", "integrate", "migrate", "optimize"]
+  review:  ["review", "validate", "verify", "analyze", "audit"]
+
+solver:
+  objective: "lexicographic"
+  time_limit: 60
+  num_workers: 8
+  symmetry_breaking: true
+  warm_start: true
+  horizon_multiplier: 1.5
+  token_unit: 100

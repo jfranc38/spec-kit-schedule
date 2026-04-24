@@ -1,0 +1,61 @@
+schema_version: "1.0"
+
+extension:
+  id: "spec-kit-schedule"
+  name: "Spec Kit Schedule — CP-SAT Agent Orchestrator"
+  version: "0.4.1"
+  description: "Optimal multi-agent task scheduling via CP-SAT solver with DAG precedence, hallucination-aware caps, and file-conflict avoidance"
+  author: "Julio César Franco Ardila"
+  repository: "https://github.com/juliofranco/spec-kit-schedule"
+  license: "MIT"
+  homepage: "https://github.com/juliofranco/spec-kit-schedule"
+
+requires:
+  speckit_version: ">=0.4.0,<1.0.0"
+  tools:
+    - name: "python3"
+      version: ">=3.10,<4.0"
+      required: true
+    - name: "ortools"
+      version: ">=9.9,<10.0"
+      required: true
+    - name: "pyyaml"
+      version: ">=6.0,<7.0"
+      required: true
+    - name: "networkx"
+      version: ">=3.1,<4.0"
+      required: true
+    - name: "matplotlib"
+      version: ">=3.7,<4.0"
+      required: false
+    - name: "pydot"
+      version: ">=2.0,<3.0"
+      required: false
+
+# Run the bundled bootstrap on `specify extension add`. If the host
+# spec-kit version does not honour `install`, `INSTALL.md` documents the
+# same one-shot command for manual invocation.
+install:
+  command: "./bin/install.sh"
+
+uninstall:
+  command: "rm -rf .venv dist"
+
+provides:
+  commands:
+    - name: "speckit.schedule"
+      file: "commands/schedule.md"
+      description: "Parse tasks.md, solve CP-SAT model, produce schedule.md with agent assignments and wave diagram"
+    - name: "speckit.schedule.portfolio"
+      file: "commands/portfolio.md"
+      description: "Define or edit the agent portfolio (models, skills, capacity caps)"
+    - name: "speckit.schedule.visualize"
+      file: "commands/visualize.md"
+      description: "Render the solved schedule as a Gantt chart and DAG diagram"
+
+tags:
+  - "scheduling"
+  - "optimization"
+  - "multi-agent"
+  - "operations-research"
+  - "parallel-execution"

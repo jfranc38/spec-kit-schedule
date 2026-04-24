@@ -1,0 +1,3 @@
+"""spec-kit-schedule solver package."""
+
+__version__ = "0.4.1"

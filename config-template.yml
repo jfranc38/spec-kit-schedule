@@ -1,0 +1,196 @@
+# =============================================================================
+# spec-kit-schedule — Agent Portfolio & Solver Configuration
+# =============================================================================
+# Copy this file to your project root as `schedule-config.yml`
+# or let `/speckit.schedule.portfolio` generate it interactively.
+#
+# The scheduler reads this file + your tasks.md to produce schedule.md
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Agent Portfolio
+# ---------------------------------------------------------------------------
+# Each agent represents a distinct AI model/configuration that will execute
+# tasks in its own isolated context (worktree, session, subprocess).
+#
+# The scheduler is PROVIDER-AGNOSTIC: `model` and `provider` are informational
+# strings that propagate through schedule.md so downstream executors (MAQA,
+# /speckit.implement, custom orchestrators) can route tasks to the correct
+# runner — Claude, Copilot, Gemini, Ollama, OpenAI, or a bespoke endpoint.
+#
+# Fields per agent:
+#   id:             Unique lowercase identifier (used in schedule.md)
+#   provider:       Optional runner tag — one of:
+#                     anthropic | openai | github | google | ollama |
+#                     azure | bedrock | groq | mistral | local | custom
+#                   Unknown values are allowed (custom executors).
+#   model:          Free-form model string (e.g. "claude-opus-4", "gpt-5",
+#                   "copilot-gpt-4.1", "gemini-2.5-pro", "qwen2.5-coder:32b")
+#   skills:         Non-empty list of skill tags this agent can handle.
+#                   Every `required_skill` produced by skill_rules must be
+#                   covered by at least one agent's skills, or the solver
+#                   refuses to run.
+#   kappa:          Max number of tasks per session (cardinality cap, > 0).
+#                   STARTING ESTIMATE based on RULER/NoLiMa/Chroma; calibrate
+#                   to your model's empirical long-context performance.
+#   context_budget: Max cumulative input tokens per session, in thousands.
+#   speed_factor:   Relative speed multiplier (1.0 = baseline). 0.5 = takes
+#                   2× longer per task. Must be > 0.
+#
+# See docs/example-config-mixed.yml for a multi-provider portfolio.
+
+agents:
+  - id: "architect"
+    provider: "anthropic"
+    model: "claude-opus-4"
+    skills: ["design", "review", "schema", "architecture"]
+    kappa: 6
+    context_budget: 32
+    speed_factor: 0.8
+
+  - id: "backend"
+    provider: "anthropic"
+    model: "claude-sonnet-4"
+    skills: ["python", "backend", "api", "database", "schema"]
+    kappa: 10
+    context_budget: 16
+    speed_factor: 1.0
+
+  - id: "frontend"
+    provider: "anthropic"
+    model: "claude-sonnet-4"
+    skills: ["frontend", "react", "css", "html", "javascript"]
+    kappa: 10
+    context_budget: 16
+    speed_factor: 1.0
+
+  - id: "tester"
+    provider: "anthropic"
+    model: "claude-haiku-4.5"
+    skills: ["test", "e2e", "contract-test", "unit-test"]
+    kappa: 15
+    context_budget: 8
+    speed_factor: 1.5
+
+# ---------------------------------------------------------------------------
+# Skill Inference Rules
+# ---------------------------------------------------------------------------
+# Map file-path fragments to skill tags. The parser scans each task's file
+# paths and picks the LONGEST matching pattern (ties fall back to list
+# order), so specific markers like "test_" or "src/components/" beat short
+# fragments like ".md" even when listed after them.
+
+skill_rules:
+  - pattern: "tests/"
+    skill: "test"
+  - pattern: "test_"
+    skill: "test"
+  - pattern: "_test.py"
+    skill: "test"
+  - pattern: ".test."
+    skill: "test"
+  - pattern: "spec/"
+    skill: "test"
+  - pattern: "src/models/"
+    skill: "schema"
+  - pattern: "migrations/"
+    skill: "schema"
+  - pattern: "src/api/"
+    skill: "api"
+  - pattern: "src/services/"
+    skill: "backend"
+  - pattern: "src/components/"
+    skill: "frontend"
+  - pattern: "src/pages/"
+    skill: "frontend"
+  - pattern: "src/hooks/"
+    skill: "frontend"
+  - pattern: ".css"
+    skill: "frontend"
+  - pattern: ".tsx"
+    skill: "frontend"
+  - pattern: ".jsx"
+    skill: "frontend"
+  - pattern: "docs/"
+    skill: "review"
+  - pattern: "README"
+    skill: "review"
+  - pattern: ".md"
+    skill: "review"
+
+default_skill: "backend"
+
+# ---------------------------------------------------------------------------
+# Token Estimation
+# ---------------------------------------------------------------------------
+# When tasks.md lacks explicit token estimates, the parser classifies each
+# task by its leading action verb (see complexity_verbs) and maps that
+# complexity bucket to a token count here.
+
+token_estimates:
+  simple:   1500    # "Add import", "Create empty file", "Update config"
+  medium:   3500    # "Implement service method", "Write unit test"
+  complex:  6000    # "Design schema", "Implement full CRUD endpoint"
+  review:   2000    # "Review contracts", "Validate integration"
+
+# Verb buckets are case-insensitive and match simple inflections
+# ("implementing", "creates", "designed" all count).
+complexity_verbs:
+  simple:  ["add", "update", "rename", "move", "import", "export", "configure"]
+  medium:  ["implement", "create", "write", "build", "refactor"]
+  complex: ["design", "architect", "integrate", "migrate", "optimize"]
+  review:  ["review", "validate", "verify", "analyze", "audit"]
+
+# ---------------------------------------------------------------------------
+# Solver Parameters
+# ---------------------------------------------------------------------------
+solver:
+  # Objective strategy:
+  #   "lexicographic" — Phase 1 minimises makespan, Phase 2 freezes that
+  #                     makespan and minimises the maximum agent load.
+  #   "weighted"      — Single-phase: minimise W*makespan + max_load.
+  objective: "lexicographic"
+
+  # Weight for the weighted objective. Ignored when objective=lexicographic.
+  makespan_weight: 100
+
+  # Time limit per solver phase, in seconds.
+  # Recommended:
+  #   <100 tasks  — 30-60s is plenty.
+  #   100-500     — 60-120s.
+  #   >500        — split the feature or raise to 300s+.
+  time_limit: 60
+
+  # Parallel search workers. Safe default 8. Set to physical cores for
+  # large problems; leave at 1 for deterministic test output.
+  num_workers: 8
+
+  # Enable symmetry breaking between portfolio agents with identical
+  # (skills, kappa, context_budget, speed_factor). Significantly prunes
+  # the search space when you have multiple backend-1/backend-2 workers.
+  symmetry_breaking: true
+
+  # Run the priority-rule heuristic to seed the solver with a feasible
+  # hint. The heuristic respects file-mutex, precedence, κ, and C, so
+  # hints are never rejected.
+  warm_start: true
+
+  # Horizon = critical_path_bound * horizon_multiplier. 1.5 is a safe
+  # envelope for most realistic portfolios. Raise only if the solver
+  # reports INFEASIBLE on a problem you believe is feasible.
+  horizon_multiplier: 1.5
+
+  # Time units used internally. Duration(task, agent) =
+  #   ceil(estimated_tokens / token_unit / speed_factor).
+  # Smaller values keep more granularity (recommended); larger values
+  # shrink the horizon and may speed up solving at the cost of precision.
+  token_unit: 100
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+output:
+  schedule_file: "schedule.md"
+  gantt_chart: true
+  wave_plan: true
+  agent_summary: true
