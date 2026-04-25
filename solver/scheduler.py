@@ -1357,7 +1357,7 @@ def solve_with_fixed(
     cycle = find_cycle(len(tasks), edges)
     if cycle is not None:
         names = " → ".join(tasks[i].id for i in cycle)
-        raise ScheduleInputError(f"Dependency cycle in solver input: {names}")
+        raise ScheduleInputError(t("solver_input_cycle", names=names))
 
     warnings = WarningCollector()
     for w in data.get("warnings", []) or []:
@@ -1458,7 +1458,7 @@ def solve_from_json(data: dict) -> dict:
     cycle = find_cycle(len(tasks), edges)
     if cycle is not None:
         names = " → ".join(tasks[i].id for i in cycle)
-        raise ScheduleInputError(f"Dependency cycle in solver input: {names}")
+        raise ScheduleInputError(t("solver_input_cycle", names=names))
 
     warnings = WarningCollector()
     for w in data.get("warnings", []) or []:

@@ -176,4 +176,54 @@ MESSAGES: dict[str, dict[str, str]] = {
             "porque la configuración actual hace incompatible esa asignación."
         ),
     },
+    "not_a_directory": {
+        "en": "project_dir is not a directory: {path}",
+        "es": "project_dir no es un directorio: {path}",
+    },
+    "output_exists_use_force": {
+        "en": "{path} already exists. Use --force to overwrite.",
+        "es": "{path} ya existe. Use --force para sobrescribir.",
+    },
+    "autodetect_invalid_config": {
+        "en": "autodetect produced an invalid config (bug): {error}",
+        "es": "autodetect produjo una configuración inválida (bug): {error}",
+    },
+    "interactive_invalid_config": {
+        "en": "Interactive edits produced an invalid config: {error}",
+        "es": "Las ediciones interactivas produjeron una configuración inválida: {error}",
+    },
+    "cannot_read_runs_file": {
+        "en": "Cannot read runs file: {error}",
+        "es": "No se puede leer el archivo de runs: {error}",
+    },
+    "unresolved_deps_summary": {
+        "en": "Unresolved dependencies: {details}",
+        "es": "Dependencias sin resolver: {details}",
+    },
+    "solver_input_cycle": {
+        "en": "Dependency cycle in solver input: {names}",
+        "es": "Ciclo de dependencia en la entrada del solver: {names}",
+    },
+    "schedule_file_no_heading": {
+        "en": "No '# Schedule — <name>' heading found in {path}",
+        "es": "No se encontró el encabezado '# Schedule — <nombre>' en {path}",
+    },
+    "schedule_file_no_metadata": {
+        "en": (
+            "No status metadata line found in {path}. "
+            "Expected: '> Status: **X** | Makespan: **N** | Waves: **N** | Agents: **N**'"
+        ),
+        "es": (
+            "No se encontró la línea de metadatos de estado en {path}. "
+            "Se esperaba: '> Status: **X** | Makespan: **N** | Waves: **N** | Agents: **N**'"
+        ),
+    },
+    "schedule_file_no_waves": {
+        "en": "No wave sections found in {path}",
+        "es": "No se encontraron secciones de wave en {path}",
+    },
+    "cannot_read_schedule_file": {
+        "en": "Cannot read schedule file {path}: {error}",
+        "es": "No se puede leer el archivo de schedule {path}: {error}",
+    },
 }

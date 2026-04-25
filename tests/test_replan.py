@@ -430,3 +430,116 @@ class TestReplanCLI:
         out = json.loads(proc.stdout)
         reused = out["stats"]["replan"]["reused_from"]
         assert Path(reused).is_absolute()
+
+
+class TestReplanCLIInProcess:
+    """In-process tests of `solver.replan.main(argv)` so coverage is tracked.
+
+    The subprocess-based tests above provide end-to-end isolation but do
+    not contribute to coverage; these complement them by exercising the
+    same code paths through a direct call.
+    """
+
+    @staticmethod
+    def _seed_prior(tmp_path: Path) -> tuple[Path, Path, Path]:
+        docs = REPO_ROOT / "docs"
+        config_path = docs / "example-config.yml"
+        tasks_path = docs / "example-tasks.md"
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        solver_input = parse_tasks_md(str(tasks_path), config)
+        prior = solve_from_json(solver_input)
+        prior_path = tmp_path / "prior.json"
+        prior_path.write_text(json.dumps(prior), encoding="utf-8")
+        return prior_path, tasks_path, config_path
+
+    def test_main_happy_path(self, tmp_path: Path, capsys):
+        from solver.replan import main as replan_main
+
+        prior_path, tasks_path, config_path = self._seed_prior(tmp_path)
+        rc = replan_main([str(prior_path), str(tasks_path), str(config_path)])
+        assert rc == 0
+        captured = capsys.readouterr()
+        out = json.loads(captured.out)
+        assert out["status"] in {"OPTIMAL", "FEASIBLE"}
+        assert out["stats"]["replan"]["reused_from"].endswith("prior.json")
+
+    def test_main_freeze_before_and_add_task(self, tmp_path: Path, capsys):
+        from solver.replan import main as replan_main
+
+        prior_path, tasks_path, config_path = self._seed_prior(tmp_path)
+        rc = replan_main([
+            str(prior_path), str(tasks_path), str(config_path),
+            "--freeze-before", "10",
+            "--add-task", "- [ ] T999 Implement extra feature in `src/extra.ts`",
+        ])
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out["stats"]["replan"]["added_count"] == 1
+        assert "T999" in {a["task_id"] for a in out["assignments"]}
+
+    def test_main_missing_prior_returns_2(self, tmp_path: Path, capsys):
+        from solver.replan import main as replan_main
+
+        rc = replan_main([
+            str(tmp_path / "missing.json"),
+            str(REPO_ROOT / "docs" / "example-tasks.md"),
+            str(REPO_ROOT / "docs" / "example-config.yml"),
+        ])
+        assert rc == 2
+        assert "cannot read prior output" in capsys.readouterr().err
+
+    def test_main_invalid_prior_json_returns_2(self, tmp_path: Path, capsys):
+        from solver.replan import main as replan_main
+
+        bogus = tmp_path / "bogus.json"
+        bogus.write_text("not-json", encoding="utf-8")
+        rc = replan_main([
+            str(bogus),
+            str(REPO_ROOT / "docs" / "example-tasks.md"),
+            str(REPO_ROOT / "docs" / "example-config.yml"),
+        ])
+        assert rc == 2
+        assert "cannot read prior output" in capsys.readouterr().err
+
+    def test_main_missing_config_returns_2(self, tmp_path: Path, capsys):
+        from solver.replan import main as replan_main
+
+        prior_path, tasks_path, _ = self._seed_prior(tmp_path)
+        rc = replan_main([
+            str(prior_path), str(tasks_path),
+            str(tmp_path / "no-config.yml"),
+        ])
+        assert rc == 2
+        assert "cannot read config" in capsys.readouterr().err
+
+    def test_main_completed_unknown_returns_2(self, tmp_path: Path, capsys):
+        from solver.replan import main as replan_main
+
+        prior_path, tasks_path, config_path = self._seed_prior(tmp_path)
+        rc = replan_main([
+            str(prior_path), str(tasks_path), str(config_path),
+            "--completed", "T999",
+        ])
+        assert rc == 2
+        err = capsys.readouterr().err
+        assert "T999" in err
+
+    def test_main_invalid_tasks_md_returns_2(self, tmp_path: Path, capsys):
+        from solver.replan import main as replan_main
+
+        prior_path, _, config_path = self._seed_prior(tmp_path)
+        bad_tasks = tmp_path / "bad-tasks.md"
+        bad_tasks.write_text("# header only — no tasks here\n", encoding="utf-8")
+        rc = replan_main([str(prior_path), str(bad_tasks), str(config_path)])
+        assert rc == 2
+        assert "ERROR" in capsys.readouterr().err
+
+    def test_main_verbose_flag(self, tmp_path: Path, capsys):
+        from solver.replan import main as replan_main
+
+        prior_path, tasks_path, config_path = self._seed_prior(tmp_path)
+        rc = replan_main([
+            str(prior_path), str(tasks_path), str(config_path),
+            "--verbose",
+        ])
+        assert rc == 0

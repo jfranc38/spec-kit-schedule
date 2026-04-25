@@ -32,6 +32,7 @@ from .defaults import (
     SPEED_FACTOR_DEFAULT,
     TOKEN_ESTIMATES,
 )
+from .i18n import t
 from .validation import ScheduleInputError
 
 log = logging.getLogger(__name__)
@@ -241,7 +242,7 @@ def detect_portfolio(
     """
     project_dir = Path(project_dir).resolve()
     if not project_dir.is_dir():
-        raise ScheduleInputError(f"project_dir is not a directory: {project_dir}")
+        raise ScheduleInputError(t("not_a_directory", path=project_dir))
 
     stacks = _detect_stacks(project_dir)
     log.debug("Detected stacks in %s: %s", project_dir, stacks)
@@ -354,7 +355,7 @@ def detect_portfolio(
         Config.model_validate(config_dict)
     except Exception as exc:
         raise ScheduleInputError(
-            f"autodetect produced an invalid config (bug): {exc}"
+            t("autodetect_invalid_config", error=exc)
         ) from exc
 
     return config_dict
@@ -469,7 +470,7 @@ def main(argv: list[str] | None = None) -> None:
                 Config.model_validate(config_dict)
             except Exception as exc:
                 raise ScheduleInputError(
-                    f"Interactive edits produced an invalid config: {exc}"
+                    t("interactive_invalid_config", error=exc)
                 ) from exc
 
         yaml_text = _to_yaml(config_dict, args.project_dir.resolve())
@@ -486,7 +487,7 @@ def main(argv: list[str] | None = None) -> None:
 
         if output_path.exists() and not args.force:
             raise ScheduleInputError(
-                f"{output_path} already exists. Use --force to overwrite."
+                t("output_exists_use_force", path=output_path)
             )
 
         # Atomic write via tempfile + os.replace

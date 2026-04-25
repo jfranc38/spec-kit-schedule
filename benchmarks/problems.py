@@ -16,6 +16,7 @@ skill-ratio and file-mutex density configurations.
 
 from __future__ import annotations
 
+import math
 import random
 from typing import Any
 
@@ -72,8 +73,8 @@ REAL_WORLD_SHAPES: dict[str, dict[str, Any]] = {
 _ALL_SKILLS = ["backend", "frontend", "test", "infra", "data", "devops"]
 _COMPLEXITIES = ["simple", "medium", "complex", "review"]
 _COMPLEXITY_TOKENS = {"simple": 1500, "medium": 3500, "complex": 6000, "review": 2000}
-_KAPPA = 12
-_CONTEXT_BUDGET = 128_000
+_KAPPA_HEADROOM = 1.5
+_CONTEXT_BUDGET_HEADROOM = 1.6
 _SPEED_FACTOR = 1.0
 
 
@@ -192,24 +193,45 @@ def generate(*, size: str, seed: int = 42) -> dict:
 
     edges = _make_dag_edges(n_tasks, density, rng)
 
+    # Scale capacity with workload so generator output is always feasible.
+    # κ_a × n_agents must cover n_tasks (with headroom); context_budget per
+    # agent must cover its share of total tokens (with headroom).
+    total_tokens = sum(t["estimated_tokens"] for t in tasks)
+    kappa_per_agent = max(
+        1, math.ceil(n_tasks / n_agents * _KAPPA_HEADROOM)
+    )
+    budget_per_agent = max(
+        1, math.ceil(total_tokens / n_agents * _CONTEXT_BUDGET_HEADROOM)
+    )
+
+    # Skill assignment: ensure every skill in `skills` is held by at least
+    # one agent (round-robin primary), then add a secondary at random so
+    # workloads can spread across compatible runners.
     agents = []
     for j in range(n_agents):
-        agent_skills = list(skills)
-        if n_skills > 2:
-            # Each agent covers a primary skill plus a random secondary
-            primary = skills[j % len(skills)]
+        primary = skills[j % len(skills)]
+        if n_skills > 1:
             secondary = rng.choice([s for s in skills if s != primary])
             agent_skills = sorted({primary, secondary})
+        else:
+            agent_skills = [primary]
         agents.append({
             "id": f"agent_{j}",
             "model": "benchmark-model",
             "skills": agent_skills,
-            "kappa": _KAPPA,
-            "context_budget": _CONTEXT_BUDGET,
+            "kappa": kappa_per_agent,
+            "context_budget": budget_per_agent,
             "speed_factor": _SPEED_FACTOR,
             "provider": "local",
             "price_per_1k_tokens": 0.0,
         })
+
+    # Final guard: if some skill ended up uncovered (e.g. n_agents < n_skills),
+    # extend agent[0] to absorb the orphans so preflight passes deterministically.
+    covered = {s for a in agents for s in a["skills"]}
+    uncovered = [s for s in skills if s not in covered]
+    if uncovered:
+        agents[0]["skills"] = sorted(set(agents[0]["skills"]) | set(uncovered))
 
     return {
         "tasks": tasks,

@@ -32,6 +32,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = "solver"  # noqa: A001
 
+from .i18n import t
 from .validation import ScheduleInputError
 
 # ── Compiled regex constants ──────────────────────────────────────────────────
@@ -214,30 +215,27 @@ def parse_schedule_md(path: str | Path) -> ExecutionPlan:
     try:
         text = p.read_text(encoding="utf-8")
     except OSError as exc:
-        raise ScheduleInputError(f"Cannot read schedule file {p}: {exc}") from exc
+        raise ScheduleInputError(
+            t("cannot_read_schedule_file", path=p, error=exc)
+        ) from exc
 
     # Feature name.
     heading_m = _HEADING_RE.search(text)
     if not heading_m:
-        raise ScheduleInputError(
-            f"No '# Schedule — <name>' heading found in {p}"
-        )
+        raise ScheduleInputError(t("schedule_file_no_heading", path=p))
     feature_name = heading_m.group(1).strip()
 
     # Metadata line.
     meta_m = _META_RE.search(text)
     if not meta_m:
-        raise ScheduleInputError(
-            f"No status metadata line found in {p}. "
-            "Expected: '> Status: **X** | Makespan: **N** | Waves: **N** | Agents: **N**'"
-        )
+        raise ScheduleInputError(t("schedule_file_no_metadata", path=p))
     makespan = int(meta_m.group(1))
     declared_waves = int(meta_m.group(2))
 
     # Locate all wave sections and their text spans.
     wave_matches = list(_WAVE_HEADING_RE.finditer(text))
     if not wave_matches:
-        raise ScheduleInputError(f"No wave sections found in {p}")
+        raise ScheduleInputError(t("schedule_file_no_waves", path=p))
 
     # Build (start_char, end_char, match) spans.
     spans: list[tuple[int, int, re.Match]] = []

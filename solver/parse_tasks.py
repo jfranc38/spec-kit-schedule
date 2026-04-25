@@ -352,10 +352,10 @@ def parse_tasks_md(
                 continue
             add_edge(id_to_idx[dep_id], i, EdgeOrigin.EXPLICIT)
     if missing_deps:
-        msg = "; ".join(
+        details = "; ".join(
             t("unresolved_dep", task_id=tid, line=ln, dep=dep) for tid, dep, ln in missing_deps
         )
-        raise ScheduleInputError(f"Unresolved dependencies: {msg}")
+        raise ScheduleInputError(t("unresolved_deps_summary", details=details))
 
     # (b) Phase ordering: last task of phase N → first task of phase N+1.
     story_phases = sorted(

@@ -33,6 +33,7 @@ from typing import Literal
 import yaml
 
 from .config_schema import Config, load_config
+from .i18n import t
 from .validation import ScheduleInputError
 from .warnings_collector import WarningCollector
 
@@ -111,7 +112,7 @@ def _load_runs(runs_path: Path, collector: WarningCollector) -> tuple[list[dict]
     try:
         text = runs_path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise ScheduleInputError(f"Cannot read runs file: {exc}") from exc
+        raise ScheduleInputError(t("cannot_read_runs_file", error=exc)) from exc
 
     for line_no, line in enumerate(text.splitlines(), start=1):
         line = line.strip()
