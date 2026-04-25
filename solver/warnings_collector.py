@@ -7,9 +7,9 @@ understand a surprising schedule.
 
 :class:`WarningCollector` is a :class:`logging.Handler` subclass so it can
 be attached to any Python :class:`logging.Logger` via
-``logger.addHandler(collector)``.  The legacy :meth:`WarningCollector.add`
-shortcut remains for callers that want to emit a structured warning without
-going through the logging system.
+``logger.addHandler(collector)``.  The :meth:`WarningCollector.add`
+shortcut is the direct API for callers that want to emit a structured
+warning without configuring a logger.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ class WarningCollector(logging.Handler):
     """Captures user-facing warnings as structured records.
 
     Usable as both a :class:`logging.Handler` (attach to any logger) and via
-    the legacy :meth:`add` shortcut for direct callers.
+    the :meth:`add` shortcut for direct callers.
     """
 
     def __init__(self, *, level: int = logging.WARNING) -> None:

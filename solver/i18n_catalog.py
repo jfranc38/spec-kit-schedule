@@ -128,10 +128,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Task {task_id}: no agent provides skill {skill!r}",
         "es": "Tarea {task_id}: ningún agente proporciona la habilidad {skill!r}",
     },
-    "missing_key_fallback": {
-        "en": "i18n key {key!r} missing for lang={lang!r}; falling back to key string.",
-        "es": "i18n key {key!r} missing for lang={lang!r}; falling back to key string.",
-    },
     "anytime_timeout": {
         "en": (
             "Solver reached the time limit before proving optimality. "

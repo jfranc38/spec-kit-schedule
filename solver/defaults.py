@@ -26,6 +26,7 @@ __all__ = [
     "ANYTIME_DEFAULT",
     "AGENT_COLORS",
     "CRITICAL_COLOR",
+    "CRITICAL_HATCH",
 ]
 
 

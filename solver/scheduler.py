@@ -634,8 +634,6 @@ def _add_resource_constraints(
     model: cp_model.CpModel,
     vars_: _ModelVars,
     agents: list[Agent],
-    compat: dict[int, list[int]],  # noqa: ARG001  # kept for API symmetry
-    p: dict[tuple[int, int], int],  # noqa: ARG001  # kept for API symmetry
     tasks: list[Task],
     file_conflicts: dict[str, list[int]],
 ) -> None:
@@ -754,7 +752,7 @@ def build_model(
     )
     vars_ = _build_variables(model, n, m, compat, p, min_dur, horizon)
     _add_precedence_constraints(model, vars_, edges)
-    _add_resource_constraints(model, vars_, agents, compat, p, tasks, file_conflicts)
+    _add_resource_constraints(model, vars_, agents, tasks, file_conflicts)
     _add_objectives(model, vars_, agents, p, config, horizon)
     assert vars_.max_load is not None  # guaranteed by _add_objectives
     assert vars_.makespan is not None  # guaranteed by _add_objectives

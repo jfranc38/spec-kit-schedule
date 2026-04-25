@@ -55,11 +55,6 @@ def require_positive(value, name: str) -> None:
         raise ScheduleInputError(f"{name} must be > 0; got {value!r}")
 
 
-def require_non_negative(value, name: str) -> None:
-    if not isinstance(value, int | float) or value < 0:
-        raise ScheduleInputError(f"{name} must be >= 0; got {value!r}")
-
-
 KNOWN_PROVIDERS = frozenset(
     {
         "anthropic",
