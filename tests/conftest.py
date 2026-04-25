@@ -1,4 +1,5 @@
 """Shared pytest fixtures."""
+
 from __future__ import annotations
 
 import copy
@@ -38,7 +39,10 @@ def minimal_config() -> dict:
         ],
         "default_skill": "backend",
         "token_estimates": {
-            "simple": 1500, "medium": 3500, "complex": 6000, "review": 2000,
+            "simple": 1500,
+            "medium": 3500,
+            "complex": 6000,
+            "review": 2000,
         },
         "complexity_verbs": {
             "simple": ["add", "update"],
@@ -64,9 +68,7 @@ def write_tasks(tmp_path: Path):
 
 @pytest.fixture
 def docs_example_config() -> dict:
-    return yaml.safe_load(
-        (REPO_ROOT / "docs" / "example-config.yml").read_text(encoding="utf-8")
-    )
+    return yaml.safe_load((REPO_ROOT / "docs" / "example-config.yml").read_text(encoding="utf-8"))
 
 
 @pytest.fixture

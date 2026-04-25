@@ -59,7 +59,8 @@ def _hierarchical_layout(graph: nx.DiGraph) -> dict:
     for u in nx.topological_sort(graph):
         preds = list(graph.predecessors(u))
         graph.nodes[u]["_layer"] = 1 + max(
-            (graph.nodes[p]["_layer"] for p in preds), default=-1,
+            (graph.nodes[p]["_layer"] for p in preds),
+            default=-1,
         )
     return nx.multipartite_layout(graph, subset_key="_layer", align="vertical")
 
@@ -104,25 +105,17 @@ def render_dag(
     graph.add_edges_from(critical_path_edges)
 
     agents_sorted = sorted({a["agent_id"] for a in assignments})
-    color_by_agent = {
-        ag: AGENT_COLORS[i % len(AGENT_COLORS)]
-        for i, ag in enumerate(agents_sorted)
-    }
+    color_by_agent = {ag: AGENT_COLORS[i % len(AGENT_COLORS)] for i, ag in enumerate(agents_sorted)}
 
     pos = _hierarchical_layout(graph)
 
     critical_edge_set = set(critical_path_edges)
     node_colors = [
-        color_by_agent.get(agent_for.get(n, ""), _FALLBACK_AGENT_COLOR)
-        for n in graph.nodes
+        color_by_agent.get(agent_for.get(n, ""), _FALLBACK_AGENT_COLOR) for n in graph.nodes
     ]
-    edgecolors = [
-        CRITICAL_COLOR if n in critical_path else _NODE_BORDER_COLOR
-        for n in graph.nodes
-    ]
+    edgecolors = [CRITICAL_COLOR if n in critical_path else _NODE_BORDER_COLOR for n in graph.nodes]
     linewidths = [
-        _CRITICAL_LINEWIDTH if n in critical_path else _NORMAL_LINEWIDTH
-        for n in graph.nodes
+        _CRITICAL_LINEWIDTH if n in critical_path else _NORMAL_LINEWIDTH for n in graph.nodes
     ]
 
     # Width scales with layer count, height with the widest layer, so
@@ -140,44 +133,66 @@ def render_dag(
     critical_nodes = [n for n in graph.nodes if n in critical_path]
     if critical_nodes:
         nx.draw_networkx_nodes(
-            graph, pos, nodelist=critical_nodes,
-            node_color=CRITICAL_COLOR, node_size=int(_NODE_SIZE * 1.6),
-            edgecolors=CRITICAL_COLOR, linewidths=0.0, ax=ax,
+            graph,
+            pos,
+            nodelist=critical_nodes,
+            node_color=CRITICAL_COLOR,
+            node_size=int(_NODE_SIZE * 1.6),
+            edgecolors=CRITICAL_COLOR,
+            linewidths=0.0,
+            ax=ax,
         )
     nx.draw_networkx_nodes(
-        graph, pos, node_color=node_colors, edgecolors=edgecolors,
-        linewidths=linewidths, node_size=_NODE_SIZE, ax=ax,
+        graph,
+        pos,
+        node_color=node_colors,
+        edgecolors=edgecolors,
+        linewidths=linewidths,
+        node_size=_NODE_SIZE,
+        ax=ax,
     )
     normal_edges = [e for e in graph.edges if e not in critical_edge_set]
     if normal_edges:
         nx.draw_networkx_edges(
-            graph, pos, edgelist=normal_edges, edge_color=_NORMAL_EDGE_COLOR,
-            arrows=True, arrowsize=12, ax=ax,
+            graph,
+            pos,
+            edgelist=normal_edges,
+            edge_color=_NORMAL_EDGE_COLOR,
+            arrows=True,
+            arrowsize=12,
+            ax=ax,
         )
     if critical_edge_set:
         nx.draw_networkx_edges(
-            graph, pos, edgelist=list(critical_edge_set),
+            graph,
+            pos,
+            edgelist=list(critical_edge_set),
             edge_color=CRITICAL_COLOR,
-            width=_CRITICAL_EDGE_WIDTH, arrows=True, arrowsize=16, ax=ax,
+            width=_CRITICAL_EDGE_WIDTH,
+            arrows=True,
+            arrowsize=16,
+            ax=ax,
         )
     nx.draw_networkx_labels(
-        graph, pos, font_size=_LABEL_FONT_SIZE, font_color=_LABEL_COLOR, ax=ax,
+        graph,
+        pos,
+        font_size=_LABEL_FONT_SIZE,
+        font_color=_LABEL_COLOR,
+        ax=ax,
     )
 
     legend_handles = [
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=c,
-                   markersize=10, label=ag)
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=c, markersize=10, label=ag)
         for ag, c in color_by_agent.items()
     ]
     if critical_path:
         legend_handles.append(
-            plt.Line2D([0], [0], color=CRITICAL_COLOR, lw=_CRITICAL_EDGE_WIDTH,
-                       label="critical path")
+            plt.Line2D(
+                [0], [0], color=CRITICAL_COLOR, lw=_CRITICAL_EDGE_WIDTH, label="critical path"
+            )
         )
     ax.legend(handles=legend_handles, loc="best", fontsize=8, frameon=True)
-    ax.set_title(
-        f"Dependency DAG — makespan {data.get('stats', {}).get('makespan', '?')}"
-    )
+    ax.set_title(f"Dependency DAG — makespan {data.get('stats', {}).get('makespan', '?')}")
     ax.axis("off")
     fig.tight_layout()
     fig.savefig(output, dpi=dpi, bbox_inches="tight")
@@ -201,10 +216,7 @@ def render_gantt(
     makespan = stats.get("makespan", 0)
 
     agents_sorted = sorted({a["agent_id"] for a in assignments})
-    color_by_agent = {
-        ag: AGENT_COLORS[i % len(AGENT_COLORS)]
-        for i, ag in enumerate(agents_sorted)
-    }
+    color_by_agent = {ag: AGENT_COLORS[i % len(AGENT_COLORS)] for i, ag in enumerate(agents_sorted)}
     row = {ag: i for i, ag in enumerate(agents_sorted)}
 
     fig, ax = plt.subplots(figsize=(max(10, makespan / 15), max(3, len(agents_sorted) * 0.7)))
@@ -228,8 +240,10 @@ def render_gantt(
             a["start"] + (a["end"] - a["start"]) / 2,
             y,
             a["task_id"],
-            ha="center", va="center",
-            fontsize=_GANTT_TEXT_SIZE, color=_LABEL_COLOR,
+            ha="center",
+            va="center",
+            fontsize=_GANTT_TEXT_SIZE,
+            color=_LABEL_COLOR,
         )
 
     ax.set_yticks(list(row.values()))

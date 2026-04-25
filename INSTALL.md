@@ -1,6 +1,7 @@
-# Installation
+# Installation — v0.5.0
 
-`spec-kit-schedule` is distributed as a spec-kit extension. Pick the flow
+`spec-kit-schedule` is distributed as a spec-kit extension and as a
+[PyPI package](https://pypi.org/project/spec-kit-schedule/). Pick the flow
 that matches how you received the code.
 
 ---
@@ -43,7 +44,26 @@ specify extension add --from /path/to/spec-kit-schedule
 
 ---
 
-## 2. You are the author / contributor
+## 2. Install from PyPI
+
+```bash
+pip install spec-kit-schedule           # core only
+pip install 'spec-kit-schedule[viz]'    # + matplotlib/pydot for PNG images
+```
+
+Or with `uv`:
+
+```bash
+uv pip install spec-kit-schedule
+uv pip install 'spec-kit-schedule[viz]'
+```
+
+Entry points installed: `speckit-schedule-parse`, `speckit-schedule-solve`,
+`speckit-schedule-render`.
+
+---
+
+## 3. You are the author / contributor
 
 ```bash
 git clone <repo>
@@ -51,13 +71,13 @@ cd spec-kit-schedule
 make install        # bin/install.sh via Make (dev + viz extras)
 make test           # pytest
 make smoke          # end-to-end pipeline check
-make schedule       # regenerate docs/example-schedule.md + docs/images/*
+make schedule-all   # regenerate docs/example-schedule.md + docs/images/* + docs/example-schedule.html
 make package        # build dist/spec-kit-schedule.zip for teammates
 ```
 
 ---
 
-## 3. Corporate / locked-down environment without `uv`
+## 4. Corporate / locked-down environment without `uv`
 
 ```bash
 SKIP_UV=1 ./bin/install.sh
@@ -71,17 +91,20 @@ pin your dependencies explicitly if reproducibility matters.
 
 ## Requirements
 
-| Tool       | Version          | Notes                                  |
-|------------|------------------|----------------------------------------|
-| Python     | 3.10 – 3.13      | Enforced by `pyproject.toml`           |
-| uv         | ≥ 0.4 (recommended) | `install.sh` will install it for you |
-| ortools    | ≥ 9.9, < 10      | Core; installed transitively           |
-| PyYAML     | ≥ 6, < 7         | Core; installed transitively           |
-| networkx   | ≥ 3.1, < 4       | Core; graph algorithms                 |
-| matplotlib | ≥ 3.7, < 4       | Optional (`viz` extra) — PNG rendering |
-| pydot      | ≥ 2, < 3         | Optional (`viz` extra) — DOT export    |
+| Tool       | Version          | Notes                                        |
+|------------|------------------|----------------------------------------------|
+| Python     | 3.10 – 3.13      | Enforced by `pyproject.toml`                 |
+| uv         | ≥ 0.4 (recommended) | `install.sh` will install it for you      |
+| ortools    | ≥ 9.9, < 10      | Core; installed transitively                 |
+| PyYAML     | ≥ 6, < 7         | Core; installed transitively                 |
+| networkx   | ≥ 3.1, < 4       | Core; graph algorithms                       |
+| pydantic   | ≥ 2, < 3         | Core; config schema validation               |
+| matplotlib | ≥ 3.7, < 4       | Optional (`viz` extra) — PNG rendering       |
+| pydot      | ≥ 2, < 3         | Optional (`viz` extra) — DOT export          |
+| plotly     | ≥ 5, < 6         | Optional (`viz` extra) — interactive HTML    |
 
 `matplotlib` / `pydot` are only needed for `python -m solver.visualize`.
+`plotly` is only needed for `python -m solver.render_html`.
 The Mermaid Gantt + DAG blocks in `schedule.md` render fine without them.
 
 ## Verifying the install
@@ -89,7 +112,9 @@ The Mermaid Gantt + DAG blocks in `schedule.md` render fine without them.
 ```bash
 uv run python -m solver.parse_tasks --help
 uv run python -m solver.scheduler --help
+uv run python -m solver.render_schedule --help
 uv run python -m solver.visualize --help
+uv run python -m solver.render_html --help
 make smoke
 ```
 

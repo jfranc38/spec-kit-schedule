@@ -57,8 +57,7 @@ def render(
     # resource edges); fall back to `pairwise(critical_path)` for older
     # solver outputs that predate the field.
     critical_edges = {
-        (src, dst)
-        for src, dst in data.get("critical_path_edges", list(pairwise(critical_path)))
+        (src, dst) for src, dst in data.get("critical_path_edges", list(pairwise(critical_path)))
     }
 
     lines: list[str] = []
@@ -112,9 +111,7 @@ def render(
         for t in agent_tasks:
             files = ", ".join(f"`{f}`" for f in t.get("file_paths", []))
             label = t.get("story_id") or t.get("phase", "?")
-            lines.append(
-                f"- **{t['task_id']}** [{label}] t={t['start']}→{t['end']} | {files}"
-            )
+            lines.append(f"- **{t['task_id']}** [{label}] t={t['start']}→{t['end']} | {files}")
         lines.append("")
 
     lines.append("---")
@@ -126,9 +123,7 @@ def render(
     for wave in waves:
         wave_tasks = wave["tasks"]
         phase_label = " + ".join(sorted({t["phase"] for t in wave_tasks}))
-        lines.append(
-            f"### Wave {wave['wave']} (t={wave['start_time']}) — {phase_label}"
-        )
+        lines.append(f"### Wave {wave['wave']} (t={wave['start_time']}) — {phase_label}")
         lines.append("")
         lines.append("| Task | Agent | Duration | Files | Phase |")
         lines.append("|------|-------|----------|-------|-------|")
@@ -136,8 +131,7 @@ def render(
             files = ", ".join(f"`{f}`" for f in t.get("file_paths", []))
             label = t.get("story_id") or t.get("phase", "?")
             lines.append(
-                f"| {t['task_id']} | {t['agent_id']} | {t['duration']} | "
-                f"{files} | {label} |"
+                f"| {t['task_id']} | {t['agent_id']} | {t['duration']} | " f"{files} | {label} |"
             )
         lines.append("")
 
@@ -199,10 +193,7 @@ def render(
             # absolute END time (Unix seconds), not a duration. Passing
             # `duration` produces bars of length 0 or negative width when
             # `duration < start`.
-            lines.append(
-                f"    {t['task_id']} :{marker}{tag}, "
-                f"{t['start']}, {t['end']}"
-            )
+            lines.append(f"    {t['task_id']} :{marker}{tag}, " f"{t['start']}, {t['end']}")
         lines.append("")
 
     lines.append("```")
@@ -220,14 +211,10 @@ def render(
     for idx, ag_id in enumerate(agent_tasks_map):
         color = AGENT_COLORS[idx % len(AGENT_COLORS)]
         lines.append(
-            f"    classDef {_mermaid_id(ag_id)} "
-            f"fill:{color},color:#fff,stroke:{color}"
+            f"    classDef {_mermaid_id(ag_id)} " f"fill:{color},color:#fff,stroke:{color}"
         )
     if critical_set:
-        lines.append(
-            "    classDef critical stroke:#D0021B,stroke-width:4px,"
-            "color:#fff"
-        )
+        lines.append("    classDef critical stroke:#D0021B,stroke-width:4px," "color:#fff")
     lines.append("")
 
     drawn: set[tuple[str, str]] = set()
@@ -275,9 +262,7 @@ def render(
     max_load = stats.get("max_load")
     min_load = stats.get("min_load")
     load_range = (
-        max_load - min_load
-        if isinstance(max_load, int) and isinstance(min_load, int)
-        else "?"
+        max_load - min_load if isinstance(max_load, int) and isinstance(min_load, int) else "?"
     )
     rows = [
         ("Total tasks", stats.get("total_tasks", "?")),
@@ -312,7 +297,7 @@ def _build_argparser() -> argparse.ArgumentParser:
         "--image-prefix",
         default=None,
         help="Embed `{prefix}-dag.png` and `{prefix}-gantt.png` references "
-             "in the markdown (produce them with `python -m solver.visualize`).",
+        "in the markdown (produce them with `python -m solver.visualize`).",
     )
     return ap
 
@@ -322,9 +307,8 @@ def main(argv: list[str] | None = None) -> int:
     with open(args.input, encoding="utf-8") as f:
         data = json.load(f)
     sys.stdout.write(
-        render(data, args.feature_name, image_prefix=args.image_prefix)
+        render(data, args.feature_name, image_prefix=args.image_prefix).rstrip() + "\n"
     )
-    sys.stdout.write("\n")
     return 0
 
 

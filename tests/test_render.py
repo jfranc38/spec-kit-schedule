@@ -1,4 +1,5 @@
 """Unit tests for solver.render_schedule."""
+
 from __future__ import annotations
 
 from solver.render_schedule import render
@@ -8,25 +9,49 @@ def _minimal_solver_output() -> dict:
     return {
         "status": "OPTIMAL",
         "stats": {
-            "status": "OPTIMAL", "makespan": 10, "max_load": 10,
-            "min_load": 5, "load_range": 5, "total_tasks": 2,
-            "total_agents": 1, "total_waves": 2, "horizon": 20,
-            "phase1_time": 0.1, "phase1_status": "OPTIMAL",
-            "phase2_time": 0.1, "phase2_status": "OPTIMAL",
+            "status": "OPTIMAL",
+            "makespan": 10,
+            "max_load": 10,
+            "min_load": 5,
+            "load_range": 5,
+            "total_tasks": 2,
+            "total_agents": 1,
+            "total_waves": 2,
+            "horizon": 20,
+            "phase1_time": 0.1,
+            "phase1_status": "OPTIMAL",
+            "phase2_time": 0.1,
+            "phase2_status": "OPTIMAL",
         },
         "assignments": [
             {
-                "task_id": "T001", "task_index": 0, "agent_id": "backend",
-                "agent_index": 0, "start": 0, "end": 5, "duration": 5,
-                "phase": "Setup", "story_id": None, "story_priority": 99,
-                "file_paths": ["src/a.py"], "tokens": 500,
+                "task_id": "T001",
+                "task_index": 0,
+                "agent_id": "backend",
+                "agent_index": 0,
+                "start": 0,
+                "end": 5,
+                "duration": 5,
+                "phase": "Setup",
+                "story_id": None,
+                "story_priority": 99,
+                "file_paths": ["src/a.py"],
+                "tokens": 500,
                 "required_skill": "backend",
             },
             {
-                "task_id": "T002", "task_index": 1, "agent_id": "backend",
-                "agent_index": 0, "start": 5, "end": 10, "duration": 5,
-                "phase": "Setup", "story_id": None, "story_priority": 99,
-                "file_paths": ["src/b.py"], "tokens": 500,
+                "task_id": "T002",
+                "task_index": 1,
+                "agent_id": "backend",
+                "agent_index": 0,
+                "start": 5,
+                "end": 10,
+                "duration": 5,
+                "phase": "Setup",
+                "story_id": None,
+                "story_priority": 99,
+                "file_paths": ["src/b.py"],
+                "tokens": 500,
                 "required_skill": "backend",
             },
         ],
@@ -34,12 +59,18 @@ def _minimal_solver_output() -> dict:
             {"wave": 1, "start_time": 0, "tasks": []},
             {"wave": 2, "start_time": 5, "tasks": []},
         ],
-        "agent_summary": [{
-            "agent_id": "backend", "model": "test", "task_count": 2,
-            "total_tokens": 1000, "budget_utilization": 10.0,
-            "total_load": 10, "kappa_utilization": 20.0,
-            "tasks": ["T001", "T002"],
-        }],
+        "agent_summary": [
+            {
+                "agent_id": "backend",
+                "model": "test",
+                "task_count": 2,
+                "total_tokens": 1000,
+                "budget_utilization": 10.0,
+                "total_load": 10,
+                "kappa_utilization": 20.0,
+                "tasks": ["T001", "T002"],
+            }
+        ],
         "edges": [["T001", "T002"]],
         "warnings": [],
     }
@@ -72,9 +103,7 @@ def test_resource_edges_rendered_as_dotted():
 def test_render_warnings_section_only_when_present():
     data = _minimal_solver_output()
     assert "## ⚠ Warnings" not in render(data, "feat")
-    data["warnings"] = [
-        {"code": "phase2_fallback", "message": "timed out", "context": {"k": 1}}
-    ]
+    data["warnings"] = [{"code": "phase2_fallback", "message": "timed out", "context": {"k": 1}}]
     out = render(data, "feat")
     assert "## ⚠ Warnings" in out
     assert "phase2_fallback" in out
@@ -132,8 +161,7 @@ def test_non_critical_gantt_has_no_crit_marker():
     assert "T001 :crit," in out
     # Ensure the non-critical task's gantt line exists without the crit marker.
     assert any(
-        line.lstrip().startswith("T002 :") and ":crit," not in line
-        for line in out.splitlines()
+        line.lstrip().startswith("T002 :") and ":crit," not in line for line in out.splitlines()
     )
 
 

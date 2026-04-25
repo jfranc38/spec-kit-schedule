@@ -28,20 +28,19 @@ if __package__ in (None, ""):
 
 import yaml
 
+from .config_schema import Config
 from .defaults import (
     COMPLEXITY_VERBS,
     CONTEXT_BUDGET_KTOKENS_DEFAULT,
-    DEFAULT_SKILL,
     KAPPA_DEFAULT,
     SPEED_FACTOR_DEFAULT,
     TOKEN_ESTIMATES,
 )
+from .i18n import t
 from .validation import (
     ScheduleInputError,
     find_cycle,
     normalize_path,
-    validate_agent_config,
-    validate_solver_config,
 )
 from .warnings_collector import WarningCollector
 
@@ -61,6 +60,7 @@ class EdgeOrigin:
     PHASE = "phase"
     SAME_FILE = "same-file"
     TDD = "tdd"
+
 
 # ───────────────────────────────────────────────────────────────────────
 # Regex patterns for task line parsing
@@ -85,18 +85,10 @@ PARALLEL_RE = re.compile(r"\[P\]")
 # "Phase N:" / "N." prefix). Matching the whole heading avoids
 # "Advanced Setup Instructions" being read as a Setup phase.
 _PHASE_PREFIX = r"#{1,4}\s+(?:Phase\s+\d+[:.\-]?\s+|\d+[.)]\s+)?"
-PHASE_SETUP_RE = re.compile(
-    rf"^{_PHASE_PREFIX}(?:Setup|Environment|Configuration)\b", re.I
-)
-PHASE_FOUND_RE = re.compile(
-    rf"^{_PHASE_PREFIX}(?:Foundation|Foundational|Core|Base)\b", re.I
-)
-PHASE_STORY_RE = re.compile(
-    rf"^{_PHASE_PREFIX}(?:User\s+Story|US)\s*(\d+)\b", re.I
-)
-PHASE_POLISH_RE = re.compile(
-    rf"^{_PHASE_PREFIX}(?:Polish|Cleanup|Final|Integration)\b", re.I
-)
+PHASE_SETUP_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Setup|Environment|Configuration)\b", re.I)
+PHASE_FOUND_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Foundation|Foundational|Core|Base)\b", re.I)
+PHASE_STORY_RE = re.compile(rf"^{_PHASE_PREFIX}(?:User\s+Story|US)\s*(\d+)\b", re.I)
+PHASE_POLISH_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Polish|Cleanup|Final|Integration)\b", re.I)
 
 PRIORITY_RE = re.compile(r"\(P(\d+)\)")
 PATH_IN_BACKTICKS_RE = re.compile(r"`([^`]*(?:\.[\w]+|/[\w]+))`")
@@ -105,8 +97,18 @@ VERB_RE = re.compile(r"^(?:T\d{3,4}\s+(?:\[P\]\s+)?(?:\[US\d+\]\s+)?)?(\w+)", re
 # Action verbs that denote a write on the target file. Used to spot
 # parallel-flag misuse (two [P] tasks writing the same file).
 _WRITE_VERBS = {
-    "implement", "create", "write", "build", "refactor", "add", "update",
-    "design", "architect", "integrate", "migrate", "optimize",
+    "implement",
+    "create",
+    "write",
+    "build",
+    "refactor",
+    "add",
+    "update",
+    "design",
+    "architect",
+    "integrate",
+    "migrate",
+    "optimize",
 }
 
 
@@ -168,17 +170,50 @@ def _detect_phase(line: str) -> tuple[str, str | None, int] | None:
 
 
 def _merge_config(config: dict) -> dict:
-    """Apply defaults and validate config in place (returns a copy)."""
-    cfg = dict(config)
-    cfg.setdefault("skill_rules", [])
-    cfg.setdefault("default_skill", DEFAULT_SKILL)
-    cfg.setdefault("token_estimates", dict(TOKEN_ESTIMATES))
-    cfg.setdefault("complexity_verbs", COMPLEXITY_VERBS)
-    cfg.setdefault("solver", {})
-    cfg.setdefault("agents", [])
-    validate_solver_config(cfg["solver"])
-    for agent in cfg["agents"]:
-        validate_agent_config(agent)
+    """Validate config via pydantic, apply defaults, and return a plain dict.
+
+    The pydantic Config model is the single source of validation truth.
+    After validation, we convert back to a dict so the rest of the parser
+    can continue using plain dict accessors unchanged.
+    """
+    # Apply legacy defaults that may be absent in minimal user configs
+    # before handing off to pydantic, so pydantic field defaults layer on top.
+    raw = dict(config)
+    raw.setdefault("token_estimates", dict(TOKEN_ESTIMATES))
+    raw.setdefault("complexity_verbs", COMPLEXITY_VERBS)
+
+    validated: Config = Config.model_validate(raw)
+    cfg = validated.model_dump(mode="python")
+
+    # Normalise token_estimates to plain dictionaries so downstream code can
+    # preserve both the deterministic mean and stochastic std_dev.
+    from .config_schema import TokenEstimate  # local import; module already loaded
+
+    te: dict[str, object] = {}
+    for k, v in (cfg.get("token_estimates") or {}).items():
+        if isinstance(v, dict) and "mean" in v:
+            te[k] = {
+                "mean": int(v["mean"]),
+                "std_dev": int(v.get("std_dev", 0)),
+            }
+        elif isinstance(v, TokenEstimate):
+            te[k] = {
+                "mean": v.mean,
+                "std_dev": v.std_dev,
+            }
+        else:
+            te[k] = {
+                "mean": int(v),
+                "std_dev": 0,
+            }
+    cfg["token_estimates"] = te
+
+    # Flatten solver sub-dict so existing consumers can do cfg["solver"]["time_limit"].
+    if isinstance(cfg.get("solver"), dict):
+        pass  # already a dict after model_dump
+    else:
+        cfg["solver"] = {}
+
     return cfg
 
 
@@ -217,7 +252,10 @@ def parse_tasks_md(
             current_phase, current_story_id, current_priority = phase_hit
             log.debug(
                 "line %d: phase → %s (story=%s, pri=%d)",
-                line_num, current_phase, current_story_id, current_priority,
+                line_num,
+                current_phase,
+                current_story_id,
+                current_priority,
             )
             continue
 
@@ -227,10 +265,7 @@ def parse_tasks_md(
 
         task_id = m.group("id")
         if task_id in task_ids:
-            raise ScheduleInputError(
-                f"Duplicate task id {task_id!r} at line {line_num}. "
-                "Each task id must be unique."
-            )
+            raise ScheduleInputError(t("duplicate_task_id", task_id=task_id, line=line_num))
         task_ids.add(task_id)
 
         story = m.group("story") or current_story_id
@@ -257,39 +292,43 @@ def parse_tasks_md(
         vm = VERB_RE.match(desc)
         verb = vm.group(1) if vm else "implement"
         complexity = classify_complexity(verb, complexity_verbs)
-        tokens = int(token_est.get(complexity, token_est.get("medium", 3500)))
+        estimate = token_est.get(complexity, token_est.get("medium", {"mean": 3500, "std_dev": 0}))
+        if isinstance(estimate, dict):
+            tokens = int(estimate["mean"])
+            token_std_dev = int(estimate.get("std_dev", 0))
+        else:
+            tokens = int(estimate)
+            token_std_dev = 0
 
         explicit_deps: list[str] = []
         if deps_str:
-            explicit_deps = [
-                d.strip() for d in deps_str.split(",") if d.strip().startswith("T")
-            ]
+            explicit_deps = [d.strip() for d in deps_str.split(",") if d.strip().startswith("T")]
 
-        tasks.append({
-            "id": task_id,
-            "phase": current_phase,
-            "story_id": story,
-            "story_priority": current_priority,
-            "parallel_flag": parallel,
-            "file_paths": file_paths,
-            "required_skill": skill,
-            "estimated_tokens": tokens,
-            "action_verb": verb,
-            "explicit_deps": explicit_deps,
-            "description": desc,
-            "source_line": line_num,
-        })
+        tasks.append(
+            {
+                "id": task_id,
+                "phase": current_phase,
+                "story_id": story,
+                "story_priority": current_priority,
+                "parallel_flag": parallel,
+                "file_paths": file_paths,
+                "required_skill": skill,
+                "estimated_tokens": tokens,
+                "token_std_dev": token_std_dev,
+                "action_verb": verb,
+                "explicit_deps": explicit_deps,
+                "description": desc,
+                "source_line": line_num,
+            }
+        )
 
     if not tasks:
-        raise ScheduleInputError(
-            f"No tasks found in {tasks_path}. Verify the file uses the "
-            "`- [ ] T### ...` format."
-        )
+        raise ScheduleInputError(t("no_tasks_found", path=tasks_path))
 
     log.info("parsed %d tasks from %s", len(tasks), tasks_path)
 
     # ── Build edges ───────────────────────────────────────────────────
-    id_to_idx = {t["id"]: i for i, t in enumerate(tasks)}
+    id_to_idx = {td["id"]: i for i, td in enumerate(tasks)}
     edges: list[list[str]] = []
     edge_set: set[tuple[int, int]] = set()
     edge_origins: dict[tuple[int, int], str] = {}
@@ -306,29 +345,28 @@ def parse_tasks_md(
 
     # (a) Explicit dependencies — fail hard on unknown references.
     missing_deps: list[tuple[str, str, int]] = []
-    for i, t in enumerate(tasks):
-        for dep_id in t["explicit_deps"]:
+    for i, td in enumerate(tasks):
+        for dep_id in td["explicit_deps"]:
             if dep_id not in id_to_idx:
-                missing_deps.append((t["id"], dep_id, t["source_line"]))
+                missing_deps.append((td["id"], dep_id, td["source_line"]))
                 continue
             add_edge(id_to_idx[dep_id], i, EdgeOrigin.EXPLICIT)
     if missing_deps:
         msg = "; ".join(
-            f"task {tid} (line {ln}) depends on unknown task {dep}"
-            for tid, dep, ln in missing_deps
+            t("unresolved_dep", task_id=tid, line=ln, dep=dep) for tid, dep, ln in missing_deps
         )
         raise ScheduleInputError(f"Unresolved dependencies: {msg}")
 
     # (b) Phase ordering: last task of phase N → first task of phase N+1.
     story_phases = sorted(
-        {t["phase"] for t in tasks if t["phase"].startswith("User Story")},
+        {td["phase"] for td in tasks if td["phase"].startswith("User Story")},
         key=lambda p: int(re.search(r"\d+", p).group()),
     )
     phase_order = ["Setup", "Foundational", *story_phases, "Polish"]
 
     phase_tasks: dict[str, list[int]] = defaultdict(list)
-    for i, t in enumerate(tasks):
-        phase_tasks[t["phase"]].append(i)
+    for i, td in enumerate(tasks):
+        phase_tasks[td["phase"]].append(i)
 
     for phase in phase_order:
         if phase not in phase_tasks:
@@ -347,11 +385,11 @@ def parse_tasks_md(
 
     # (c) Same-file write order within a story scope.
     story_file_writers: dict[tuple[str, str], list[int]] = defaultdict(list)
-    for i, t in enumerate(tasks):
-        if t["parallel_flag"]:
+    for i, td in enumerate(tasks):
+        if td["parallel_flag"]:
             continue
-        for fp in t["file_paths"]:
-            key = (t["story_id"] or t["phase"], fp)
+        for fp in td["file_paths"]:
+            key = (td["story_id"] or td["phase"], fp)
             story_file_writers[key].append(i)
 
     for writers in story_file_writers.values():
@@ -362,10 +400,10 @@ def parse_tasks_md(
     # O(n) instead of O(n²) for large projects with many test+impl pairs.
     test_idx: dict[tuple[str | None, str], list[int]] = defaultdict(list)
     impl_idx: dict[tuple[str | None, str], list[int]] = defaultdict(list)
-    for i, t in enumerate(tasks):
-        bucket = test_idx if t["required_skill"] == "test" else impl_idx
-        for fp in t["file_paths"]:
-            bucket[(t["story_id"], fp)].append(i)
+    for i, td in enumerate(tasks):
+        bucket = test_idx if td["required_skill"] == "test" else impl_idx
+        for fp in td["file_paths"]:
+            bucket[(td["story_id"], fp)].append(i)
     for key, test_tasks in test_idx.items():
         for impl in impl_idx.get(key, ()):
             for test in test_tasks:
@@ -375,30 +413,22 @@ def parse_tasks_md(
     cycle = find_cycle(len(tasks), edge_set)
     if cycle is not None:
         names = " → ".join(tasks[i]["id"] for i in cycle)
-        origins = []
-        for a, b in zip(cycle, cycle[1:], strict=False):
-            origins.append(edge_origins.get((a, b), "?"))
-        raise ScheduleInputError(
-            f"Dependency cycle detected: {names}. "
-            f"Edge origins along the cycle: {origins}. "
-            "Check explicit 'depends on' clauses and same-file write order."
-        )
+        origins = [edge_origins.get((a, b), "?") for a, b in zip(cycle, cycle[1:], strict=False)]
+        raise ScheduleInputError(t("cycle_detected", names=names, origins=origins))
 
     # ── Parallel-flag sanity: two [P] tasks writing the same file ─────
     parallel_writers: dict[str, list[int]] = defaultdict(list)
-    for i, t in enumerate(tasks):
-        if not t["parallel_flag"] or t["action_verb"].lower() not in _WRITE_VERBS:
+    for i, td in enumerate(tasks):
+        if not td["parallel_flag"] or td["action_verb"].lower() not in _WRITE_VERBS:
             continue
-        for fp in t["file_paths"]:
+        for fp in td["file_paths"]:
             parallel_writers[fp].append(i)
     for fp, idxs in parallel_writers.items():
         if len(idxs) > 1:
             ids = [tasks[i]["id"] for i in idxs]
             warnings.add(
                 "parallel_write_conflict",
-                f"Multiple [P] tasks write to {fp!r}: {ids}. "
-                "The [P] flag exempts tasks from file-mutex; verify they "
-                "are truly idempotent or remove [P].",
+                t("parallel_write_conflict", file=fp, task_ids=ids),
                 file=fp,
                 task_ids=ids,
             )
@@ -411,36 +441,35 @@ def parse_tasks_md(
             "model": ac.get("model", "unknown"),
             "skills": list(ac["skills"]),
             "kappa": int(ac.get("kappa", KAPPA_DEFAULT)),
-            "context_budget": int(
-                ac.get("context_budget", CONTEXT_BUDGET_KTOKENS_DEFAULT) * 1000
-            ),
+            "context_budget": int(ac.get("context_budget", CONTEXT_BUDGET_KTOKENS_DEFAULT) * 1000),
             "speed_factor": float(ac.get("speed_factor", SPEED_FACTOR_DEFAULT)),
+            "price_per_1k_tokens": float(ac.get("price_per_1k_tokens", 0.0)),
         }
         if ac.get("provider") is not None:
             agent_dict["provider"] = ac["provider"]
         agents_out.append(agent_dict)
 
     if not agents_out:
-        raise ScheduleInputError(
-            "No agents declared in config. Add at least one agent to the "
-            "'agents:' list."
-        )
+        raise ScheduleInputError(t("empty_agents"))
 
     solver_cfg = dict(cfg["solver"])
 
     tasks_out: list[dict] = []
-    for t in tasks:
-        tasks_out.append({
-            "id": t["id"],
-            "phase": t["phase"],
-            "story_id": t["story_id"],
-            "story_priority": t["story_priority"],
-            "parallel_flag": t["parallel_flag"],
-            "file_paths": t["file_paths"],
-            "required_skill": t["required_skill"],
-            "estimated_tokens": t["estimated_tokens"],
-            "action_verb": t["action_verb"],
-        })
+    for td in tasks:
+        tasks_out.append(
+            {
+                "id": td["id"],
+                "phase": td["phase"],
+                "story_id": td["story_id"],
+                "story_priority": td["story_priority"],
+                "parallel_flag": td["parallel_flag"],
+                "file_paths": td["file_paths"],
+                "required_skill": td["required_skill"],
+                "estimated_tokens": td["estimated_tokens"],
+                "token_std_dev": td["token_std_dev"],
+                "action_verb": td["action_verb"],
+            }
+        )
 
     return {
         "tasks": tasks_out,

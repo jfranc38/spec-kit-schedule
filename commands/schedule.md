@@ -59,6 +59,10 @@ python -m solver.visualize out.json images/ --feature <feature>
 #    the Mermaid blocks so consumers without Mermaid still see the charts.
 python -m solver.render_schedule out.json <feature> \
     --image-prefix images/<feature> > schedule.md
+
+# 4. (optional) Interactive HTML — requires plotly (included in `viz` extra).
+python -m solver.render_html out.json <feature> \
+    --image-prefix images/<feature> > schedule.html
 ```
 
 The solver output exposes three edge collections:
@@ -87,7 +91,7 @@ The solver:
    - **File mutex**: Non-[P] tasks writing the same file cannot overlap across ANY agents (NoOverlap)
    - **Cardinality cap**: Agent task count ≤ κ_a (hallucination guardrail)
    - **Context budget**: Sum of task token costs on agent ≤ C_a (context-rot guardrail)
-3. Solves lexicographically: minimize makespan, then minimize max agent load
+3. Solves with the configured objective (`lexicographic` | `weighted` | `cost_aware`); default is lexicographic (minimize makespan, then minimize max agent load)
 4. Outputs the solution as a JSON structure with per-task assignments and timing
 
 ### Phase 3 — Generate schedule.md
@@ -205,3 +209,27 @@ Or with explicit configuration path:
 ```
 /speckit.schedule --config path/to/schedule-config.yml
 ```
+
+## Executing Waves via /speckit.implement
+
+Once `schedule.md` is generated, use the Wave Executor Bridge to drive
+agent execution respecting the solver's precedence barriers:
+
+```bash
+# Emit a POSIX shell script — one backgrounded subprocess per agent per wave,
+# with a `wait` barrier between waves.
+python -m solver.wave_executor schedule.md --format shell > /tmp/wave-plan.sh
+
+# Set RUNNER to your agent driver, then execute.
+RUNNER="speckit-agent-runner" bash /tmp/wave-plan.sh
+```
+
+You can also read the plan programmatically:
+
+```python
+from solver.wave_executor import parse_schedule_md
+plan = parse_schedule_md("schedule.md")
+```
+
+For full integration details, barrier semantics, file-mutex guarantees,
+and failure-handling guidance, see `commands/implement_bridge.md`.

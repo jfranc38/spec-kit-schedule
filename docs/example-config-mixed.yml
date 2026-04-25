@@ -16,6 +16,7 @@ agents:
     kappa: 6
     context_budget: 40
     speed_factor: 0.8
+    price_per_1k_tokens: 0.015   # claude-opus-4 input price per 1K tokens (2026)
 
   - id: "backend"
     provider: "openai"
@@ -24,6 +25,7 @@ agents:
     kappa: 10
     context_budget: 24
     speed_factor: 1.0
+    price_per_1k_tokens: 0.005   # gpt-5 estimated input price per 1K tokens (2026)
 
   - id: "frontend"
     provider: "github"
@@ -32,6 +34,7 @@ agents:
     kappa: 10
     context_budget: 16
     speed_factor: 1.0
+    price_per_1k_tokens: 0.002   # copilot-gpt-4.1 estimated input price per 1K tokens (2026)
 
   - id: "tester"
     provider: "google"
@@ -40,6 +43,7 @@ agents:
     kappa: 18
     context_budget: 12
     speed_factor: 1.4
+    price_per_1k_tokens: 0.0001  # gemini-2.5-flash estimated input price per 1K tokens (2026)
 
   - id: "local-assistant"
     provider: "ollama"
@@ -48,6 +52,7 @@ agents:
     kappa: 8
     context_budget: 16
     speed_factor: 0.6
+    price_per_1k_tokens: 0.0     # self-hosted: no per-token cost
 
 skill_rules:
   - pattern: "tests/"
@@ -79,7 +84,7 @@ default_skill: "backend"
 
 token_estimates:
   simple:   1500
-  medium:   3500
+  medium:   {mean: 3500, std_dev: 500}   # dict form: enables stochastic scheduling
   complex:  6000
   review:   2000
 

@@ -1,4 +1,5 @@
 """Unit tests for solver.parse_tasks."""
+
 from __future__ import annotations
 
 import pytest
@@ -38,15 +39,17 @@ class TestClassifyComplexity:
         assert classify_complexity("Add", verbs) == "simple"
 
     def test_fallback_medium(self):
-        assert classify_complexity("unknown", {"simple": [], "medium": [], "complex": [], "review": []}) == "medium"
+        assert (
+            classify_complexity(
+                "unknown", {"simple": [], "medium": [], "complex": [], "review": []}
+            )
+            == "medium"
+        )
 
 
 class TestParseHappyPath:
     def test_single_task(self, write_tasks, minimal_config):
-        p = write_tasks(
-            "## Setup Phase\n"
-            "- [ ] T001 Implement feature in `src/api/foo.py`\n"
-        )
+        p = write_tasks("## Setup Phase\n" "- [ ] T001 Implement feature in `src/api/foo.py`\n")
         result = parse_tasks_md(str(p), minimal_config)
         assert len(result["tasks"]) == 1
         t = result["tasks"][0]
@@ -56,10 +59,7 @@ class TestParseHappyPath:
         assert t["phase"] == "Setup"
 
     def test_parallel_flag_detected(self, write_tasks, minimal_config):
-        p = write_tasks(
-            "## Setup Phase\n"
-            "- [ ] T001 [P] Add config in `src/api/foo.py`\n"
-        )
+        p = write_tasks("## Setup Phase\n" "- [ ] T001 [P] Add config in `src/api/foo.py`\n")
         result = parse_tasks_md(str(p), minimal_config)
         assert result["tasks"][0]["parallel_flag"] is True
 
@@ -74,8 +74,7 @@ class TestParseHappyPath:
 
     def test_story_priority_captured(self, write_tasks, minimal_config):
         p = write_tasks(
-            "## User Story 1 (P1)\n"
-            "- [ ] T001 [US1] Implement thing in `src/api/a.py`\n"
+            "## User Story 1 (P1)\n" "- [ ] T001 [US1] Implement thing in `src/api/a.py`\n"
         )
         result = parse_tasks_md(str(p), minimal_config)
         t = result["tasks"][0]
@@ -102,6 +101,25 @@ class TestParseHappyPath:
         result = parse_tasks_md(str(p), minimal_config)
         assert len(result["tasks"]) == 3
 
+    def test_agent_price_is_preserved(self, write_tasks, clone_config):
+        cfg = clone_config()
+        cfg["agents"][0]["price_per_1k_tokens"] = 3.25
+        p = write_tasks("## Setup Phase\n" "- [ ] T001 Implement feature in `src/api/foo.py`\n")
+
+        result = parse_tasks_md(str(p), cfg)
+
+        assert result["agents"][0]["price_per_1k_tokens"] == 3.25
+
+    def test_token_std_dev_is_preserved(self, write_tasks, clone_config):
+        cfg = clone_config()
+        cfg["token_estimates"]["medium"] = {"mean": 3500, "std_dev": 700}
+        p = write_tasks("## Setup Phase\n" "- [ ] T001 Implement feature in `src/api/foo.py`\n")
+
+        result = parse_tasks_md(str(p), cfg)
+
+        assert result["tasks"][0]["estimated_tokens"] == 3500
+        assert result["tasks"][0]["token_std_dev"] == 700
+
 
 class TestParseFailFast:
     def test_duplicate_task_id_raises(self, write_tasks, minimal_config):
@@ -115,8 +133,7 @@ class TestParseFailFast:
 
     def test_unknown_dependency_raises(self, write_tasks, minimal_config):
         p = write_tasks(
-            "## Setup Phase\n"
-            "- [ ] T001 Implement a in `src/api/a.py` (depends on T999)\n"
+            "## Setup Phase\n" "- [ ] T001 Implement a in `src/api/a.py` (depends on T999)\n"
         )
         with pytest.raises(ScheduleInputError, match="Unresolved dependencies"):
             parse_tasks_md(str(p), minimal_config)
@@ -138,10 +155,7 @@ class TestParseFailFast:
 
 class TestPhaseRegex:
     def test_phase_keyword_anchored(self, write_tasks, minimal_config):
-        p = write_tasks(
-            "## Advanced Planning Notes\n"
-            "- [ ] T001 Implement a in `src/api/a.py`\n"
-        )
+        p = write_tasks("## Advanced Planning Notes\n" "- [ ] T001 Implement a in `src/api/a.py`\n")
         result = parse_tasks_md(str(p), minimal_config)
         assert result["tasks"][0]["phase"] == "Setup"
 

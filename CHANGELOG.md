@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.5.0] - 2026-04-24
+
+### Added
+- **Cost-aware objective** (`objective: cost_aware`): Phase 1 minimises makespan;
+  Phase 2 pins `C_max` and minimises total token cost weighted by
+  `price_per_1k_tokens` per agent. Solver output includes `total_cost`.
+  Parser preserves `price_per_1k_tokens` and `token_std_dev` from config.
+- **Stochastic durations**: Tasks may carry `token_std_dev`; `solver.calibrate`
+  runs Monte Carlo simulation (default 1 000 samples, log-normal draws) and
+  reports p50/p90 makespan quantiles. Config key: `calibrate.percentile`.
+- **Anytime callback**: `solver.scheduler` accepts an `on_solution` callable
+  invoked at each incumbent improvement — enables streaming progress to UIs
+  without polling.
+- **Replanning** (`solver.replan`): `solve_with_fixed` freezes completed /
+  in-flight task assignments and re-solves the residual subgraph. Frozen
+  assignments incompatible with the portfolio raise `ScheduleInputError`
+  instead of being silently dropped. Horizon expands to cover frozen
+  start+duration before the residual solve.
+- **Interactive HTML output** (`python -m solver.render_html`): Plotly-based
+  self-contained schedule page with interactive Gantt and DAG. `--inline-plotly`
+  embeds the full (~4 MB) bundle for offline / air-gapped use. 20 tests.
+- **`make schedule-all`** Makefile target: regenerates `docs/example-schedule.md`
+  + `docs/images/example-{dag,gantt}.png` + `docs/example-schedule.html` in one
+  command.
+- **`--help` regression test**: `tests/test_cli_help.py` verifies all five CLI
+  entry-point modules respond to `--help` without error.
+- PyPI badges in `README.md`; PyPI install section in `INSTALL.md`.
+
+### Changed
+- `solver/__init__.__version__` bumped to `0.5.0`.
+- `extension.yml` version bumped to `0.5.0`; description updated.
+- `docs/formulation.md` updated with cost-aware objective formula, stochastic
+  durations section, and replanning semantics.
+- `commands/schedule.md` and `commands/visualize.md` updated with HTML output
+  and new objective modes.
+- `templates/schedule-template.md` adds optional `total_cost` row in Solver
+  Statistics table.
+- `INSTALL.md` adds PyPI install section, plotly requirement row, and
+  `render_html --help` verification step.
+- Scheduler symmetry-breaking key includes `price_per_1k_tokens` so agents
+  differing only in cost are not incorrectly treated as interchangeable.
+
 ## [0.4.1] - 2026-04-24
 
 ### Fixed

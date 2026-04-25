@@ -3,6 +3,7 @@
 The module is skipped entirely if matplotlib is unavailable — keeps the
 core test suite green in `dev` environments without the `viz` extra.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,14 +21,36 @@ def _sample(tmp_path: Path) -> dict:
         "stats": {"makespan": 10, "total_agents": 2},
         "edges": [["T001", "T002"]],
         "assignments": [
-            {"task_id": "T001", "task_index": 0, "agent_id": "a",
-             "agent_index": 0, "start": 0, "end": 5, "duration": 5,
-             "phase": "Setup", "story_id": None, "story_priority": 99,
-             "file_paths": ["x.py"], "tokens": 500, "required_skill": "backend"},
-            {"task_id": "T002", "task_index": 1, "agent_id": "b",
-             "agent_index": 1, "start": 5, "end": 10, "duration": 5,
-             "phase": "Setup", "story_id": None, "story_priority": 99,
-             "file_paths": ["y.py"], "tokens": 500, "required_skill": "backend"},
+            {
+                "task_id": "T001",
+                "task_index": 0,
+                "agent_id": "a",
+                "agent_index": 0,
+                "start": 0,
+                "end": 5,
+                "duration": 5,
+                "phase": "Setup",
+                "story_id": None,
+                "story_priority": 99,
+                "file_paths": ["x.py"],
+                "tokens": 500,
+                "required_skill": "backend",
+            },
+            {
+                "task_id": "T002",
+                "task_index": 1,
+                "agent_id": "b",
+                "agent_index": 1,
+                "start": 5,
+                "end": 10,
+                "duration": 5,
+                "phase": "Setup",
+                "story_id": None,
+                "story_priority": 99,
+                "file_paths": ["y.py"],
+                "tokens": 500,
+                "required_skill": "backend",
+            },
         ],
         "critical_path": ["T001", "T002"],
     }
@@ -56,4 +79,5 @@ def test_agent_palette_excludes_critical_color():
     re-introduction of the clash.
     """
     from solver.defaults import AGENT_COLORS, CRITICAL_COLOR
+
     assert CRITICAL_COLOR not in AGENT_COLORS

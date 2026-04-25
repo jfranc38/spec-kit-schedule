@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions
+    url: https://github.com/juliofranco/spec-kit-schedule/discussions
+    about: Ask questions, share ideas, and discuss scheduling workflows.

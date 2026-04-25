@@ -15,6 +15,13 @@ the team wants a static artifact pinned to a release.
    critical bars outlined in red.
 3. **Updated `schedule.md`** — Image references injected next to the
    Mermaid blocks so both views are available in the same document.
+4. **`schedule.html`** (optional) — Fully self-contained interactive HTML
+   with Plotly Gantt and DAG; no server required.
+   ```bash
+   python -m solver.render_html out.json <feature> > schedule.html
+   # offline/air-gapped: embed the ~4 MB Plotly bundle
+   python -m solver.render_html out.json <feature> --inline-plotly > schedule.html
+   ```
 
 Mermaid Gantt + DAG remain in `schedule.md` for GitHub / web rendering;
 this command complements them, it does not replace them.
@@ -64,5 +71,5 @@ have a red border and thick red arrows in the DAG.
 Or, directly:
 
 ```bash
-make schedule         # regenerate docs/example-{schedule.md,images}
+make schedule-all     # regenerate docs/example-schedule.md + images/* + example-schedule.html
 ```

@@ -51,55 +51,76 @@ def find_cycle(n: int, edges: Iterable[tuple[int, int]]) -> list[int] | None:
 
 
 def require_positive(value, name: str) -> None:
-    if not isinstance(value, (int, float)) or value <= 0:
+    if not isinstance(value, int | float) or value <= 0:
         raise ScheduleInputError(f"{name} must be > 0; got {value!r}")
 
 
 def require_non_negative(value, name: str) -> None:
-    if not isinstance(value, (int, float)) or value < 0:
+    if not isinstance(value, int | float) or value < 0:
         raise ScheduleInputError(f"{name} must be >= 0; got {value!r}")
 
 
-KNOWN_PROVIDERS = frozenset({
-    "anthropic", "openai", "github", "google", "ollama", "azure",
-    "bedrock", "groq", "mistral", "local", "custom",
-})
+KNOWN_PROVIDERS = frozenset(
+    {
+        "anthropic",
+        "openai",
+        "github",
+        "google",
+        "ollama",
+        "azure",
+        "bedrock",
+        "groq",
+        "mistral",
+        "local",
+        "custom",
+    }
+)
 
 
 def validate_agent_config(agent: dict) -> None:
-    """Validate a single agent block from config or solver input."""
-    missing = {"id", "skills"} - set(agent.keys())
-    if missing:
-        raise ScheduleInputError(f"Agent missing required fields {sorted(missing)}: {agent}")
-    if not isinstance(agent["skills"], list) or not agent["skills"]:
-        raise ScheduleInputError(f"Agent {agent['id']!r}: skills must be a non-empty list")
-    require_positive(agent.get("kappa", 1), f"agent {agent['id']!r}.kappa")
-    require_positive(
-        agent.get("context_budget", 1),
-        f"agent {agent['id']!r}.context_budget",
-    )
-    require_positive(
-        agent.get("speed_factor", 1.0),
-        f"agent {agent['id']!r}.speed_factor",
-    )
+    """Validate a single agent block via pydantic AgentConfig.
+
+    Thin wrapper that converts pydantic ValidationError into ScheduleInputError
+    with a field-path prefix so callers receive an actionable message.
+    """
+    from .config_schema import AgentConfig  # local import avoids circular dep at module load
+
+    try:
+        AgentConfig.model_validate(agent)
+    except Exception as exc:  # pydantic.ValidationError
+        errors = getattr(exc, "errors", None)
+        if errors is not None:
+            parts = []
+            for err in errors():
+                loc = ".".join(str(s) for s in err["loc"]) if err.get("loc") else "?"
+                msg = err.get("msg", str(err))
+                agent_id = agent.get("id", "<unknown>")
+                parts.append(f"agent {agent_id!r}.{loc}: {msg}")
+            raise ScheduleInputError("; ".join(parts)) from exc
+        raise ScheduleInputError(f"agent config error: {exc}") from exc
     # `provider` is intentionally free-form: KNOWN_PROVIDERS is a discovery
     # hint for docs/tooling, not an allow-list, so bespoke runners work.
 
 
 def validate_solver_config(cfg: dict) -> None:
-    if "time_limit" in cfg:
-        require_positive(cfg["time_limit"], "solver.time_limit")
-    if "num_workers" in cfg:
-        require_positive(cfg["num_workers"], "solver.num_workers")
-    if "horizon_multiplier" in cfg:
-        require_positive(cfg["horizon_multiplier"], "solver.horizon_multiplier")
-    if "token_unit" in cfg:
-        require_positive(cfg["token_unit"], "solver.token_unit")
-    obj = cfg.get("objective", "lexicographic")
-    if obj not in ("lexicographic", "weighted"):
-        raise ScheduleInputError(
-            f"solver.objective must be 'lexicographic' or 'weighted'; got {obj!r}"
-        )
+    """Validate solver options block via pydantic SolverOptions.
+
+    Thin wrapper that converts pydantic ValidationError into ScheduleInputError.
+    """
+    from .config_schema import SolverOptions  # local import avoids circular dep at module load
+
+    try:
+        SolverOptions.model_validate(cfg)
+    except Exception as exc:  # pydantic.ValidationError
+        errors = getattr(exc, "errors", None)
+        if errors is not None:
+            parts = []
+            for err in errors():
+                loc = ".".join(str(s) for s in err["loc"]) if err.get("loc") else "?"
+                msg = err.get("msg", str(err))
+                parts.append(f"solver.{loc}: {msg}")
+            raise ScheduleInputError("; ".join(parts)) from exc
+        raise ScheduleInputError(f"solver config error: {exc}") from exc
 
 
 def validate_solver_input(data: dict) -> None:
@@ -109,9 +130,7 @@ def validate_solver_input(data: dict) -> None:
     required = {"tasks", "edges", "agents", "config"}
     missing = required - set(data.keys())
     if missing:
-        raise ScheduleInputError(
-            f"Solver input missing top-level keys: {sorted(missing)}"
-        )
+        raise ScheduleInputError(f"Solver input missing top-level keys: {sorted(missing)}")
     if not isinstance(data["tasks"], list) or not data["tasks"]:
         raise ScheduleInputError("Solver input 'tasks' must be a non-empty list")
     if not isinstance(data["edges"], list):
@@ -140,7 +159,7 @@ def validate_solver_input(data: dict) -> None:
 
     ids = {t["id"] for t in data["tasks"]}
     for e in data["edges"]:
-        if not (isinstance(e, (list, tuple)) and len(e) == 2):
+        if not (isinstance(e, list | tuple) and len(e) == 2):
             raise ScheduleInputError(f"Malformed edge (expected [src_id, dst_id]): {e}")
         src, dst = e
         if src not in ids:

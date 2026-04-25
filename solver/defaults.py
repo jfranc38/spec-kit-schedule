@@ -22,6 +22,8 @@ __all__ = [
     "SPEED_FACTOR_DEFAULT",
     "MAKESPAN_WEIGHT",
     "OBJECTIVE",
+    "STOCHASTIC_QUANTILE_DEFAULT",
+    "ANYTIME_DEFAULT",
     "AGENT_COLORS",
     "CRITICAL_COLOR",
 ]
@@ -52,34 +54,90 @@ CRITICAL_HATCH = "///"
 
 
 TOKEN_ESTIMATES: dict[str, int] = dict(
-    MappingProxyType({
-        "simple": 1500,
-        "medium": 3500,
-        "complex": 6000,
-        "review": 2000,
-    })
+    MappingProxyType(
+        {
+            "simple": 1500,
+            "medium": 3500,
+            "complex": 6000,
+            "review": 2000,
+        }
+    )
 )
 
 COMPLEXITY_VERBS: dict[str, list[str]] = {
     "simple": [
-        "add", "update", "rename", "move", "import", "export", "configure",
-        "adds", "updates", "renames", "moves", "imports", "exports", "configures",
-        "adding", "updating", "renaming", "moving", "importing", "exporting", "configuring",
+        "add",
+        "update",
+        "rename",
+        "move",
+        "import",
+        "export",
+        "configure",
+        "adds",
+        "updates",
+        "renames",
+        "moves",
+        "imports",
+        "exports",
+        "configures",
+        "adding",
+        "updating",
+        "renaming",
+        "moving",
+        "importing",
+        "exporting",
+        "configuring",
     ],
     "medium": [
-        "implement", "create", "write", "build", "refactor",
-        "implements", "creates", "writes", "builds", "refactors",
-        "implementing", "creating", "writing", "building", "refactoring",
+        "implement",
+        "create",
+        "write",
+        "build",
+        "refactor",
+        "implements",
+        "creates",
+        "writes",
+        "builds",
+        "refactors",
+        "implementing",
+        "creating",
+        "writing",
+        "building",
+        "refactoring",
     ],
     "complex": [
-        "design", "architect", "integrate", "migrate", "optimize",
-        "designs", "architects", "integrates", "migrates", "optimizes",
-        "designing", "architecting", "integrating", "migrating", "optimizing",
+        "design",
+        "architect",
+        "integrate",
+        "migrate",
+        "optimize",
+        "designs",
+        "architects",
+        "integrates",
+        "migrates",
+        "optimizes",
+        "designing",
+        "architecting",
+        "integrating",
+        "migrating",
+        "optimizing",
     ],
     "review": [
-        "review", "validate", "verify", "analyze", "audit",
-        "reviews", "validates", "verifies", "analyzes", "audits",
-        "reviewing", "validating", "verifying", "analyzing", "auditing",
+        "review",
+        "validate",
+        "verify",
+        "analyze",
+        "audit",
+        "reviews",
+        "validates",
+        "verifies",
+        "analyzes",
+        "audits",
+        "reviewing",
+        "validating",
+        "verifying",
+        "analyzing",
+        "auditing",
     ],
 }
 
@@ -96,3 +154,5 @@ OBJECTIVE = "lexicographic"
 KAPPA_DEFAULT = 10
 CONTEXT_BUDGET_KTOKENS_DEFAULT = 16
 SPEED_FACTOR_DEFAULT = 1.0
+STOCHASTIC_QUANTILE_DEFAULT = 0.5
+ANYTIME_DEFAULT = False

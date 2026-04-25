@@ -1,4 +1,5 @@
 """Unit tests for solver.scheduler."""
+
 from __future__ import annotations
 
 import pytest
@@ -18,17 +19,28 @@ from solver.validation import ScheduleInputError
 
 def _task(i: int, skill: str = "backend", tokens: int = 500, files=(), parallel=False) -> Task:
     return Task(
-        id=f"T{i:03d}", phase="Setup", story_id=None, story_priority=99,
-        parallel_flag=parallel, file_paths=list(files),
-        required_skill=skill, estimated_tokens=tokens, action_verb="implement",
+        id=f"T{i:03d}",
+        phase="Setup",
+        story_id=None,
+        story_priority=99,
+        parallel_flag=parallel,
+        file_paths=list(files),
+        required_skill=skill,
+        estimated_tokens=tokens,
+        action_verb="implement",
         index=i,
     )
 
 
 def _agent(j: int, skills=("backend",), kappa=10, budget=100_000, speed=1.0) -> Agent:
     return Agent(
-        id=f"A{j}", model="test", skills=list(skills),
-        kappa=kappa, context_budget=budget, speed_factor=speed, index=j,
+        id=f"A{j}",
+        model="test",
+        skills=list(skills),
+        kappa=kappa,
+        context_budget=budget,
+        speed_factor=speed,
+        index=j,
     )
 
 
@@ -121,20 +133,40 @@ class TestSolveFromJson:
     def _base_input(self):
         return {
             "tasks": [
-                {"id": "T001", "phase": "Setup", "story_id": None,
-                 "story_priority": 99, "parallel_flag": False,
-                 "file_paths": ["a.py"], "required_skill": "backend",
-                 "estimated_tokens": 500, "action_verb": "implement"},
-                {"id": "T002", "phase": "Setup", "story_id": None,
-                 "story_priority": 99, "parallel_flag": False,
-                 "file_paths": ["b.py"], "required_skill": "backend",
-                 "estimated_tokens": 500, "action_verb": "implement"},
+                {
+                    "id": "T001",
+                    "phase": "Setup",
+                    "story_id": None,
+                    "story_priority": 99,
+                    "parallel_flag": False,
+                    "file_paths": ["a.py"],
+                    "required_skill": "backend",
+                    "estimated_tokens": 500,
+                    "action_verb": "implement",
+                },
+                {
+                    "id": "T002",
+                    "phase": "Setup",
+                    "story_id": None,
+                    "story_priority": 99,
+                    "parallel_flag": False,
+                    "file_paths": ["b.py"],
+                    "required_skill": "backend",
+                    "estimated_tokens": 500,
+                    "action_verb": "implement",
+                },
             ],
             "edges": [["T001", "T002"]],
-            "agents": [{
-                "id": "backend", "model": "test", "skills": ["backend"],
-                "kappa": 5, "context_budget": 10_000, "speed_factor": 1.0,
-            }],
+            "agents": [
+                {
+                    "id": "backend",
+                    "model": "test",
+                    "skills": ["backend"],
+                    "kappa": 5,
+                    "context_budget": 10_000,
+                    "speed_factor": 1.0,
+                }
+            ],
             "config": {"time_limit": 5, "num_workers": 1},
         }
 
@@ -192,18 +224,25 @@ class TestSolveFromJson:
             tuple(e) for e in result["resource_edges"]
         }
         for arc in result["critical_path_edges"]:
-            assert tuple(arc) in edge_pool, (
-                f"Critical arc {arc} missing from edges + resource_edges"
-            )
+            assert (
+                tuple(arc) in edge_pool
+            ), f"Critical arc {arc} missing from edges + resource_edges"
 
     def test_critical_path_matches_makespan(self):
         data = self._base_input()
-        data["tasks"].append({
-            "id": "T003", "phase": "Setup", "story_id": None,
-            "story_priority": 99, "parallel_flag": False,
-            "file_paths": ["c.py"], "required_skill": "backend",
-            "estimated_tokens": 100, "action_verb": "implement",
-        })
+        data["tasks"].append(
+            {
+                "id": "T003",
+                "phase": "Setup",
+                "story_id": None,
+                "story_priority": 99,
+                "parallel_flag": False,
+                "file_paths": ["c.py"],
+                "required_skill": "backend",
+                "estimated_tokens": 100,
+                "action_verb": "implement",
+            }
+        )
         result = solve_from_json(data)
         by_id = {a["task_id"]: a for a in result["assignments"]}
         chain_duration = sum(by_id[t]["duration"] for t in result["critical_path"])

@@ -1,4 +1,5 @@
 """Unit tests for solver.validation."""
+
 from __future__ import annotations
 
 import pytest
@@ -50,10 +51,15 @@ class TestFindCycle:
 
 class TestAgentConfig:
     def test_happy_path(self):
-        validate_agent_config({
-            "id": "a", "skills": ["backend"], "kappa": 5,
-            "context_budget": 16, "speed_factor": 1.0,
-        })
+        validate_agent_config(
+            {
+                "id": "a",
+                "skills": ["backend"],
+                "kappa": 5,
+                "context_budget": 16,
+                "speed_factor": 1.0,
+            }
+        )
 
     def test_missing_id_raises(self):
         with pytest.raises(ScheduleInputError):
@@ -65,8 +71,7 @@ class TestAgentConfig:
 
     @pytest.mark.parametrize("field", ["kappa", "context_budget", "speed_factor"])
     def test_non_positive_raises(self, field):
-        agent = {"id": "a", "skills": ["x"], "kappa": 5,
-                 "context_budget": 16, "speed_factor": 1.0}
+        agent = {"id": "a", "skills": ["x"], "kappa": 5, "context_budget": 16, "speed_factor": 1.0}
         agent[field] = 0
         with pytest.raises(ScheduleInputError):
             validate_agent_config(agent)
@@ -90,10 +95,15 @@ class TestSolverInput:
         return {
             "tasks": [{"id": "T001", "estimated_tokens": 500}],
             "edges": [],
-            "agents": [{
-                "id": "a", "skills": ["backend"], "kappa": 1,
-                "context_budget": 1000, "speed_factor": 1.0,
-            }],
+            "agents": [
+                {
+                    "id": "a",
+                    "skills": ["backend"],
+                    "kappa": 1,
+                    "context_budget": 1000,
+                    "speed_factor": 1.0,
+                }
+            ],
             "config": {},
         }
 

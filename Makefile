@@ -1,4 +1,4 @@
-.PHONY: install sync test cov lint typecheck fmt smoke schedule clean package help
+.PHONY: install sync test cov lint typecheck fmt smoke schedule schedule-all bench bench-report clean package help
 
 SHELL := /usr/bin/env bash
 UV    ?= uv
@@ -48,6 +48,18 @@ schedule: ## Rebuild docs/example-schedule.md + docs/images/* from current code
 	echo "regenerated docs/example-schedule.md + docs/images/example-{dag,gantt}.png"; \
 	rm -rf $$tmp
 
+schedule-all: ## Regenerate schedule.md + PNGs + HTML (requires viz extra)
+	@set -e; \
+	tmp=$$(mktemp -d); \
+	$(UV) run -- python -m solver.parse_tasks docs/example-tasks.md docs/example-config.yml > $$tmp/in.json; \
+	$(UV) run -- python -m solver.scheduler < $$tmp/in.json > $$tmp/out.json; \
+	mkdir -p docs/images; \
+	$(UV) run --extra viz -- python -m solver.visualize $$tmp/out.json docs/images --feature example >/dev/null; \
+	$(UV) run -- python -m solver.render_schedule $$tmp/out.json "Create Taskify" --image-prefix images/example > docs/example-schedule.md; \
+	$(UV) run --extra viz -- python -m solver.render_html $$tmp/out.json "Create Taskify" --image-prefix images/example > docs/example-schedule.html; \
+	echo "regenerated docs/example-schedule.md + docs/images/example-{dag,gantt}.png + docs/example-schedule.html"; \
+	rm -rf $$tmp
+
 package: ## Produce a distributable zip of the extension
 	@rm -rf dist && mkdir -p dist
 	@git rev-parse --is-inside-work-tree >/dev/null 2>&1 && \
@@ -56,6 +68,12 @@ package: ## Produce a distributable zip of the extension
 	     "$$(basename $(PWD))" -x '*/.git/*' '*/.venv/*' '*/__pycache__/*' \
 	     '*/.ruff_cache/*' '*/.pytest_cache/*' '*/.mypy_cache/*' '*/dist/*')
 	@echo "dist/spec-kit-schedule.zip ready"
+
+bench: ## Run all benchmark problems and write latest.md
+	$(UV) run --extra viz -- python -m benchmarks.run --all --time-limit 60
+
+bench-report: ## Print the latest benchmark table
+	@cat benchmarks/results/latest.md 2>/dev/null || echo "run 'make bench' first"
 
 clean: ## Remove caches and build outputs
 	rm -rf .pytest_cache .ruff_cache .mypy_cache dist .venv

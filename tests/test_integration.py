@@ -1,4 +1,5 @@
 """End-to-end integration tests using the docs example."""
+
 from __future__ import annotations
 
 from solver.parse_tasks import parse_tasks_md
@@ -45,8 +46,6 @@ def test_docs_example_skill_coverage_is_complete(docs_example_tasks, docs_exampl
     skill an agent needs.
     """
     parser_output = parse_tasks_md(str(docs_example_tasks), docs_example_config)
-    agent_skills = {
-        s for a in parser_output["agents"] for s in a["skills"]
-    }
+    agent_skills = {s for a in parser_output["agents"] for s in a["skills"]}
     uncovered = {t["required_skill"] for t in parser_output["tasks"]} - agent_skills
     assert uncovered == set()

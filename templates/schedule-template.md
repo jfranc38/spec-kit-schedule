@@ -118,6 +118,9 @@ graph LR
 | Phase 1 time / status | {{P1_TIME}}s / {{P1_STATUS}} |
 | Phase 2 time / status | {{P2_TIME}}s / {{P2_STATUS}} |
 | Status | {{STATUS}} |
+{{#TOTAL_COST}}
+| Total cost | {{TOTAL_COST}} |
+{{/TOTAL_COST}}
 
 ---
 

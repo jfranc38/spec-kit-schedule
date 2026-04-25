@@ -1,8 +1,9 @@
 # =============================================================================
 # spec-kit-schedule — Agent Portfolio & Solver Configuration
 # =============================================================================
-# Copy this file to your project root as `schedule-config.yml`
-# or let `/speckit.schedule.portfolio` generate it interactively.
+# Copy this file to your project root as `schedule-config.yml`,
+# or run `python -m solver.autodetect --project-dir . --output schedule-config.yml`
+# to bootstrap a portfolio from your project's files automatically.
 #
 # The scheduler reads this file + your tasks.md to produce schedule.md
 # =============================================================================
@@ -34,8 +35,11 @@
 #                   STARTING ESTIMATE based on RULER/NoLiMa/Chroma; calibrate
 #                   to your model's empirical long-context performance.
 #   context_budget: Max cumulative input tokens per session, in thousands.
-#   speed_factor:   Relative speed multiplier (1.0 = baseline). 0.5 = takes
-#                   2× longer per task. Must be > 0.
+#   speed_factor:       Relative speed multiplier (1.0 = baseline). 0.5 = takes
+#                       2× longer per task. Must be > 0.
+#   price_per_1k_tokens: Optional cost in USD per 1,000 input tokens (default 0.0).
+#                       Used by the cost_aware objective to trade off makespan
+#                       against monetary cost. Set to 0 for self-hosted models.
 #
 # See docs/example-config-mixed.yml for a multi-provider portfolio.
 
@@ -47,6 +51,7 @@ agents:
     kappa: 6
     context_budget: 32
     speed_factor: 0.8
+    price_per_1k_tokens: 0.015   # optional; USD per 1K input tokens
 
   - id: "backend"
     provider: "anthropic"
@@ -55,6 +60,7 @@ agents:
     kappa: 10
     context_budget: 16
     speed_factor: 1.0
+    price_per_1k_tokens: 0.003
 
   - id: "frontend"
     provider: "anthropic"
@@ -63,6 +69,7 @@ agents:
     kappa: 10
     context_budget: 16
     speed_factor: 1.0
+    price_per_1k_tokens: 0.003
 
   - id: "tester"
     provider: "anthropic"
@@ -71,6 +78,7 @@ agents:
     kappa: 15
     context_budget: 8
     speed_factor: 1.5
+    price_per_1k_tokens: 0.0008
 
 # ---------------------------------------------------------------------------
 # Skill Inference Rules
@@ -129,7 +137,8 @@ default_skill: "backend"
 
 token_estimates:
   simple:   1500    # "Add import", "Create empty file", "Update config"
-  medium:   3500    # "Implement service method", "Write unit test"
+  # Dict form adds std_dev for stochastic scheduling (used when stochastic_quantile != 0.5):
+  medium:   {mean: 3500, std_dev: 500}   # "Implement service method", "Write unit test"
   complex:  6000    # "Design schema", "Implement full CRUD endpoint"
   review:   2000    # "Review contracts", "Validate integration"
 
@@ -149,10 +158,16 @@ solver:
   #   "lexicographic" — Phase 1 minimises makespan, Phase 2 freezes that
   #                     makespan and minimises the maximum agent load.
   #   "weighted"      — Single-phase: minimise W*makespan + max_load.
+  #   "cost_aware"    — Single-phase: minimise W*makespan + cost_weight*cost.
+  #                     Requires price_per_1k_tokens set on each agent.
   objective: "lexicographic"
 
-  # Weight for the weighted objective. Ignored when objective=lexicographic.
+  # Weight for the weighted/cost_aware objectives. Ignored for lexicographic.
   makespan_weight: 100
+
+  # Weight applied to estimated monetary cost in the cost_aware objective.
+  # Set to 0 (default) when cost optimisation is not needed.
+  cost_weight: 0
 
   # Time limit per solver phase, in seconds.
   # Recommended:
@@ -185,6 +200,16 @@ solver:
   # Smaller values keep more granularity (recommended); larger values
   # shrink the horizon and may speed up solving at the cost of precision.
   token_unit: 100
+
+  # Quantile used when token_estimates entries have std_dev > 0 (stochastic
+  # mode). 0.5 = median (default). 0.9 = conservative high estimate.
+  # Range: [0.0, 1.0].
+  stochastic_quantile: 0.5
+
+  # When true, the solver returns the best solution found within time_limit
+  # rather than waiting for optimality proof (anytime mode). Useful for
+  # very large problems where the first feasible solution is already good.
+  anytime: false
 
 # ---------------------------------------------------------------------------
 # Output
