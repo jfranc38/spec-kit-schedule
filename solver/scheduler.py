@@ -316,6 +316,15 @@ def compute_min_durations(
     return {i: min(p[(i, a)] for a in compat[i]) for i in range(n)}
 
 
+def _raise_if_cycle(tasks: list[Task], edges: list[tuple[int, int]]) -> None:
+    """Raise `ScheduleInputError` with the cycle path if `edges` form a cycle."""
+    cycle = find_cycle(len(tasks), edges)
+    if cycle is None:
+        return
+    names = " → ".join(tasks[i].id for i in cycle)
+    raise ScheduleInputError(t("solver_input_cycle", names=names))
+
+
 # ───────────────────────────────────────────────────────────────────────
 # File-conflict sets
 # ───────────────────────────────────────────────────────────────────────
@@ -1354,10 +1363,7 @@ def solve_with_fixed(
     validate_solver_input(data)
     tasks, edges, agents, config = _parse_input(data)
 
-    cycle = find_cycle(len(tasks), edges)
-    if cycle is not None:
-        names = " → ".join(tasks[i].id for i in cycle)
-        raise ScheduleInputError(t("solver_input_cycle", names=names))
+    _raise_if_cycle(tasks, edges)
 
     warnings = WarningCollector()
     for w in data.get("warnings", []) or []:
@@ -1455,10 +1461,7 @@ def solve_from_json(data: dict) -> dict:
     validate_solver_input(data)
     tasks, edges, agents, config = _parse_input(data)
 
-    cycle = find_cycle(len(tasks), edges)
-    if cycle is not None:
-        names = " → ".join(tasks[i].id for i in cycle)
-        raise ScheduleInputError(t("solver_input_cycle", names=names))
+    _raise_if_cycle(tasks, edges)
 
     warnings = WarningCollector()
     for w in data.get("warnings", []) or []:

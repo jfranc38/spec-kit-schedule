@@ -216,7 +216,7 @@ def parse_schedule_md(path: str | Path) -> ExecutionPlan:
         text = p.read_text(encoding="utf-8")
     except OSError as exc:
         raise ScheduleInputError(
-            t("cannot_read_schedule_file", path=p, error=exc)
+            t("cannot_read_file", file_kind="schedule", path_suffix=f" {p}", error=exc)
         ) from exc
 
     # Feature name.

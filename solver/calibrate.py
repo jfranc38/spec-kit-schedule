@@ -112,7 +112,9 @@ def _load_runs(runs_path: Path, collector: WarningCollector) -> tuple[list[dict]
     try:
         text = runs_path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise ScheduleInputError(t("cannot_read_runs_file", error=exc)) from exc
+        raise ScheduleInputError(
+            t("cannot_read_file", file_kind="runs", path_suffix="", error=exc)
+        ) from exc
 
     for line_no, line in enumerate(text.splitlines(), start=1):
         line = line.strip()

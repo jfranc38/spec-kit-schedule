@@ -192,9 +192,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Interactive edits produced an invalid config: {error}",
         "es": "Las ediciones interactivas produjeron una configuración inválida: {error}",
     },
-    "cannot_read_runs_file": {
-        "en": "Cannot read runs file: {error}",
-        "es": "No se puede leer el archivo de runs: {error}",
+    "cannot_read_file": {
+        "en": "Cannot read {file_kind} file{path_suffix}: {error}",
+        "es": "No se puede leer el archivo {file_kind}{path_suffix}: {error}",
     },
     "unresolved_deps_summary": {
         "en": "Unresolved dependencies: {details}",
@@ -221,9 +221,5 @@ MESSAGES: dict[str, dict[str, str]] = {
     "schedule_file_no_waves": {
         "en": "No wave sections found in {path}",
         "es": "No se encontraron secciones de wave en {path}",
-    },
-    "cannot_read_schedule_file": {
-        "en": "Cannot read schedule file {path}: {error}",
-        "es": "No se puede leer el archivo de schedule {path}: {error}",
     },
 }
