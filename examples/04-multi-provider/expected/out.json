@@ -1,0 +1,858 @@
+{
+  "status": "OPTIMAL",
+  "assignments": [
+    {
+      "task_id": "T002",
+      "task_index": 1,
+      "agent_id": "opus",
+      "agent_index": 0,
+      "start": 0,
+      "end": 75,
+      "duration": 75,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "docs/ADR-002-encoding.md"
+      ],
+      "tokens": 6000,
+      "required_skill": "design"
+    },
+    {
+      "task_id": "T003",
+      "task_index": 2,
+      "agent_id": "sonnet",
+      "agent_index": 1,
+      "start": 0,
+      "end": 60,
+      "duration": 60,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/models/schema.sql"
+      ],
+      "tokens": 6000,
+      "required_skill": "schema"
+    },
+    {
+      "task_id": "T004",
+      "task_index": 3,
+      "agent_id": "sonnet",
+      "agent_index": 1,
+      "start": 60,
+      "end": 95,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/models/link.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "schema"
+    },
+    {
+      "task_id": "T001",
+      "task_index": 0,
+      "agent_id": "opus",
+      "agent_index": 0,
+      "start": 75,
+      "end": 150,
+      "duration": 75,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "docs/ADR-001-architecture.md"
+      ],
+      "tokens": 6000,
+      "required_skill": "design"
+    },
+    {
+      "task_id": "T005",
+      "task_index": 4,
+      "agent_id": "sonnet",
+      "agent_index": 1,
+      "start": 95,
+      "end": 130,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/services/encoder.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "backend"
+    },
+    {
+      "task_id": "T006",
+      "task_index": 5,
+      "agent_id": "gpt4o",
+      "agent_index": 2,
+      "start": 95,
+      "end": 130,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/services/redirect.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "backend"
+    },
+    {
+      "task_id": "T007",
+      "task_index": 6,
+      "agent_id": "sonnet",
+      "agent_index": 1,
+      "start": 130,
+      "end": 165,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/api/shorten.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "api"
+    },
+    {
+      "task_id": "T011",
+      "task_index": 10,
+      "agent_id": "gpt4o-mini",
+      "agent_index": 3,
+      "start": 130,
+      "end": 155,
+      "duration": 25,
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "tests/test_encoder.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "test"
+    },
+    {
+      "task_id": "T012",
+      "task_index": 11,
+      "agent_id": "gpt4o-mini",
+      "agent_index": 3,
+      "start": 155,
+      "end": 180,
+      "duration": 25,
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "tests/test_redirect.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "test"
+    },
+    {
+      "task_id": "T008",
+      "task_index": 7,
+      "agent_id": "sonnet",
+      "agent_index": 1,
+      "start": 165,
+      "end": 200,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/api/redirect.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "api"
+    },
+    {
+      "task_id": "T009",
+      "task_index": 8,
+      "agent_id": "gemini-flash",
+      "agent_index": 4,
+      "start": 165,
+      "end": 187,
+      "duration": 22,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/components/LinkForm.tsx"
+      ],
+      "tokens": 3500,
+      "required_skill": "frontend"
+    },
+    {
+      "task_id": "T010",
+      "task_index": 9,
+      "agent_id": "gpt4o",
+      "agent_index": 2,
+      "start": 165,
+      "end": 200,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/components/LinkList.tsx"
+      ],
+      "tokens": 3500,
+      "required_skill": "frontend"
+    },
+    {
+      "task_id": "T013",
+      "task_index": 12,
+      "agent_id": "gpt4o-mini",
+      "agent_index": 3,
+      "start": 200,
+      "end": 225,
+      "duration": 25,
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "tests/test_e2e.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "test"
+    },
+    {
+      "task_id": "T014",
+      "task_index": 13,
+      "agent_id": "gemini-flash",
+      "agent_index": 4,
+      "start": 225,
+      "end": 238,
+      "duration": 13,
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "docs/architecture.md"
+      ],
+      "tokens": 2000,
+      "required_skill": "docs"
+    }
+  ],
+  "waves": [
+    {
+      "wave": 1,
+      "start_time": 0,
+      "tasks": [
+        {
+          "task_id": "T002",
+          "task_index": 1,
+          "agent_id": "opus",
+          "agent_index": 0,
+          "start": 0,
+          "end": 75,
+          "duration": 75,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "docs/ADR-002-encoding.md"
+          ],
+          "tokens": 6000,
+          "required_skill": "design"
+        },
+        {
+          "task_id": "T003",
+          "task_index": 2,
+          "agent_id": "sonnet",
+          "agent_index": 1,
+          "start": 0,
+          "end": 60,
+          "duration": 60,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/models/schema.sql"
+          ],
+          "tokens": 6000,
+          "required_skill": "schema"
+        }
+      ]
+    },
+    {
+      "wave": 2,
+      "start_time": 60,
+      "tasks": [
+        {
+          "task_id": "T004",
+          "task_index": 3,
+          "agent_id": "sonnet",
+          "agent_index": 1,
+          "start": 60,
+          "end": 95,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/models/link.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "schema"
+        }
+      ]
+    },
+    {
+      "wave": 3,
+      "start_time": 75,
+      "tasks": [
+        {
+          "task_id": "T001",
+          "task_index": 0,
+          "agent_id": "opus",
+          "agent_index": 0,
+          "start": 75,
+          "end": 150,
+          "duration": 75,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "docs/ADR-001-architecture.md"
+          ],
+          "tokens": 6000,
+          "required_skill": "design"
+        }
+      ]
+    },
+    {
+      "wave": 4,
+      "start_time": 95,
+      "tasks": [
+        {
+          "task_id": "T005",
+          "task_index": 4,
+          "agent_id": "sonnet",
+          "agent_index": 1,
+          "start": 95,
+          "end": 130,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/services/encoder.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "backend"
+        },
+        {
+          "task_id": "T006",
+          "task_index": 5,
+          "agent_id": "gpt4o",
+          "agent_index": 2,
+          "start": 95,
+          "end": 130,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/services/redirect.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "backend"
+        }
+      ]
+    },
+    {
+      "wave": 5,
+      "start_time": 130,
+      "tasks": [
+        {
+          "task_id": "T007",
+          "task_index": 6,
+          "agent_id": "sonnet",
+          "agent_index": 1,
+          "start": 130,
+          "end": 165,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/api/shorten.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "api"
+        },
+        {
+          "task_id": "T011",
+          "task_index": 10,
+          "agent_id": "gpt4o-mini",
+          "agent_index": 3,
+          "start": 130,
+          "end": 155,
+          "duration": 25,
+          "phase": "Polish",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "tests/test_encoder.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "test"
+        }
+      ]
+    },
+    {
+      "wave": 6,
+      "start_time": 155,
+      "tasks": [
+        {
+          "task_id": "T012",
+          "task_index": 11,
+          "agent_id": "gpt4o-mini",
+          "agent_index": 3,
+          "start": 155,
+          "end": 180,
+          "duration": 25,
+          "phase": "Polish",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "tests/test_redirect.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "test"
+        }
+      ]
+    },
+    {
+      "wave": 7,
+      "start_time": 165,
+      "tasks": [
+        {
+          "task_id": "T008",
+          "task_index": 7,
+          "agent_id": "sonnet",
+          "agent_index": 1,
+          "start": 165,
+          "end": 200,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/api/redirect.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "api"
+        },
+        {
+          "task_id": "T009",
+          "task_index": 8,
+          "agent_id": "gemini-flash",
+          "agent_index": 4,
+          "start": 165,
+          "end": 187,
+          "duration": 22,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/components/LinkForm.tsx"
+          ],
+          "tokens": 3500,
+          "required_skill": "frontend"
+        },
+        {
+          "task_id": "T010",
+          "task_index": 9,
+          "agent_id": "gpt4o",
+          "agent_index": 2,
+          "start": 165,
+          "end": 200,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/components/LinkList.tsx"
+          ],
+          "tokens": 3500,
+          "required_skill": "frontend"
+        }
+      ]
+    },
+    {
+      "wave": 8,
+      "start_time": 200,
+      "tasks": [
+        {
+          "task_id": "T013",
+          "task_index": 12,
+          "agent_id": "gpt4o-mini",
+          "agent_index": 3,
+          "start": 200,
+          "end": 225,
+          "duration": 25,
+          "phase": "Polish",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "tests/test_e2e.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "test"
+        }
+      ]
+    },
+    {
+      "wave": 9,
+      "start_time": 225,
+      "tasks": [
+        {
+          "task_id": "T014",
+          "task_index": 13,
+          "agent_id": "gemini-flash",
+          "agent_index": 4,
+          "start": 225,
+          "end": 238,
+          "duration": 13,
+          "phase": "Polish",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "docs/architecture.md"
+          ],
+          "tokens": 2000,
+          "required_skill": "docs"
+        }
+      ]
+    }
+  ],
+  "agent_summary": [
+    {
+      "agent_id": "opus",
+      "model": "claude-opus-4",
+      "task_count": 2,
+      "total_tokens": 12000,
+      "budget_utilization": 37.5,
+      "total_load": 150,
+      "kappa_utilization": 33.3,
+      "cost": 180.0,
+      "tasks": [
+        "T002",
+        "T001"
+      ],
+      "provider": "anthropic"
+    },
+    {
+      "agent_id": "sonnet",
+      "model": "claude-sonnet-4",
+      "task_count": 5,
+      "total_tokens": 20000,
+      "budget_utilization": 62.5,
+      "total_load": 200,
+      "kappa_utilization": 50.0,
+      "cost": 60.0,
+      "tasks": [
+        "T003",
+        "T004",
+        "T005",
+        "T007",
+        "T008"
+      ],
+      "provider": "anthropic"
+    },
+    {
+      "agent_id": "gpt4o",
+      "model": "gpt-4o",
+      "task_count": 2,
+      "total_tokens": 7000,
+      "budget_utilization": 21.9,
+      "total_load": 70,
+      "kappa_utilization": 20.0,
+      "cost": 35.0,
+      "tasks": [
+        "T006",
+        "T010"
+      ],
+      "provider": "openai"
+    },
+    {
+      "agent_id": "gpt4o-mini",
+      "model": "gpt-4o-mini",
+      "task_count": 3,
+      "total_tokens": 10500,
+      "budget_utilization": 65.6,
+      "total_load": 75,
+      "kappa_utilization": 25.0,
+      "cost": 1.575,
+      "tasks": [
+        "T011",
+        "T012",
+        "T013"
+      ],
+      "provider": "openai"
+    },
+    {
+      "agent_id": "gemini-flash",
+      "model": "gemini-2.0-flash",
+      "task_count": 2,
+      "total_tokens": 5500,
+      "budget_utilization": 34.4,
+      "total_load": 35,
+      "kappa_utilization": 16.7,
+      "cost": 0.4125,
+      "tasks": [
+        "T009",
+        "T014"
+      ],
+      "provider": "google"
+    }
+  ],
+  "critical_path": [
+    "T003",
+    "T004",
+    "T005",
+    "T007",
+    "T010",
+    "T013",
+    "T014"
+  ],
+  "critical_path_edges": [
+    [
+      "T003",
+      "T004"
+    ],
+    [
+      "T004",
+      "T005"
+    ],
+    [
+      "T005",
+      "T007"
+    ],
+    [
+      "T007",
+      "T010"
+    ],
+    [
+      "T010",
+      "T013"
+    ],
+    [
+      "T013",
+      "T014"
+    ]
+  ],
+  "resource_edges": [
+    [
+      "T002",
+      "T001"
+    ],
+    [
+      "T006",
+      "T010"
+    ],
+    [
+      "T007",
+      "T008"
+    ],
+    [
+      "T009",
+      "T014"
+    ],
+    [
+      "T011",
+      "T012"
+    ],
+    [
+      "T012",
+      "T013"
+    ]
+  ],
+  "stats": {
+    "horizon": 338,
+    "heuristic_makespan": 293,
+    "phase1_time": 0.02,
+    "phase1_status": "OPTIMAL",
+    "phase1_status_code": 4,
+    "makespan_phase1": 238,
+    "phase2_time": 0.0,
+    "phase2_status": "OPTIMAL",
+    "phase2_status_code": 4,
+    "phase3_time": 0.0,
+    "phase3_status": "OPTIMAL",
+    "phase3_status_code": 4,
+    "total_solve_time": 0.03,
+    "makespan": 238,
+    "max_load": 200,
+    "min_load": 35,
+    "total_tasks": 14,
+    "total_agents": 5,
+    "total_waves": 9,
+    "total_cost": 276.9875,
+    "status": "OPTIMAL",
+    "quantile_used": 0.5
+  },
+  "warnings": [],
+  "edges": [
+    [
+      "T003",
+      "T004"
+    ],
+    [
+      "T002",
+      "T005"
+    ],
+    [
+      "T004",
+      "T005"
+    ],
+    [
+      "T004",
+      "T006"
+    ],
+    [
+      "T005",
+      "T007"
+    ],
+    [
+      "T006",
+      "T008"
+    ],
+    [
+      "T007",
+      "T009"
+    ],
+    [
+      "T007",
+      "T010"
+    ],
+    [
+      "T005",
+      "T011"
+    ],
+    [
+      "T006",
+      "T012"
+    ],
+    [
+      "T009",
+      "T013"
+    ],
+    [
+      "T010",
+      "T013"
+    ],
+    [
+      "T013",
+      "T014"
+    ]
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "design"
+    },
+    {
+      "id": "T002",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "design"
+    },
+    {
+      "id": "T003",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "schema"
+    },
+    {
+      "id": "T004",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "schema"
+    },
+    {
+      "id": "T005",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "backend"
+    },
+    {
+      "id": "T006",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "backend"
+    },
+    {
+      "id": "T007",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "api"
+    },
+    {
+      "id": "T008",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "api"
+    },
+    {
+      "id": "T009",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "frontend"
+    },
+    {
+      "id": "T010",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "frontend"
+    },
+    {
+      "id": "T011",
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "test"
+    },
+    {
+      "id": "T012",
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "test"
+    },
+    {
+      "id": "T013",
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "test"
+    },
+    {
+      "id": "T014",
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "docs"
+    }
+  ]
+}

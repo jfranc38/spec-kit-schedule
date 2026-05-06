@@ -1,5 +1,12 @@
+# Example portfolio. The scheduler is provider-agnostic: `provider` and
+# `model` are informational strings the executor (e.g. /speckit.implement,
+# MAQA coordinator, custom orchestrator) uses to route each task to the
+# right runner. Mix providers freely — see docs/example-config-mixed.yml
+# for a more diverse example.
+
 agents:
   - id: "architect"
+    provider: "anthropic"
     model: "claude-opus-4"
     skills: ["design", "review", "schema", "architecture"]
     kappa: 8
@@ -8,14 +15,16 @@ agents:
     price_per_1k_tokens: 0.015   # claude-opus-4 input price per 1K tokens (2026)
 
   - id: "backend-1"
-    model: "claude-sonnet-4"
+    provider: "openai"
+    model: "gpt-4o"
     skills: ["python", "backend", "api", "database", "schema"]
     kappa: 12
     context_budget: 32
     speed_factor: 1.0
-    price_per_1k_tokens: 0.003   # claude-sonnet-4 input price per 1K tokens (2026)
+    price_per_1k_tokens: 0.0025  # gpt-4o input price per 1K tokens (2026)
 
   - id: "backend-2"
+    provider: "anthropic"
     model: "claude-sonnet-4"
     skills: ["python", "backend", "api", "database", "schema"]
     kappa: 12
@@ -24,14 +33,16 @@ agents:
     price_per_1k_tokens: 0.003
 
   - id: "frontend"
-    model: "claude-sonnet-4"
+    provider: "google"
+    model: "gemini-2.0-pro"
     skills: ["frontend", "react", "css", "html", "javascript"]
     kappa: 10
     context_budget: 32
     speed_factor: 1.0
-    price_per_1k_tokens: 0.003
+    price_per_1k_tokens: 0.00125  # gemini-2.0-pro estimated input price per 1K tokens (2026)
 
   - id: "tester"
+    provider: "anthropic"
     model: "claude-haiku-4.5"
     skills: ["test", "e2e", "contract-test", "unit-test"]
     kappa: 15

@@ -10,6 +10,33 @@ Solve a constrained optimization model (CP-SAT) over the current feature's `task
 
 This command sits between `/speckit.tasks` and `/speckit.implement` in the SDD pipeline.
 
+## Pre-flight: verify Python solver dependencies
+
+Before invoking the solver, run this check from the repository root:
+
+```bash
+python3 -c "import solver, ortools, networkx, pydantic, yaml" 2>&1 || {
+  cat <<'EOF'
+ERROR: Python solver dependencies are not installed.
+
+This extension's solver is a Python package separate from the
+spec-kit command registration. Install it once with:
+
+  cd <path-to-spec-kit-schedule-clone>
+  ./bin/install.sh        # bootstraps uv + venv + deps + smoke test
+  # OR
+  uv sync --extra dev     # if you already have uv
+
+After bootstrap, re-run the /speckit.schedule.* command.
+EOF
+  exit 2
+}
+```
+
+If the check fails, surface the error message above to the user verbatim
+and STOP — do not attempt the solver invocations below. If the check
+succeeds, proceed with the workflow.
+
 ## Prerequisites
 
 Before running this command, verify:

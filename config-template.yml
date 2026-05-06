@@ -44,6 +44,10 @@
 # See docs/example-config-mixed.yml for a multi-provider portfolio.
 
 agents:
+  # The portfolio below mixes providers to illustrate the schema. Swap any
+  # agent for a different provider/model — the solver only consumes
+  # `skills`, `kappa`, `context_budget`, `speed_factor`, and (optionally)
+  # `price_per_1k_tokens`.
   - id: "architect"
     provider: "anthropic"
     model: "claude-opus-4"
@@ -54,22 +58,22 @@ agents:
     price_per_1k_tokens: 0.015   # optional; USD per 1K input tokens
 
   - id: "backend"
-    provider: "anthropic"
-    model: "claude-sonnet-4"
+    provider: "openai"
+    model: "gpt-4o"
     skills: ["python", "backend", "api", "database", "schema"]
     kappa: 10
     context_budget: 16
     speed_factor: 1.0
-    price_per_1k_tokens: 0.003
+    price_per_1k_tokens: 0.0025
 
   - id: "frontend"
-    provider: "anthropic"
-    model: "claude-sonnet-4"
+    provider: "google"
+    model: "gemini-2.0-pro"
     skills: ["frontend", "react", "css", "html", "javascript"]
     kappa: 10
     context_budget: 16
     speed_factor: 1.0
-    price_per_1k_tokens: 0.003
+    price_per_1k_tokens: 0.00125
 
   - id: "tester"
     provider: "anthropic"

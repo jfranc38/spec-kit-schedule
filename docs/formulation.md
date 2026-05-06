@@ -286,13 +286,20 @@ i \in F^{\text{frz}}\}$:
 
 ## Hallucination Calibration
 
-The cardinality cap $\kappa_a$ and context budget $C_a$ are empirically calibrated:
+The cardinality cap $\kappa_a$ and context budget $C_a$ are empirically
+calibrated. Calibration is by **capability tier** rather than by specific
+model: the underlying long-context degradation curves (RULER, NoLiMa) test
+models across providers — Anthropic, OpenAI, Google, Meta, Mistral — and
+report broadly similar context-length patterns within each tier. Map your
+portfolio's agents to the closest tier below and override individual
+`kappa` / `context_budget` values when you have provider-specific
+calibration data.
 
-| Agent Class | $\kappa_a$ | $C_a$ (tokens) | Rationale |
-|-------------|-----------|-----------------|-----------|
-| Large (Opus) | 6 | 32K | RULER reports significant 32K-degradation across most models; this envelope conservatively bounds Opus to a regime where strong models retain ≥80% accuracy in RULER-style tasks |
-| Medium (Sonnet) | 10 | 16K | informed by NoLiMa-style benchmarks documenting context-length degradation |
-| Small (Haiku) | 15 | 8K | Anecdotal calibration informed by community findings on long-context coding-task degradation past ~8 K |
+| Tier | Examples | $\kappa_a$ | $C_a$ (tokens) | Rationale |
+|------|----------|-----------|-----------------|-----------|
+| Frontier | Claude Opus 4, GPT-4o, Gemini 2.0 Pro, o1 | 6 | 32K | RULER: top-tier models retain ≥80% accuracy at 32K context |
+| Mid | Claude Sonnet 4, GPT-4o-mini, Gemini 2.0 Flash, GPT-4 Turbo | 10 | 16K | NoLiMa-style benchmarks show stable performance below ~16K |
+| Small | Claude Haiku 3.5, Mistral Small, Llama 3 70B, GPT-3.5 | 15 | 8K | Coding-task degradation past ~8K commonly reported across small open- and closed-source models |
 
 These hard inequalities are **not** a linear approximation of the underlying
 quality function; they are conservative *feasibility cuts* — a guardrail
@@ -314,6 +321,25 @@ and $C_a$ act as conservative envelopes bounding $L$ and $k$ inside regimes
 where empirical accuracy stays acceptable. Embedding the non-linear $q$
 directly would push the model from CP-SAT into MINLP; the box-constraint
 envelope preserves linearity while excluding regions of accuracy collapse.
+
+### Multi-provider portfolios
+
+The model is provider-agnostic: each agent declares its `provider` and
+`model` strings purely as metadata. The solver consumes only the
+schedule-relevant fields (`skills`, `kappa`, `context_budget`,
+`speed_factor`, `price_per_1k_tokens`, optional `token_estimates`). A
+single portfolio can therefore mix runners such as:
+
+- Anthropic API (`provider: anthropic`, `model: claude-opus-4`)
+- OpenAI API (`provider: openai`, `model: gpt-4o`)
+- Google API (`provider: google`, `model: gemini-2.0-pro`)
+- GitHub Copilot (`provider: github`, `model: gpt-4o`)
+- Cursor's multi-provider setup (`provider: cursor`, `model: <auto>`)
+- Local inference (`provider: ollama`, `model: llama-3-70b`)
+
+The user's editor or CLI is responsible for actually invoking the model
+named in each agent's `model` field; the solver only optimises the
+assignment.
 
 ---
 

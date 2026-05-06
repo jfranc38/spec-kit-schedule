@@ -11,6 +11,44 @@ embedded in `schedule.md`. Use this when the consumer (slides, printed
 reports, IDEs without Mermaid) cannot render the inline diagrams, or when
 the team wants a static artifact pinned to a release.
 
+## Pre-flight: verify Python solver + visualization dependencies
+
+Before invoking the visualizer, run this check from the repository root:
+
+```bash
+python3 -c "import solver, ortools, networkx, pydantic, yaml" 2>&1 || {
+  cat <<'EOF'
+ERROR: Python solver dependencies are not installed.
+
+This extension's solver is a Python package separate from the
+spec-kit command registration. Install it once with:
+
+  cd <path-to-spec-kit-schedule-clone>
+  ./bin/install.sh        # bootstraps uv + venv + deps + smoke test
+  # OR
+  uv sync --extra dev     # if you already have uv
+
+After bootstrap, re-run the /speckit.schedule.* command.
+EOF
+  exit 2
+}
+python3 -c "import matplotlib, plotly" 2>&1 || {
+  cat <<'EOF'
+ERROR: Visualization dependencies (matplotlib, plotly) are not installed.
+
+/speckit.schedule.visualize requires the `viz` extra. Install it with:
+
+  uv sync --extra viz     # adds matplotlib, plotly, pydot
+
+After install, re-run /speckit.schedule.visualize.
+EOF
+  exit 2
+}
+```
+
+If either check fails, surface the matching error message to the user
+verbatim and STOP. If both succeed, proceed with the workflow.
+
 ## Outputs
 
 1. **`schedule-dag.png`** — Dependency DAG with agent colouring and critical

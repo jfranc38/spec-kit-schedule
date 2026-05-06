@@ -1,0 +1,94 @@
+# Hybrid portfolio mixing Anthropic, OpenAI, and Google models. The
+# scheduler is provider-agnostic: `provider` and `model` are pure
+# metadata that downstream executors (Cursor, Copilot, Claude Code,
+# Aider, custom orchestrators) use to dispatch each task to the right
+# runner. The solver only allocates tasks to slots — it does not invoke
+# any model itself.
+#
+# Pricing is in dollars per 1K tokens but values are scaled up from
+# 2026 list prices so the cost differential is visible in the demo.
+# Relative ratios are realistic (Opus ≫ GPT-4o ≫ Sonnet ≫ GPT-4o-mini
+# ≈ Gemini Flash).
+
+agents:
+  - id: opus
+    provider: anthropic
+    model: claude-opus-4
+    skills: [design, schema, architecture, review]
+    kappa: 6
+    context_budget: 32
+    speed_factor: 0.8
+    price_per_1k_tokens: 15.0
+
+  - id: sonnet
+    provider: anthropic
+    model: claude-sonnet-4
+    skills: [python, backend, api, schema, review]
+    kappa: 10
+    context_budget: 32
+    speed_factor: 1.0
+    price_per_1k_tokens: 3.0
+
+  - id: gpt4o
+    provider: openai
+    model: gpt-4o
+    skills: [python, backend, api, frontend, react, review]
+    kappa: 10
+    context_budget: 32
+    speed_factor: 1.0
+    price_per_1k_tokens: 5.0
+
+  - id: gpt4o-mini
+    provider: openai
+    model: gpt-4o-mini
+    skills: [python, test, e2e, unit-test]
+    kappa: 12
+    context_budget: 16
+    speed_factor: 1.4
+    price_per_1k_tokens: 0.15
+
+  - id: gemini-flash
+    provider: google
+    model: gemini-2.0-flash
+    skills: [docs, frontend, review]
+    kappa: 12
+    context_budget: 16
+    speed_factor: 1.6
+    price_per_1k_tokens: 0.075
+
+skill_rules:
+  - pattern: "tests/"
+    skill: "test"
+  - pattern: "test_"
+    skill: "test"
+  - pattern: ".test."
+    skill: "test"
+  - pattern: "src/models/"
+    skill: "schema"
+  - pattern: "migrations/"
+    skill: "schema"
+  - pattern: "src/api/"
+    skill: "api"
+  - pattern: "src/services/"
+    skill: "backend"
+  - pattern: "src/components/"
+    skill: "frontend"
+  - pattern: "src/pages/"
+    skill: "frontend"
+  - pattern: ".tsx"
+    skill: "frontend"
+  - pattern: "docs/"
+    skill: "docs"
+  - pattern: ".md"
+    skill: "docs"
+  - pattern: "docs/ADR-"
+    skill: "design"
+  - pattern: "docs/design/"
+    skill: "design"
+
+default_skill: backend
+
+solver:
+  objective: cost_aware
+  time_limit: 30
+  num_workers: 4

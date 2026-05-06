@@ -41,9 +41,10 @@ sys.exit(0 if status in ('OPTIMAL', 'FEASIBLE') else 1)
 "
 }
 
-run_example "examples/01-quickstart" || failed=1
-run_example "examples/02-cost-aware" || failed=1
-run_example "examples/03-replan"     || failed=1
+run_example "examples/01-quickstart"    || failed=1
+run_example "examples/02-cost-aware"    || failed=1
+run_example "examples/03-replan"        || failed=1
+run_example "examples/04-multi-provider" || failed=1
 
 # 03-replan also exercises the `solver.replan` CLI.
 echo "─── 03-replan: replan after T001,T002 completed ───"

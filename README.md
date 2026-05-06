@@ -47,7 +47,7 @@ The model is a Multi-Skill RCPSP (Bellenguez-Morineau & Néron 2007) enhanced wi
 
 - **DAG precedence**: Tasks respect dependency ordering from phase barriers, explicit `(depends on T###)` annotations, same-file write order, and TDD rules.
 - **Heterogeneous agents**: Each agent has a skill set, speed factor, and capacity limits.
-- **Cardinality cap (κ)**: Max tasks per agent session — calibrated to empirical hallucination thresholds (RULER, NoLiMa, Chroma).
+- **Cardinality cap (κ)**: Max tasks per agent session — calibrated to empirical hallucination thresholds (RULER, NoLiMa, and community findings on long-context coding-task degradation).
 - **Context budget (C)**: Max cumulative tokens per agent — prevents context-rot quality degradation.
 - **File mutex**: Non-`[P]` tasks writing the same file cannot execute in parallel across agents.
 - **Stochastic durations**: Each task carries optional `token_std_dev`; the solver applies deterministic-quantile substitution (`Φ⁻¹(q; μ, σ)` left-truncated at 0) at the configured quantile (`solver.stochastic_quantile`, default median).
@@ -59,7 +59,7 @@ The model is a Multi-Skill RCPSP (Bellenguez-Morineau & Néron 2007) enhanced wi
 |------|-------------------|-----------|
 | Lexicographic (default) | `lexicographic` | Phase 1: min makespan. Phase 2: pin makespan, min max-load. |
 | Weighted | `weighted` | `W·C_max + L_max` — single-phase; W large enough to dominate. |
-| Cost-aware | `cost_aware` | Phase 1: min makespan. Phase 2: pin makespan, min total token cost. |
+| Cost-aware | `cost_aware` | Phase 1: min makespan. Phase 2: pin makespan, min cost. Phase 3: pin cost, min max-load. |
 
 **Cost-aware example** (add `objective: cost_aware` to your config and set `price_per_1k_tokens` per agent):
 
