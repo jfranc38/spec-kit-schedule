@@ -11,13 +11,19 @@ if [ ! -f "$archive" ]; then
   exit 2
 fi
 
-contents=$(unzip -l "$archive")
-echo "$contents"
+# Extract just the filename column from `unzip -l`'s tabular output. This
+# avoids brittle whitespace handling in the matching regex below — both the
+# git-archive zip (no prefix) and the wheel (share/spec-kit-schedule/ prefix)
+# round-trip cleanly through this pipeline.
+echo "--- unzip -l $archive ---"
+unzip -l "$archive"
+
+filenames=$(unzip -l "$archive" | awk 'NR>3 && NF>=4 {print $NF}')
 
 missing=()
-echo "$contents" | grep -E "(^|/)(share/spec-kit-schedule/)?extension\.yml" >/dev/null || missing+=("extension.yml")
-echo "$contents" | grep -E "(^|/)(share/spec-kit-schedule/)?commands/" >/dev/null || missing+=("commands/")
-echo "$contents" | grep -E "(^|/)(share/spec-kit-schedule/)?templates/" >/dev/null || missing+=("templates/")
+echo "$filenames" | grep -E "(^|/)(share/spec-kit-schedule/)?extension\.yml$" >/dev/null || missing+=("extension.yml")
+echo "$filenames" | grep -E "(^|/)(share/spec-kit-schedule/)?commands/" >/dev/null || missing+=("commands/")
+echo "$filenames" | grep -E "(^|/)(share/spec-kit-schedule/)?templates/" >/dev/null || missing+=("templates/")
 
 if [ "${#missing[@]}" -ne 0 ]; then
   echo "::error::archive is missing required artifacts: ${missing[*]}"

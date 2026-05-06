@@ -1,10 +1,8 @@
-<!--
-  This file is INTERNAL documentation, not a registered Spec Kit command.
-  It is intentionally absent from `provides.commands` in extension.yml and
-  has no front-matter. Do not load via the command registry.
--->
-
 # Wave Executor Bridge — `/speckit.implement` Integration
+
+> Internal documentation describing how downstream orchestrators consume
+> a solved `schedule.md`. Not a slash command and not shipped inside the
+> packaged wheel; lives only in the source tree.
 
 ## Overview
 

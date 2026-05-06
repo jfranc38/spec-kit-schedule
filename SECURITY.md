@@ -2,11 +2,9 @@
 
 ## Reporting a Vulnerability
 
-If you believe you have found a security-relevant defect in spec-kit-schedule,
-please report it privately rather than opening a public issue.
-
-- Email: `security@example.invalid` (replace with project email)
-- Subject line: `spec-kit-schedule security: <short summary>`
+Please report security vulnerabilities **privately** via
+[GitHub Security Advisories](https://github.com/jfranc38/spec-kit-schedule/security/advisories/new).
+Do not open public issues for security reports.
 
 Please include:
 
@@ -23,20 +21,22 @@ in the report. Anonymise file paths and task descriptions if needed.
 
 ## Response Window
 
-- Acknowledgement: within 5 business days of the report landing in the
-  inbox above.
+- Acknowledgement: within 5 business days of the advisory being filed
+  via the GHSA flow above.
 - Triage and severity assessment: within 10 business days.
 - Patch or mitigation plan: communicated as soon as the impact is
   understood; for high-severity issues we aim for a fix or workaround
   within 30 days of acknowledgement.
 
 If you have not received an acknowledgement within 5 business days,
-please re-send the report; mail filters are the most likely culprit.
+ping the advisory thread on GitHub; notification settings are the most
+likely culprit.
 
 ## Embargo and Disclosure
 
-- We prefer coordinated disclosure. The default embargo is 90 days from
-  acknowledgement, or until a fix is released, whichever comes first.
+- We prefer coordinated disclosure via the GHSA flow. The default
+  embargo is 90 days from acknowledgement, or until a fix is released,
+  whichever comes first.
 - During the embargo we will not discuss the issue in public channels
   (issues, pull requests, release notes) beyond a generic "security fix"
   reference.

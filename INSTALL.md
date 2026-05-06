@@ -7,6 +7,17 @@ target.
 
 ---
 
+## Prerequisites
+
+- Python 3.10–3.12
+- `uv` (recommended) — install via `pipx install uv` or `brew install uv` or
+  `curl -LsSf https://astral.sh/uv/install.sh | sh`.
+- For the `specify extension add ...` flows below, install
+  [spec-kit](https://github.com/github/spec-kit) first (follow spec-kit's
+  own install docs).
+
+---
+
 ## 1. Install from a tagged release (recommended)
 
 ```bash
@@ -105,17 +116,16 @@ pin your dependencies explicitly if reproducibility matters.
 
 | Tool       | Version          | Notes                                        |
 |------------|------------------|----------------------------------------------|
-| Python     | 3.10 – 3.13      | Enforced by `pyproject.toml`                 |
+| Python     | 3.10 – 3.12      | Enforced by `pyproject.toml`                 |
 | uv         | ≥ 0.4 (recommended) | `install.sh` will install it for you      |
 | ortools    | ≥ 9.9, < 10      | Core; installed transitively                 |
 | PyYAML     | ≥ 6, < 7         | Core; installed transitively                 |
 | networkx   | ≥ 3.1, < 4       | Core; graph algorithms                       |
 | pydantic   | ≥ 2, < 3         | Core; config schema validation               |
 | matplotlib | ≥ 3.7, < 4       | Optional (`viz` extra) — PNG rendering       |
-| pydot      | ≥ 2, < 3         | Optional (`viz` extra) — DOT export          |
 | plotly     | ≥ 5, < 6         | Optional (`viz` extra) — interactive HTML    |
 
-`matplotlib` / `pydot` are only needed for `python -m solver.visualize`.
+`matplotlib` is only needed for `python -m solver.visualize`.
 `plotly` is only needed for `python -m solver.render_html`.
 The Mermaid Gantt + DAG blocks in `schedule.md` render fine without them.
 
@@ -141,7 +151,7 @@ is published, the install will be:
 
 ```bash
 pip install spec-kit-schedule           # core only
-pip install 'spec-kit-schedule[viz]'    # + matplotlib/pydot for PNG images
+pip install 'spec-kit-schedule[viz]'    # + matplotlib/plotly for PNG and HTML images
 ```
 
 Or with `uv`:

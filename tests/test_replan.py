@@ -368,7 +368,7 @@ class TestE2EFreeze:
 
 
 class TestReplanCLI:
-    def _run(self, args: list[str], input_json: str | None = None) -> subprocess.CompletedProcess:
+    def _run(self, args: list[str]) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, "-m", "solver.replan", *args],
             capture_output=True,

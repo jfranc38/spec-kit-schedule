@@ -27,7 +27,7 @@ uv run pre-commit install
 
 ```bash
 make test             # uv run pytest -q
-make test-cov         # with HTML coverage report in htmlcov/
+make cov              # with coverage report (term-missing)
 ```
 
 Run a single test module:
@@ -40,8 +40,8 @@ uv run pytest tests/test_scheduler.py -q
 
 ```bash
 make lint             # uv run ruff check solver tests
-make fmt              # uv run ruff format solver tests (fixes in-place)
-make typecheck        # uv run mypy --strict solver
+make fmt              # uv run ruff check --fix solver tests (autofixes lint issues)
+make typecheck        # uv run mypy solver (non-blocking; CI runs --strict on selected modules)
 ```
 
 All three must be clean before opening a pull request.
@@ -65,7 +65,7 @@ YAML/TOML validation, and large-file guard.
 3. Run `uv run pytest tests/<module>.py -q` to verify it passes.
 4. Ensure `uv run pytest -q` still reports 100% green.
 
-Coverage of new modules must be ≥90% (`make test-cov` shows the report).
+Coverage of new modules must be ≥90% (`make cov` shows the report).
 
 ## Adding a new error or warning message
 
@@ -80,19 +80,23 @@ Coverage of new modules must be ≥90% (`make test-cov` shows the report).
 3. Open a PR against `master`; fill in the PR template.
 4. CI will run all checks; address any failures before requesting review.
 
-## PyPI releases (maintainers only)
+## Releases
 
-Releases are triggered by pushing a version tag:
+The release workflow (`.github/workflows/release.yml`) triggers on tags
+matching `v*.*.*`. It:
+- Verifies the tag matches `pyproject.toml` and `extension.yml` versions.
+- Builds the extension zip via `git archive`.
+- Verifies the zip contains `extension.yml`, `commands/`, `templates/`.
+- Generates Sigstore attestations.
+- Creates a GitHub Release with the zip attached.
 
-```bash
-git tag v0.5.1
-git push origin v0.5.1
-```
+PyPI distribution is on the roadmap but not yet active.
 
-The GitHub Actions `release.yml` workflow builds sdist + wheel via `uv build`
-and publishes to PyPI using OIDC Trusted Publisher (no API token needed).
-To enable this for a new fork, configure Trusted Publishing in your PyPI
-project settings pointing to this repository's `release.yml` workflow.
+To cut a release:
+1. Bump version in `pyproject.toml`, `extension.yml`, `solver/__init__.py`.
+2. Update `CHANGELOG.md` with the new version + date.
+3. Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+4. The release workflow runs automatically.
 
 ## Code of conduct
 

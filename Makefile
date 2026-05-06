@@ -1,4 +1,4 @@
-.PHONY: install sync test cov lint typecheck fmt smoke smoke-stress schedule schedule-all bench bench-scaling bench-replan bench-memory bench-report clean package help
+.PHONY: install sync test cov lint typecheck fmt smoke smoke-stress schedule schedule-all bench bench-scaling bench-replan bench-memory bench-report examples clean package help
 
 SHELL := /usr/bin/env bash
 UV    ?= uv
@@ -87,5 +87,11 @@ bench-memory: ## Run all problems with peak-memory tracking enabled
 bench-report: ## Print the latest benchmark table
 	@cat benchmarks/results/latest.md 2>/dev/null || echo "run 'make bench' first"
 
+examples: ## Run all worked examples end-to-end
+	@bash bin/run-examples.sh
+
 clean: ## Remove caches and build outputs
-	rm -rf .pytest_cache .ruff_cache .mypy_cache dist .venv
+	rm -rf .pytest_cache .ruff_cache .mypy_cache .hypothesis dist .venv
+	rm -rf htmlcov .coverage coverage.xml
+	rm -rf *.egg-info
+	find . -type d -name __pycache__ -prune -exec rm -rf {} +

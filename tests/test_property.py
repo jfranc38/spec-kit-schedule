@@ -14,18 +14,29 @@ Bounds are tiny so the suite stays fast even with ``max_examples=20``.
 
 from __future__ import annotations
 
-from hypothesis import HealthCheck, given, settings
-from hypothesis import strategies as st
+import pytest
 
-from solver.scheduler import (
+# Hypothesis is a dev-only dependency. Skip the whole module on a fresh clone
+# without ``--extra dev`` so ``pytest`` doesn't error out at collection time.
+pytest.importorskip("hypothesis")
+
+from hypothesis import HealthCheck, given, settings  # noqa: E402
+from hypothesis import strategies as st  # noqa: E402
+
+from solver.scheduler import (  # noqa: E402
     compute_compatible_agents,
     compute_durations,
     compute_min_durations,
     critical_path_bound,
     solve_from_json,
 )
-from solver.validation import ScheduleInputError
-from tests._helpers import TERMINAL_STATUSES, make_agent, make_solver_input, make_task
+from solver.validation import ScheduleInputError  # noqa: E402
+from tests._helpers import (  # noqa: E402
+    TERMINAL_STATUSES,
+    make_agent,
+    make_solver_input,
+    make_task,
+)
 
 # Tight settings so this property suite runs in <30s on CI.
 PROPERTY_SETTINGS = settings(

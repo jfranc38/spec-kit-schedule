@@ -236,4 +236,4 @@ plan = parse_schedule_md("schedule.md")
 ```
 
 For full integration details, barrier semantics, file-mutex guarantees,
-and failure-handling guidance, see `commands/implement_bridge.md`.
+and failure-handling guidance, see `docs/internal/wave-executor-bridge.md`.

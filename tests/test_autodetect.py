@@ -317,7 +317,7 @@ class TestInteractiveRefine:
         """_interactive_refine with all-empty input keeps original values."""
         from solver.autodetect import _interactive_refine
 
-        monkeypatch.setattr("builtins.input", lambda prompt: "")
+        monkeypatch.setattr("builtins.input", lambda _prompt: "")
 
         config_dict = detect_portfolio(tmp_path)
         original_agents = [a.copy() for a in config_dict["agents"]]
@@ -333,7 +333,7 @@ class TestInteractiveRefine:
         from solver.autodetect import _interactive_refine
 
         inputs_iter = iter(["custom-id", "gpt-4o", "8", "custom"])
-        monkeypatch.setattr("builtins.input", lambda prompt: next(inputs_iter))
+        monkeypatch.setattr("builtins.input", lambda _prompt: next(inputs_iter))
 
         (tmp_path / "pyproject.toml").write_text("[build-system]\n", encoding="utf-8")
         config_dict = detect_portfolio(tmp_path)

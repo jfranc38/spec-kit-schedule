@@ -22,9 +22,10 @@
   92.51%.
 - **CI gates**: `actionlint` (workflow lint), `shellcheck` (shell-script
   lint), `pip-audit` (CVE scan), `pip-licenses` (license inventory),
-  cross-OS matrix (ubuntu/macos/windows × py3.10–3.12), and a
-  `smoke-stress` target running a medium benchmark each CI run. A
-  composite `setup-uv-python` action consolidates the boilerplate, and
+  CI matrix: ubuntu-latest × Python 3.10/3.11/3.12 (blocking) +
+  macos-latest × Python 3.12 (allowed-fail), and a `smoke-stress`
+  target running a medium benchmark each CI run. A composite
+  `setup-uv-python` action consolidates the boilerplate, and
   `verify-zip-assets.sh` checks the released zip contains the expected
   payload.
 - **Result schema documentation**: `solver/model/result_types.py` defines
@@ -334,5 +335,4 @@
 - Warm-start from priority-rule heuristic
 - Symmetry breaking for identical agents
 - schedule.md output with Execution Waves, Gantt chart, and DAG
-- MAQA coordinator integration support
 - Three slash commands: /speckit.schedule, /speckit.schedule.portfolio, /speckit.schedule.visualize

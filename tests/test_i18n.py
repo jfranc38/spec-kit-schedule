@@ -78,7 +78,7 @@ class TestTranslate:
 
 
 class TestMissingKey:
-    def test_missing_key_returns_key_string(self, capfd):
+    def test_missing_key_returns_key_string(self):
         result = t("nonexistent_key_xyz")
         assert result == "nonexistent_key_xyz"
         # Warning should be emitted to stderr via logging

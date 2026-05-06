@@ -21,6 +21,7 @@ recursive-include commands *.md
 recursive-include templates *
 recursive-include bin *
 recursive-include docs *.md *.yml
+prune docs/archive
 prune tests
 prune benchmarks
 prune .github

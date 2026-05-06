@@ -19,6 +19,7 @@ env/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
 .coverage
 .coverage.*
 htmlcov/
@@ -36,3 +37,4 @@ Thumbs.db
 /solver_input.json
 /solver_output.json
 /schedule.md
+.claude/

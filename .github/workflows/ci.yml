@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
 
 jobs:
@@ -80,8 +80,8 @@ jobs:
           extras: "dev"
 
       - name: pip-audit
-        # CI-G3: non-blocking initially — audit the lockfile for known CVEs.
-        # Once the warning queue is clean, flip continue-on-error to false.
+        # CI-G3: pip-audit runs warn-only; review the security job artifact
+        # and triage findings periodically.
         continue-on-error: true
         run: uv run --with pip-audit pip-audit --strict --progress-spinner=off
 
@@ -140,7 +140,7 @@ jobs:
 
       - name: Decide whether to run
         id: gate
-        # Always run on push to main; on PRs run only when solver/ or benchmarks/
+        # Always run on push to master; on PRs run only when solver/ or benchmarks/
         # paths changed. Sets steps.gate.outputs.run = "true" | "false".
         # On git fetch failure, fail-OPEN (run=true) so coverage isn't silently dropped.
         run: |
@@ -189,7 +189,7 @@ jobs:
     name: Smoke stress (medium)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # CI-G6: a small step up from the tiny smoke; runs only on push to main
+    # CI-G6: a small step up from the tiny smoke; runs only on push to master
     # to keep PR cycle time bounded. Times out at 10 minutes.
     if: github.event_name == 'push'
     steps:

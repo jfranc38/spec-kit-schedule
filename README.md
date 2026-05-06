@@ -2,8 +2,6 @@
 
 [![CI](https://github.com/jfranc38/spec-kit-schedule/actions/workflows/ci.yml/badge.svg)](https://github.com/jfranc38/spec-kit-schedule/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://github.com/jfranc38/spec-kit-schedule)
-[![Tests](https://img.shields.io/badge/tests-553%20passing-brightgreen)](https://github.com/jfranc38/spec-kit-schedule/actions)
-[![Coverage](https://img.shields.io/badge/coverage-92.51%25-brightgreen)](https://github.com/jfranc38/spec-kit-schedule/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > A [spec-kit](https://github.com/github/spec-kit) extension that uses **constraint programming** (Google OR-Tools CP-SAT) to produce **provably optimal** task-to-agent assignments with DAG precedence, hallucination-aware capacity caps, file-conflict avoidance, stochastic durations, online replanning, and interactive HTML output.
@@ -32,7 +30,6 @@ MAQA solves this with a **greedy heuristic** (first-available agent). This exten
           │
           ▼
   /speckit.implement
-      (or MAQA)
 ```
 
 1. **Parse** `tasks.md` into a typed task graph `G = (T, E)` with skill requirements, token estimates, file footprints, and DAG edges (fails fast on duplicate ids, unknown dependencies, or cycles).
@@ -210,14 +207,6 @@ agents:
 | `/speckit.schedule.run` | Parse tasks.md → solve CP-SAT → produce schedule.md (+ optional PNG images) |
 | `/speckit.schedule.portfolio` | Create or edit agent portfolio configuration |
 | `/speckit.schedule.visualize` | Emit publication-grade `<feature>-dag.png` and `<feature>-gantt.png` from a solver output JSON and embed references in `schedule.md` |
-
-## MAQA Integration
-
-When both this extension and MAQA are installed, the schedule's Execution Wave Plan can replace MAQA's greedy batch assignment:
-
-```bash
-/speckit.maqa.coordinator --schedule .specify/specs/<feature>/schedule.md
-```
 
 ## Mathematical Formulation
 

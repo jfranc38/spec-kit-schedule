@@ -57,23 +57,6 @@ def require_positive(value: object, name: str) -> None:
         raise ScheduleInputError(t("validation_must_be_positive", name=name, value=value))
 
 
-KNOWN_PROVIDERS = frozenset(
-    {
-        "anthropic",
-        "openai",
-        "github",
-        "google",
-        "ollama",
-        "azure",
-        "bedrock",
-        "groq",
-        "mistral",
-        "local",
-        "custom",
-    }
-)
-
-
 def validate_agent_config(agent: dict[str, object]) -> None:
     """Validate a single agent block via pydantic AgentConfig.
 
@@ -99,8 +82,8 @@ def validate_agent_config(agent: dict[str, object]) -> None:
         raise ScheduleInputError(
             t("validation_agent_config_generic", error=exc)
         ) from exc
-    # `provider` is intentionally free-form: KNOWN_PROVIDERS is a discovery
-    # hint for docs/tooling, not an allow-list, so bespoke runners work.
+    # `provider` is intentionally free-form so bespoke runners work; pydantic
+    # only enforces the surrounding shape, not the provider value itself.
 
 
 def validate_solver_config(cfg: dict[str, object]) -> None:
