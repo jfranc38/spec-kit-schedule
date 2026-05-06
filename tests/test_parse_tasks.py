@@ -9,6 +9,7 @@ from solver.parse_tasks import (
     infer_skill,
     parse_tasks_md,
 )
+from solver.scheduler import solve_from_json
 from solver.validation import ScheduleInputError
 from solver.warnings_collector import WarningCollector
 
@@ -171,6 +172,33 @@ class TestPhaseRegex:
         assert by_id["T001"]["phase"] == "Setup"
         assert by_id["T002"]["phase"] == "Foundational"
 
+    def test_phase_implementation_recognized(self, write_tasks, minimal_config):
+        """`## Implementation Phase` maps to the Implementation bucket, not Setup."""
+        p = write_tasks(
+            "## Implementation Phase\n"
+            "- [ ] T001 Implement endpoint in `src/api/a.py`\n"
+        )
+        result = parse_tasks_md(str(p), minimal_config)
+        assert result["tasks"][0]["phase"] == "Implementation"
+
+    def test_phase_build_synonym(self, write_tasks, minimal_config):
+        """`## Build Phase` is a recognized synonym for Implementation."""
+        p = write_tasks(
+            "## Build Phase\n"
+            "- [ ] T001 Implement endpoint in `src/api/a.py`\n"
+        )
+        result = parse_tasks_md(str(p), minimal_config)
+        assert result["tasks"][0]["phase"] == "Implementation"
+
+    def test_phase_develop_synonym(self, write_tasks, minimal_config):
+        """`## Develop Phase` is a recognized synonym for Implementation."""
+        p = write_tasks(
+            "## Develop Phase\n"
+            "- [ ] T001 Implement endpoint in `src/api/a.py`\n"
+        )
+        result = parse_tasks_md(str(p), minimal_config)
+        assert result["tasks"][0]["phase"] == "Implementation"
+
 
 class TestParallelWriteWarning:
     def test_double_parallel_write_emits_warning(self, write_tasks, minimal_config):
@@ -183,3 +211,140 @@ class TestParallelWriteWarning:
         result = parse_tasks_md(str(p), minimal_config, warnings=warnings)
         codes = {w["code"] for w in result["warnings"]}
         assert "parallel_write_conflict" in codes
+
+
+class TestExplicitSkillAnnotation:
+    """Inline ``(skill: <name>)`` overrides the path/verb-based inference."""
+
+    def test_explicit_skill_overrides_inference(self, write_tasks, clone_config):
+        cfg = clone_config()
+        # Add an extra agent + skill so 'docs' is part of the portfolio.
+        cfg["agents"].append(
+            {
+                "id": "doc-writer",
+                "model": "test",
+                "skills": ["docs"],
+                "kappa": 5,
+                "context_budget": 32,
+                "speed_factor": 1.0,
+            }
+        )
+        # Without (skill: docs) the path src/api/foo.py would infer 'api'.
+        p = write_tasks(
+            "## Setup Phase\n"
+            "- [ ] T001 Implement payment gateway in `src/api/foo.py` (skill: docs)\n"
+        )
+        result = parse_tasks_md(str(p), cfg)
+        assert result["tasks"][0]["required_skill"] == "docs"
+
+    def test_explicit_skill_stripped_from_action_verb(self, write_tasks, clone_config):
+        """The annotation is removed from the desc before verb extraction."""
+        cfg = clone_config()
+        cfg["agents"].append(
+            {
+                "id": "designer",
+                "model": "test",
+                "skills": ["design"],
+                "kappa": 5,
+                "context_budget": 32,
+                "speed_factor": 1.0,
+            }
+        )
+        p = write_tasks(
+            "## Setup Phase\n"
+            "- [ ] T001 Design schema in `src/api/foo.py` (skill: design)\n"
+        )
+        result = parse_tasks_md(str(p), cfg)
+        task = result["tasks"][0]
+        assert task["required_skill"] == "design"
+        # ``action_verb`` is the first word of the cleaned desc — must not be
+        # 'skill' or anything from the annotation.
+        assert task["action_verb"].lower() == "design"
+
+    def test_no_explicit_skill_falls_back_to_inference(
+        self, write_tasks, minimal_config
+    ):
+        """Without ``(skill: X)`` the existing path-based inference is unchanged."""
+        p = write_tasks(
+            "## Setup Phase\n"
+            "- [ ] T001 Implement payment gateway in `src/api/foo.py`\n"
+        )
+        result = parse_tasks_md(str(p), minimal_config)
+        # ``src/api/`` rule maps to 'api' in the minimal_config fixture.
+        assert result["tasks"][0]["required_skill"] == "api"
+
+    def test_explicit_skill_with_depends_on(self, write_tasks, clone_config):
+        """Annotation co-exists with ``(depends on T###)`` on the same line."""
+        cfg = clone_config()
+        cfg["agents"].append(
+            {
+                "id": "doc-writer",
+                "model": "test",
+                "skills": ["docs"],
+                "kappa": 5,
+                "context_budget": 32,
+                "speed_factor": 1.0,
+            }
+        )
+        p = write_tasks(
+            "## Setup Phase\n"
+            "- [ ] T001 Implement first in `src/api/a.py`\n"
+            "- [ ] T002 Implement second in `src/api/b.py` (skill: docs)"
+            " (depends on T001)\n"
+        )
+        result = parse_tasks_md(str(p), cfg)
+        by_id = {t["id"]: t for t in result["tasks"]}
+        assert by_id["T002"]["required_skill"] == "docs"
+        assert ["T001", "T002"] in result["edges"]
+
+    def test_first_explicit_skill_wins_when_multiple(self, write_tasks, clone_config):
+        """First ``(skill: X)`` annotation wins on the rare multi-annotation line."""
+        cfg = clone_config()
+        for sid in ("docs", "design"):
+            cfg["agents"].append(
+                {
+                    "id": f"agent-{sid}",
+                    "model": "test",
+                    "skills": [sid],
+                    "kappa": 5,
+                    "context_budget": 32,
+                    "speed_factor": 1.0,
+                }
+            )
+        p = write_tasks(
+            "## Setup Phase\n"
+            "- [ ] T001 Implement a in `src/api/foo.py` (skill: docs) (skill: design)\n"
+        )
+        result = parse_tasks_md(str(p), cfg)
+        assert result["tasks"][0]["required_skill"] == "docs"
+
+    def test_unknown_explicit_skill_raises_via_solver(self, write_tasks, clone_config):
+        """``(skill: X)`` with no agent providing X triggers ``skill_uncovered``."""
+        cfg = clone_config()
+        # Portfolio: only backend/api/test agents (no 'nonexistent').
+        p = write_tasks(
+            "## Setup Phase\n"
+            "- [ ] T001 Do thing in `src/api/foo.py` (skill: nonexistent)\n"
+        )
+        parsed = parse_tasks_md(str(p), cfg)
+        assert parsed["tasks"][0]["required_skill"] == "nonexistent"
+
+        solver_input = {
+            "tasks": parsed["tasks"],
+            "edges": parsed["edges"],
+            "agents": parsed["agents"],
+            "config": parsed["config"],
+        }
+        with pytest.raises(ScheduleInputError, match="nonexistent"):
+            solve_from_json(solver_input)
+
+    def test_explicit_skill_does_not_match_depends_on(self, write_tasks, minimal_config):
+        """Sanity: ``(depends on T###)`` is NOT picked up by the skill regex."""
+        p = write_tasks(
+            "## Setup Phase\n"
+            "- [ ] T001 Implement a in `src/api/a.py`\n"
+            "- [ ] T002 Implement b in `src/api/b.py` (depends on T001)\n"
+        )
+        result = parse_tasks_md(str(p), minimal_config)
+        # Skill is path-inferred, not an extracted dep token.
+        assert result["tasks"][1]["required_skill"] == "api"

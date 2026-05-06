@@ -84,12 +84,21 @@ TASK_RE = re.compile(
 
 PARALLEL_RE = re.compile(r"\[P\]")
 
+# Inline skill annotation: ``(skill: <name>)``. Lowercase identifier matches the
+# existing skill-naming convention used in skill_rules / agent skills lists.
+# When present, this overrides the auto-inferred skill from file paths so users
+# can be explicit when the action_verb + path heuristic guesses wrong.
+EXPLICIT_SKILL_RE = re.compile(r"\(skill:\s*([a-z][a-z0-9_-]*)\s*\)")
+
 # Phase headers — keywords anchored to heading body (after optional
 # "Phase N:" / "N." prefix). Matching the whole heading avoids
 # "Advanced Setup Instructions" being read as a Setup phase.
 _PHASE_PREFIX = r"#{1,4}\s+(?:Phase\s+\d+[:.\-]?\s+|\d+[.)]\s+)?"
 PHASE_SETUP_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Setup|Environment|Configuration)\b", re.I)
 PHASE_FOUND_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Foundation|Foundational|Core|Base)\b", re.I)
+PHASE_IMPL_RE = re.compile(
+    rf"^{_PHASE_PREFIX}(?:Implementation|Implement|Build|Development|Develop)\b", re.I
+)
 PHASE_STORY_RE = re.compile(rf"^{_PHASE_PREFIX}(?:User\s+Story|US)\s*(\d+)\b", re.I)
 PHASE_POLISH_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Polish|Cleanup|Final|Integration)\b", re.I)
 
@@ -163,6 +172,8 @@ def _detect_phase(line: str) -> tuple[str, str | None, int] | None:
         return ("Setup", None, STORY_PRIORITY_DEFAULT)
     if PHASE_FOUND_RE.match(line):
         return ("Foundational", None, STORY_PRIORITY_DEFAULT)
+    if PHASE_IMPL_RE.match(line):
+        return ("Implementation", None, STORY_PRIORITY_DEFAULT)
     m = PHASE_STORY_RE.match(line)
     if m:
         num = m.group(1)
@@ -279,6 +290,17 @@ def parse_tasks_md(
         deps_str = m.group("deps")
         parallel = bool(PARALLEL_RE.search(line))
 
+        # Pull any inline ``(skill: <name>)`` annotation BEFORE the rest of the
+        # description-driven extraction. The first match wins on multi-annotated
+        # lines (deliberately rare; documented as undefined behaviour). The
+        # annotation is stripped from ``desc`` so it doesn't leak into verb
+        # detection or backtick-path scanning.
+        explicit_skill: str | None = None
+        skill_match = EXPLICIT_SKILL_RE.search(desc)
+        if skill_match is not None:
+            explicit_skill = skill_match.group(1)
+            desc = (desc[: skill_match.start()] + desc[skill_match.end() :]).strip()
+
         # File paths: explicit + any backticked paths in the description.
         raw_paths: list[str] = []
         if explicit_path:
@@ -292,7 +314,8 @@ def parse_tasks_md(
                 seen.add(normalized)
                 file_paths.append(normalized)
 
-        skill = infer_skill(file_paths, skill_rules, default_skill)
+        inferred_skill = infer_skill(file_paths, skill_rules, default_skill)
+        skill = explicit_skill if explicit_skill is not None else inferred_skill
 
         vm = VERB_RE.match(desc)
         verb = vm.group(1) if vm else "implement"

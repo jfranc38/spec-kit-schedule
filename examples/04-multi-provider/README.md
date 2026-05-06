@@ -32,6 +32,10 @@ cost-vs-makespan trade-off across providers.
   critical-path backbone where its skill set lines up with the longest
   chain.
 
+For the full `tasks.md` syntax (recognised phase headers, the `[P]`
+flag, `[USn]` tag, and the `(depends on T###)` / `(skill: <name>)`
+annotations), see [`docs/tasks-format.md`](../../docs/tasks-format.md).
+
 ## Run it
 
 From the repository root:

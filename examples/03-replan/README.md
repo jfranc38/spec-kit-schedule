@@ -20,6 +20,10 @@ then re-solve the residual subgraph with `solver.replan`.
   re-derived from `p[i,a]`) so calibration drift between solves can't
   silently shift a frozen task. Fix landed in v0.5.1.
 
+For the full `tasks.md` syntax (recognised phase headers, the `[P]`
+flag, `[USn]` tag, and the `(depends on T###)` / `(skill: <name>)`
+annotations), see [`docs/tasks-format.md`](../../docs/tasks-format.md).
+
 ## Run it
 
 From the repository root:

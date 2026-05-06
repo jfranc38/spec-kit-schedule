@@ -103,7 +103,9 @@ Numbered walk-through:
    optional `(depends on Tnnn)` and `[P]` annotations) and `config.yml`
    (agent portfolio + skill-routing rules). See
    `docs/example-tasks.md` and `docs/example-config.yml` for canonical
-   shapes.
+   shapes, and [`docs/tasks-format.md`](tasks-format.md) for the full
+   parser specification (recognised phase headers, annotation syntax,
+   skill inference, complexity bucketing).
 2. **Parse.** `parse_tasks.parse_tasks_md(path, config_dict)` produces
    the JSON envelope `{tasks, edges, agents, config, warnings?}`
    that the solver consumes.

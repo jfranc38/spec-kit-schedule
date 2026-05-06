@@ -9,7 +9,7 @@
       "start": 0,
       "end": 35,
       "duration": 35,
-      "phase": "Setup",
+      "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
       "file_paths": [
@@ -43,7 +43,7 @@
       "start": 35,
       "end": 70,
       "duration": 35,
-      "phase": "Setup",
+      "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
       "file_paths": [
@@ -83,7 +83,7 @@
           "start": 0,
           "end": 35,
           "duration": 35,
-          "phase": "Setup",
+          "phase": "Implementation",
           "story_id": null,
           "story_priority": 99,
           "file_paths": [
@@ -123,7 +123,7 @@
           "start": 35,
           "end": 70,
           "duration": 35,
-          "phase": "Setup",
+          "phase": "Implementation",
           "story_id": null,
           "story_priority": 99,
           "file_paths": [
@@ -233,10 +233,13 @@
       "fixed_count": 0,
       "completed_count": 2,
       "added_count": 0,
-      "reused_from": "/private/tmp/out3.json"
+      "reused_from": "/private/tmp/out.json"
     }
   },
   "warnings": [],
+  "makespan": 95,
+  "max_load": 70,
+  "total_cost": 0.0,
   "edges": [
     [
       "T003",
@@ -250,14 +253,14 @@
   "tasks": [
     {
       "id": "T003",
-      "phase": "Setup",
+      "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
       "required_skill": "backend"
     },
     {
       "id": "T004",
-      "phase": "Setup",
+      "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
       "required_skill": "backend"

@@ -26,7 +26,7 @@
       "start": 35,
       "end": 70,
       "duration": 35,
-      "phase": "Setup",
+      "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
       "file_paths": [
@@ -43,7 +43,7 @@
       "start": 70,
       "end": 105,
       "duration": 35,
-      "phase": "Setup",
+      "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
       "file_paths": [
@@ -123,7 +123,7 @@
           "start": 35,
           "end": 70,
           "duration": 35,
-          "phase": "Setup",
+          "phase": "Implementation",
           "story_id": null,
           "story_priority": 99,
           "file_paths": [
@@ -146,7 +146,7 @@
           "start": 70,
           "end": 105,
           "duration": 35,
-          "phase": "Setup",
+          "phase": "Implementation",
           "story_id": null,
           "story_priority": 99,
           "file_paths": [
@@ -258,14 +258,14 @@
   "stats": {
     "horizon": 195,
     "heuristic_makespan": 145,
-    "phase1_time": 0.0,
+    "phase1_time": 0.02,
     "phase1_status": "OPTIMAL",
     "phase1_status_code": 4,
     "makespan_phase1": 130,
     "phase2_time": 0.0,
     "phase2_status": "OPTIMAL",
     "phase2_status_code": 4,
-    "total_solve_time": 0.01,
+    "total_solve_time": 0.02,
     "makespan": 130,
     "max_load": 120,
     "min_load": 25,
@@ -277,6 +277,9 @@
     "quantile_used": 0.5
   },
   "warnings": [],
+  "makespan": 130,
+  "max_load": 120,
+  "total_cost": 0.0,
   "edges": [
     [
       "T002",
@@ -308,14 +311,14 @@
     },
     {
       "id": "T003",
-      "phase": "Setup",
+      "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
       "required_skill": "backend"
     },
     {
       "id": "T004",
-      "phase": "Setup",
+      "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
       "required_skill": "backend"

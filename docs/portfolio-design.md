@@ -62,9 +62,35 @@ Override individual `kappa`/`context_budget` values when you have
 provider-specific calibration data — the table is a starting point, not
 a prescription.
 
-`context_budget` in YAML is in **kilotokens** (`32` = 32K tokens). The
-parser multiplies by 1000 internally; this is a frequent point of
-confusion.
+### A note on units: `context_budget` is in kilotokens
+
+`context_budget` values in YAML are in **kilotokens (× 1000 raw
+tokens)**, not raw tokens. `parse_tasks.py` always multiplies the
+YAML value by 1000 before handing it to the solver
+(see `parse_tasks.py:458`, `solver/scheduler.py:137`). So:
+
+| YAML            | Raw tokens fed to solver |
+|-----------------|--------------------------|
+| `context_budget: 8`   | 8,000     |
+| `context_budget: 16`  | 16,000    |
+| `context_budget: 32`  | 32,000    |
+| `context_budget: 32000`| 32,000,000 (almost certainly a bug) |
+
+The example configs throughout this repo use `context_budget: 32`
+(= 32K), `16` (= 16K), and `8` (= 8K). If you write
+`context_budget: 32000` thinking "32K tokens", you will end up with
+a 32-million-token slot and a trivially feasible problem — every
+task will fit in one agent's budget and the C9 constraint will never
+bind.
+
+The κ / C tier table above (`Frontier` / `Mid` / `Small` rows) shows
+context budgets in tokens (`32K`, `16K`, `8K`); divide by 1000 to
+get the YAML value.
+
+The unrelated `solver.token_unit` knob (default 100) is the internal
+CP-SAT duration granularity and does **not** participate in the
+`context_budget` conversion. Setting `token_unit: 1` does not change
+how `context_budget` is interpreted.
 
 ## Step 3: assign skills
 
@@ -277,9 +303,8 @@ expected output, and run instructions in
   `model: gpt-99` assignment if you put it in the config. The schedule
   will be unrealisable at runtime.
 - **Confusing `context_budget` units.** YAML accepts kilotokens
-  (`32` = 32K). The parser multiplies by 1000 — do not put `32000` in
-  the YAML or you will end up with a 32-million-token agent and
-  trivially feasible problems.
+  (`32` = 32K). See ["A note on units" in Step 2](#a-note-on-units-context_budget-is-in-kilotokens)
+  for the full conversion table and a worked example.
 
 ## See also
 

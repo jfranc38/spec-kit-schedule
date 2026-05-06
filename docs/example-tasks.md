@@ -1,3 +1,9 @@
+<!--
+Canonical sample tasks.md.
+For the full format spec (phase headers, annotations, skill
+inference, complexity bucketing), see docs/tasks-format.md.
+-->
+
 # Tasks — Create Taskify
 
 ## Setup Phase

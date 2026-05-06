@@ -11,6 +11,10 @@ then balance load).
 - How `[P]` (parallel) and `(depends on T###)` annotations shape the DAG.
 - A two-agent portfolio with a `backend` and a `tester` skill split.
 
+For the full `tasks.md` syntax (recognised phase headers, the `[P]`
+flag, `[USn]` tag, and the `(depends on T###)` / `(skill: <name>)`
+annotations), see [`docs/tasks-format.md`](../../docs/tasks-format.md).
+
 ## Run it
 
 From the repository root:

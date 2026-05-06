@@ -121,6 +121,11 @@ class ScheduleResult(TypedDict, total=False):
     ``total=False`` because the INFEASIBLE path skips many keys; the
     happy path always populates ``status``, ``assignments``, ``waves``,
     ``agent_summary``, ``stats``, and ``warnings``.
+
+    ``makespan``, ``max_load``, and ``total_cost`` are mirrored at the
+    top level from ``stats`` for the convenience of programmatic
+    consumers; ``stats`` remains the canonical per-phase block. See
+    :func:`solver.result.extract._finalize_result`.
     """
 
     status: str
@@ -136,3 +141,6 @@ class ScheduleResult(TypedDict, total=False):
     edges: list[list[str]]
     tasks: list[dict[str, Any]]
     agents: list[dict[str, Any]]
+    makespan: int
+    max_load: int
+    total_cost: float

@@ -19,6 +19,10 @@ free to assign any task to any agent — the differentiator is price.
 - `total_cost` (in dollars, four decimal places) is reported in
   `stats` and per-agent in `agent_summary`.
 
+For the full `tasks.md` syntax (recognised phase headers, the `[P]`
+flag, `[USn]` tag, and the `(depends on T###)` / `(skill: <name>)`
+annotations), see [`docs/tasks-format.md`](../../docs/tasks-format.md).
+
 ## Run it
 
 From the repository root:

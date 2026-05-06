@@ -461,6 +461,11 @@ def _finalize_result(
                 break
     stats["status"] = status_str
 
+    # Mirror the canonical scalar metrics at the top level so programmatic
+    # consumers (``result["makespan"]`` etc.) work without reaching into
+    # ``stats``. The rendered output and existing tests still read from
+    # ``stats``; mirroring keeps both surfaces in sync without duplicating
+    # the source-of-truth (which remains the per-phase computation above).
     return {
         "status": status_str,
         "assignments": assignments,
@@ -471,4 +476,7 @@ def _finalize_result(
         "resource_edges": resource_edges,
         "stats": stats,
         "warnings": warnings.as_list(),
+        "makespan": stats["makespan"],
+        "max_load": stats["max_load"],
+        "total_cost": stats["total_cost"],
     }
