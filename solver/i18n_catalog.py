@@ -9,7 +9,16 @@ debug, internal warnings) stay in English at their call-sites.
 
 from __future__ import annotations
 
-__all__ = ["MESSAGES"]
+from typing import Final
+
+__all__ = [
+    "MESSAGES",
+    "WARN_ANYTIME_TIMEOUT",
+    "WARN_COST_SCALE_UNDERFLOW",
+    "WARN_PARALLEL_WRITE_CONFLICT",
+    "WARN_PHASE2_FALLBACK",
+    "WARN_PHASE3_FALLBACK",
+]
 
 MESSAGES: dict[str, dict[str, str]] = {
     "duplicate_task_id": {
@@ -104,6 +113,36 @@ MESSAGES: dict[str, dict[str, str]] = {
             "de carga puede ser subóptimo. Aumente solver.time_limit para mejorar."
         ),
     },
+    "phase3_fallback": {
+        "en": (
+            "Phase 3 (load balancing under pinned cost, cost-aware mode) did "
+            "not return a solution within the time limit. Returning the Phase 2 "
+            "minimum-cost solution; load balance may be suboptimal. Increase "
+            "solver.time_limit to improve it."
+        ),
+        "es": (
+            "La Fase 3 (balanceo de carga con costo fijado, modo cost-aware) no "
+            "devolvió una solución dentro del límite de tiempo. Se devuelve la "
+            "solución de costo mínimo de la Fase 2; el balance de carga puede ser "
+            "subóptimo. Aumente solver.time_limit para mejorar."
+        ),
+    },
+    "cost_scale_underflow": {
+        "en": (
+            "Cost-aware signals collapsed to zero after integer scaling: "
+            "all per-task scaled costs round to 0 even though some agents "
+            "have price_per_1k_tokens > 0. The cost objective will not "
+            "discriminate between agents. Increase price_per_1k_tokens "
+            "values or raise the internal _COST_SCALE constant."
+        ),
+        "es": (
+            "Las señales de cost-aware colapsaron a cero tras el escalado entero: "
+            "todos los costos por tarea redondean a 0 aunque algunos agentes "
+            "tienen price_per_1k_tokens > 0. El objetivo de costo no podrá "
+            "diferenciar entre agentes. Aumente los valores de price_per_1k_tokens "
+            "o suba la constante interna _COST_SCALE."
+        ),
+    },
     "no_tasks_found": {
         "en": (
             "No tasks found in {path}. Verify the file uses the "
@@ -172,6 +211,16 @@ MESSAGES: dict[str, dict[str, str]] = {
             "porque la configuración actual hace incompatible esa asignación."
         ),
     },
+    "replan_fixed_invalid_duration": {
+        "en": (
+            "Frozen task {tid!r} has invalid duration={d}: "
+            "duration must be a positive integer."
+        ),
+        "es": (
+            "La tarea congelada {tid!r} tiene una duración inválida={d}: "
+            "la duración debe ser un entero positivo."
+        ),
+    },
     "not_a_directory": {
         "en": "project_dir is not a directory: {path}",
         "es": "project_dir no es un directorio: {path}",
@@ -218,4 +267,50 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "No wave sections found in {path}",
         "es": "No se encontraron secciones de wave en {path}",
     },
+    "phase1_infeasible_proven": {
+        "en": (
+            "Phase 1 proved INFEASIBLE at horizon={horizon}. "
+            "Preflight passed (capacity ≥ demand), so the model is overconstrained "
+            "by precedence + κ + budget + file-mutex. Inspect the DAG and resource "
+            "caps."
+        ),
+        "es": (
+            "La Fase 1 demostró INFEASIBLE en horizon={horizon}. "
+            "El preflight pasó (capacidad ≥ demanda), por lo que el modelo está "
+            "sobrerrestringido por precedencia + κ + presupuesto + mutex de archivo. "
+            "Inspeccione el DAG y los topes de recursos."
+        ),
+    },
+    "phase1_infeasible_lb_exceeds_horizon": {
+        "en": (
+            "Phase 1 status={status}; solver lower bound on makespan "
+            "({lb}) exceeds horizon ({horizon}). Increase "
+            "horizon_multiplier or reduce token granularity."
+        ),
+        "es": (
+            "Estado de Fase 1={status}; la cota inferior del solver sobre el makespan "
+            "({lb}) supera el horizon ({horizon}). Aumente "
+            "horizon_multiplier o reduzca la granularidad de tokens."
+        ),
+    },
+    "phase1_infeasible_timeout": {
+        "en": (
+            "Phase 1 found no feasible schedule (status={status}, "
+            "horizon={horizon}, lb≈{lb}). "
+            "This typically means the time_limit was exhausted before proving "
+            "feasibility; consider raising time_limit or num_workers."
+        ),
+        "es": (
+            "La Fase 1 no encontró un horario factible (estado={status}, "
+            "horizon={horizon}, lb≈{lb}). "
+            "Esto suele significar que se agotó el time_limit antes de probar "
+            "factibilidad; considere aumentar time_limit o num_workers."
+        ),
+    },
 }
+
+WARN_ANYTIME_TIMEOUT: Final = "anytime_timeout"
+WARN_COST_SCALE_UNDERFLOW: Final = "cost_scale_underflow"
+WARN_PARALLEL_WRITE_CONFLICT: Final = "parallel_write_conflict"
+WARN_PHASE2_FALLBACK: Final = "phase2_fallback"
+WARN_PHASE3_FALLBACK: Final = "phase3_fallback"

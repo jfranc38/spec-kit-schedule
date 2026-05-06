@@ -6,6 +6,7 @@ import pytest
 
 pytest.importorskip("plotly")
 
+from solver.i18n_catalog import WARN_PHASE2_FALLBACK, WARN_PHASE3_FALLBACK  # noqa: E402
 from solver.render_html import render  # noqa: E402
 
 
@@ -142,12 +143,23 @@ def test_render_critical_task_ids_in_html():
 def test_render_with_warnings():
     data = _minimal_data()
     data["warnings"] = [
-        {"code": "phase2_fallback", "message": "timed out", "context": {"k": 1}}
+        {"code": WARN_PHASE2_FALLBACK, "message": "timed out", "context": {"k": 1}}
     ]
     result = render(data, "feat")
     assert "Warnings" in result
-    assert "phase2_fallback" in result
+    assert WARN_PHASE2_FALLBACK in result
     assert "timed out" in result
+
+
+def test_render_with_phase3_fallback_warning():
+    data = _minimal_data()
+    data["warnings"] = [
+        {"code": WARN_PHASE3_FALLBACK, "message": "phase 3 timed out", "context": {}}
+    ]
+    result = render(data, "feat")
+    assert "Warnings" in result
+    assert WARN_PHASE3_FALLBACK in result
+    assert "phase 3 timed out" in result
 
 
 def test_render_no_warnings_section_when_empty():

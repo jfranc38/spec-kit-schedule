@@ -1,0 +1,17 @@
+include LICENSE
+include README.md
+include CHANGELOG.md
+include INSTALL.md
+include extension.yml
+include config-template.yml
+include pyproject.toml
+recursive-include commands *.md
+recursive-include templates *
+recursive-include bin *
+recursive-include docs *.md *.yml
+prune tests
+prune benchmarks
+prune .github
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude .DS_Store

@@ -1,4 +1,8 @@
-# /speckit.schedule — Optimal Multi-Agent Task Scheduling
+---
+description: "Parse tasks.md, solve the CP-SAT scheduling model, and produce schedule.md with agent assignments, execution waves, and a Gantt diagram."
+---
+
+# /speckit.schedule.run — Optimal Multi-Agent Task Scheduling
 
 ## Purpose
 
@@ -201,13 +205,13 @@ If the MAQA extension is installed, the wave plan can be consumed directly by `/
 ## Usage
 
 ```
-/speckit.schedule
+/speckit.schedule.run
 ```
 
 Or with explicit configuration path:
 
 ```
-/speckit.schedule --config path/to/schedule-config.yml
+/speckit.schedule.run --config path/to/schedule-config.yml
 ```
 
 ## Executing Waves via /speckit.implement

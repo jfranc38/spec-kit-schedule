@@ -15,35 +15,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+      - name: Setup uv + Python
+        uses: ./.github/actions/setup-uv-python
         with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-
-      - name: Set Python version
-        run: uv python install ${{ matrix.python-version }}
-
-      - name: Sync dependencies (frozen, dev + viz)
-        run: uv sync --frozen --extra dev --extra viz
+          python-version: ${{ matrix.python-version }}
+          extras: "dev,viz"
 
       - name: Lint
         run: uv run ruff check solver tests
 
-      - name: Typecheck (non-blocking)
+      - name: Typecheck (strict on newly-typed modules)
+        run: uv run mypy --strict solver/scheduler.py solver/parse_tasks.py
+
+      - name: Typecheck (full solver package)
         run: uv run mypy solver
-        continue-on-error: true
 
       - name: Tests with coverage
-        run: uv run pytest --cov=solver --cov-report=term-missing
+        # Coverage gate: 85% — observed 91% locally with viz extras (matching CI sync).
+        run: uv run pytest --cov=solver --cov-report=term-missing --cov-fail-under=85
 
       - name: Smoke test (docs example)
         run: make smoke
 
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv + Python
+        uses: ./.github/actions/setup-uv-python
+        with:
+          python-version: "3.12"
+          extras: "dev"
+
+      - name: Build wheel
+        run: uv build
+
+      - name: Verify wheel asset payload
+        run: bash -c '.github/scripts/verify-zip-assets.sh dist/*.whl'
+
       - name: Zip install flow
-        if: matrix.python-version == '3.12'
         run: |
-          # Exercise the teammate install path: package → extract → install.sh.
+          # Exercise the teammate install path: package -> extract -> install.sh.
           make package
           tmp=$(mktemp -d)
           unzip -q dist/spec-kit-schedule.zip -d "$tmp/extract"
@@ -51,3 +64,59 @@ jobs:
           ls -1
           ./bin/install.sh
           popd
+
+  benchmark-smoke:
+    name: Benchmark smoke (tiny)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Decide whether to run
+        id: gate
+        # Always run on push to main; on PRs run only when solver/ or benchmarks/
+        # paths changed. Sets steps.gate.outputs.run = "true" | "false".
+        # On git fetch failure, fail-OPEN (run=true) so coverage isn't silently dropped.
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          if git fetch --no-tags --depth=1 origin "$base" 2>/dev/null; then
+            if git diff --name-only "$base" "$head" | grep -E '^(solver/|benchmarks/)' >/dev/null; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              echo "No solver/ or benchmarks/ changes — skipping benchmark smoke."
+            fi
+          else
+            echo "::warning::git fetch failed — running benchmark smoke conservatively."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup uv + Python
+        if: steps.gate.outputs.run == 'true'
+        uses: ./.github/actions/setup-uv-python
+        with:
+          python-version: "3.12"
+          extras: "dev"
+
+      - name: Run tiny benchmark
+        if: steps.gate.outputs.run == 'true'
+        # Gate is "the harness still works" — no Gap%/wall-time assertions.
+        run: uv run python -m benchmarks.run --size tiny --time-limit 10
+
+      - name: Upload benchmark artifacts
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-smoke-tiny
+          path: |
+            benchmarks/results/*.json
+            benchmarks/results/latest.md
+          retention-days: 14
+          if-no-files-found: error

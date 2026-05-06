@@ -1,3 +1,7 @@
+---
+description: "Interactively create or edit schedule-config.yml — the agent portfolio, skill inference rules, and solver parameters consumed by /speckit.schedule.run."
+---
+
 # /speckit.schedule.portfolio — Define Agent Portfolio
 
 ## Purpose

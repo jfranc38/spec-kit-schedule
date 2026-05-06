@@ -27,7 +27,7 @@ import yaml
 
 from .i18n import t
 from .parse_tasks import parse_tasks_md
-from .scheduler import solve_with_fixed
+from .scheduler import _resolve_fixed_duration, solve_with_fixed
 from .validation import ScheduleInputError
 
 __all__ = ["replan", "main"]
@@ -115,17 +115,25 @@ def _build_fixed_assignments(
     freeze_before: int,
     active_task_ids: set[str],
 ) -> dict[str, dict]:
-    """Return tasks from prior output whose start < freeze_before."""
+    """Return tasks from prior output whose start < freeze_before.
+
+    Propagates the prior duration via ``_resolve_fixed_duration`` so the
+    scheduler can pin the frozen task's duration as well as its start and
+    agent — see ``_apply_fixed_constraints``.
+    """
     fixed: dict[str, dict] = {}
     for assn in prior_assignments:
         task_id = assn.get("task_id", "")
         if task_id not in active_task_ids:
             continue
         if assn.get("start", 0) < freeze_before:
-            fixed[task_id] = {
+            entry: dict = {
                 "agent_id": assn["agent_id"],
                 "start": assn["start"],
             }
+            if "duration" in assn or "end" in assn:
+                entry["duration"] = _resolve_fixed_duration(assn, None, task_id=task_id)
+            fixed[task_id] = entry
     return fixed
 
 

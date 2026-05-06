@@ -1,12 +1,70 @@
 # Installation — v0.5.0
 
-`spec-kit-schedule` is distributed as a spec-kit extension and as a
-[PyPI package](https://pypi.org/project/spec-kit-schedule/). Pick the flow
-that matches how you received the code.
+`spec-kit-schedule` is distributed as a spec-kit extension. The
+canonical install paths use the `specify` CLI; PyPI distribution is on
+the roadmap and documented at the bottom of this file as a future
+target.
 
 ---
 
-## 1. You have the `.zip` a teammate shared
+## 1. Install from a tagged release (recommended)
+
+```bash
+specify extension add --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.5.0.zip
+```
+
+`specify extension add --from` accepts any HTTPS URL pointing at a zip
+of the extension. The URL above is GitHub's auto-generated source
+archive for the `v0.5.0` tag.
+
+The `specify` CLI does not install Python packages. Once the extension
+is registered, bootstrap the solver dependencies once:
+
+```bash
+git clone https://github.com/jfranc38/spec-kit-schedule
+cd spec-kit-schedule
+uv sync --extra dev --extra viz
+```
+
+Or use the bundled bootstrap script which installs `uv` if absent and
+runs an end-to-end smoke test:
+
+```bash
+./bin/install.sh
+```
+
+---
+
+## 2. Local development install
+
+For contributors, or when you have a checkout of the repo:
+
+```bash
+git clone https://github.com/jfranc38/spec-kit-schedule
+cd spec-kit-schedule
+./bin/install.sh             # uv + sync (dev+viz) + smoke test
+specify extension add --dev .
+```
+
+`specify extension add --dev` registers the working tree directly so
+edits to `commands/`, `templates/`, or `extension.yml` are picked up
+without re-installing.
+
+After installation the pipeline stages are regular Python modules:
+
+```bash
+uv run python -m solver.parse_tasks tasks.md schedule-config.yml > in.json
+uv run python -m solver.scheduler    < in.json > out.json
+uv run python -m solver.visualize    out.json images/ --feature my-feature
+uv run python -m solver.render_schedule out.json my-feature \
+    --image-prefix images/my-feature > schedule.md
+```
+
+---
+
+## 3. Zip-sharing flow
+
+If a teammate shared a `spec-kit-schedule.zip`:
 
 ```bash
 unzip spec-kit-schedule.zip
@@ -23,56 +81,10 @@ That script:
 3. Runs an end-to-end smoke test against `docs/example-tasks.md` and
    fails loudly if anything is wrong.
 
-After installation the pipeline stages are regular Python modules:
+You can also point `specify` at the unpacked directory directly:
 
 ```bash
-uv run python -m solver.parse_tasks tasks.md schedule-config.yml > in.json
-uv run python -m solver.scheduler    < in.json > out.json
-uv run python -m solver.visualize    out.json images/ --feature my-feature
-uv run python -m solver.render_schedule out.json my-feature \
-    --image-prefix images/my-feature > schedule.md
-```
-
-To wire it into spec-kit as an extension:
-
-```bash
-specify extension add --from /path/to/spec-kit-schedule
-```
-
-`extension.yml` declares `bin/install.sh` as the install hook, so
-`specify extension add` runs the bootstrap automatically.
-
----
-
-## 2. Install from PyPI
-
-```bash
-pip install spec-kit-schedule           # core only
-pip install 'spec-kit-schedule[viz]'    # + matplotlib/pydot for PNG images
-```
-
-Or with `uv`:
-
-```bash
-uv pip install spec-kit-schedule
-uv pip install 'spec-kit-schedule[viz]'
-```
-
-Entry points installed: `speckit-schedule-parse`, `speckit-schedule-solve`,
-`speckit-schedule-render`.
-
----
-
-## 3. You are the author / contributor
-
-```bash
-git clone <repo>
-cd spec-kit-schedule
-make install        # bin/install.sh via Make (dev + viz extras)
-make test           # pytest
-make smoke          # end-to-end pipeline check
-make schedule-all   # regenerate docs/example-schedule.md + docs/images/* + docs/example-schedule.html
-make package        # build dist/spec-kit-schedule.zip for teammates
+specify extension add --dev /path/to/spec-kit-schedule
 ```
 
 ---
@@ -119,3 +131,27 @@ make smoke
 ```
 
 If `make smoke` prints `smoke OK (... lines)` the extension is ready.
+
+---
+
+## Future: PyPI distribution
+
+PyPI publishing is on the roadmap but not yet active. Once the package
+is published, the install will be:
+
+```bash
+pip install spec-kit-schedule           # core only
+pip install 'spec-kit-schedule[viz]'    # + matplotlib/pydot for PNG images
+```
+
+Or with `uv`:
+
+```bash
+uv pip install spec-kit-schedule
+uv pip install 'spec-kit-schedule[viz]'
+```
+
+The wheel will ship `extension.yml`, `commands/`, and `templates/`
+under `<sys.prefix>/share/spec-kit-schedule/` so the same artifact can
+register as a spec-kit extension. Until then, install via the `specify`
+CLI as shown above.

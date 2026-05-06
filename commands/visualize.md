@@ -1,3 +1,7 @@
+---
+description: "Render the solved schedule as a static Gantt chart and dependency DAG (PNG/SVG) and embed them into schedule.md alongside the inline Mermaid diagrams."
+---
+
 # /speckit.schedule.visualize — Render Schedule Visualization
 
 ## Purpose
@@ -34,13 +38,13 @@ The static images require the `viz` extra:
 uv sync --extra viz          # or: pip install 'spec-kit-schedule[viz]'
 ```
 
-This adds `matplotlib` and `pydot`. Without them, `/speckit.schedule` still
-works but the images are not produced.
+This adds `matplotlib` and `pydot`. Without them, `/speckit.schedule.run`
+still works but the images are not produced.
 
 ## Workflow
 
 1. Run the solver and capture its JSON output (typically already produced
-   by `/speckit.schedule`).
+   by `/speckit.schedule.run`).
 2. Invoke the visualiser against that JSON:
    ```bash
    python -m solver.visualize solver_output.json <outdir> --feature <name>

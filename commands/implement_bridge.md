@@ -1,3 +1,9 @@
+<!--
+  This file is INTERNAL documentation, not a registered Spec Kit command.
+  It is intentionally absent from `provides.commands` in extension.yml and
+  has no front-matter. Do not load via the command registry.
+-->
+
 # Wave Executor Bridge — `/speckit.implement` Integration
 
 ## Overview
@@ -54,9 +60,10 @@ aborts before wave N+1 begins.
 Operator recovery workflow:
 
 1. Inspect which task(s) failed and correct the underlying issue.
-2. Rerun `/speckit.schedule` to regenerate `schedule.md` from the current
-   task state (future: `/speckit.schedule --from-state` will resume from
-   the last successful wave without re-solving the full problem).
+2. Rerun `/speckit.schedule.run` to regenerate `schedule.md` from the
+   current task state (future: `/speckit.schedule.run --from-state` will
+   resume from the last successful wave without re-solving the full
+   problem).
 3. Rerun `/speckit.implement` from the corrected schedule.
 
 ## Reading the Plan Programmatically

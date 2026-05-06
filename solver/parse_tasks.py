@@ -20,13 +20,14 @@ import re
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 # Allow `python solver/parse_tasks.py ...` as well as `python -m solver.parse_tasks`.
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = "solver"  # noqa: A001
 
-import yaml
+import yaml  # type: ignore[import-untyped]  # PyYAML ships no type stubs by default
 
 from .config_schema import Config
 from .defaults import (
@@ -37,6 +38,7 @@ from .defaults import (
     TOKEN_ESTIMATES,
 )
 from .i18n import t
+from .i18n_catalog import WARN_PARALLEL_WRITE_CONFLICT
 from .validation import (
     ScheduleInputError,
     find_cycle,
@@ -118,7 +120,7 @@ def _lower_verbs(verbs_map: dict[str, list[str]]) -> dict[str, list[str]]:
 
 def infer_skill(
     file_paths: list[str],
-    rules: list[dict],
+    rules: list[dict[str, object]],
     default: str,
 ) -> str:
     """Return the required skill using longest-pattern-match precedence.
@@ -132,6 +134,8 @@ def infer_skill(
         for rank, rule in enumerate(rules):
             pattern = rule.get("pattern", "")
             skill = rule.get("skill")
+            if not isinstance(pattern, str) or not isinstance(skill, str):
+                continue
             if not pattern or not skill:
                 continue
             if pattern in fp:
@@ -169,7 +173,7 @@ def _detect_phase(line: str) -> tuple[str, str | None, int] | None:
     return None
 
 
-def _merge_config(config: dict) -> dict:
+def _merge_config(config: dict[str, Any]) -> dict[str, Any]:
     """Validate config via pydantic, apply defaults, and return a plain dict.
 
     The pydantic Config model is the single source of validation truth.
@@ -219,9 +223,9 @@ def _merge_config(config: dict) -> dict:
 
 def parse_tasks_md(
     tasks_path: str,
-    config: dict,
+    config: dict[str, Any],
     warnings: WarningCollector | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Parse tasks.md and config into solver-ready JSON.
 
     Raises ScheduleInputError on duplicate task ids, unknown dependency
@@ -240,7 +244,7 @@ def parse_tasks_md(
     text = Path(tasks_path).read_text(encoding="utf-8")
     lines = text.splitlines()
 
-    tasks: list[dict] = []
+    tasks: list[dict[str, Any]] = []
     task_ids: set[str] = set()
     current_phase = "Setup"
     current_story_id: str | None = None
@@ -358,9 +362,15 @@ def parse_tasks_md(
         raise ScheduleInputError(t("unresolved_deps_summary", details=details))
 
     # (b) Phase ordering: last task of phase N → first task of phase N+1.
+    def _user_story_index(phase_name: str) -> int:
+        match = re.search(r"\d+", phase_name)
+        if match is None:
+            return 0
+        return int(match.group())
+
     story_phases = sorted(
         {td["phase"] for td in tasks if td["phase"].startswith("User Story")},
-        key=lambda p: int(re.search(r"\d+", p).group()),
+        key=_user_story_index,
     )
     phase_order = ["Setup", "Foundational", *story_phases, "Polish"]
 
@@ -427,16 +437,16 @@ def parse_tasks_md(
         if len(idxs) > 1:
             ids = [tasks[i]["id"] for i in idxs]
             warnings.add(
-                "parallel_write_conflict",
-                t("parallel_write_conflict", file=fp, task_ids=ids),
+                WARN_PARALLEL_WRITE_CONFLICT,
+                t(WARN_PARALLEL_WRITE_CONFLICT, file=fp, task_ids=ids),
                 file=fp,
                 task_ids=ids,
             )
 
     # ── Agents ────────────────────────────────────────────────────────
-    agents_out: list[dict] = []
+    agents_out: list[dict[str, Any]] = []
     for ac in cfg["agents"]:
-        agent_dict: dict = {
+        agent_dict: dict[str, Any] = {
             "id": ac["id"],
             "model": ac.get("model", "unknown"),
             "skills": list(ac["skills"]),
@@ -454,7 +464,7 @@ def parse_tasks_md(
 
     solver_cfg = dict(cfg["solver"])
 
-    tasks_out: list[dict] = []
+    tasks_out: list[dict[str, Any]] = []
     for td in tasks:
         tasks_out.append(
             {

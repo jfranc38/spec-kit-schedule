@@ -6,33 +6,103 @@ on:
       - "v*.*.*"
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
+  attestations: write
 
 jobs:
-  publish:
-    name: Build and publish to PyPI
+  release:
+    name: Build extension zip and attach to GitHub Release
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Setup uv + Python
+        uses: ./.github/actions/setup-uv-python
         with:
           python-version: "3.11"
+          extras: "dev"
 
-      - name: Build package
-        run: uv build
-
-      - name: Publish package
-        run: uv publish
-
-      - name: Trusted publishing note
-        if: failure()
+      - name: Verify tag matches extension.yml (and pyproject.toml in lockstep)
+        # extension.yml `extension.version` is the version of record for
+        # spec-kit extension distribution. We also check pyproject.toml
+        # so the dormant Python packaging metadata stays in lockstep.
         run: |
-          echo "If publishing failed with a trusted-publishing error, configure this repository as a PyPI Trusted Publisher."
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          ext_version=$(uv run python -c "import yaml; print(yaml.safe_load(open('extension.yml'))['extension']['version'])")
+          py_version=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "tag        = $tag_version"
+          echo "extension  = $ext_version"
+          echo "pyproject  = $py_version"
+          if [ "$tag_version" != "$ext_version" ]; then
+            echo "::error::git tag ($tag_version) != extension.yml version ($ext_version)"
+            exit 1
+          fi
+          if [ "$tag_version" != "$py_version" ]; then
+            echo "::error::git tag ($tag_version) != pyproject.toml version ($py_version)"
+            exit 1
+          fi
+          echo "VERSION=$tag_version" >> "$GITHUB_ENV"
+
+      - name: Build extension zip
+        # Produce a zip with a stable top-level prefix so users who
+        # extract it locally land in a single directory.
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          archive="dist/spec-kit-schedule-${VERSION}.zip"
+          git archive \
+            --format=zip \
+            --prefix="spec-kit-schedule-${VERSION}/" \
+            -o "$archive" \
+            HEAD
+          echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
+
+      - name: Verify zip contains required extension assets
+        run: .github/scripts/verify-zip-assets.sh "$ARCHIVE"
+
+      - name: Generate build provenance attestations
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ env.ARCHIVE }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "v${{ env.VERSION }}"
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: ${{ env.ARCHIVE }}
+
+      - name: Job summary
+        if: always()
+        run: |
+          set -euo pipefail
+          archive="${ARCHIVE:-}"
+          version="${VERSION:-${GITHUB_REF_NAME#v}}"
+          {
+            echo "## Release ${GITHUB_REF_NAME}"
+            echo ""
+            echo "- Extension: \`spec-kit-schedule\`"
+            echo "- Version: \`${version}\`"
+            echo ""
+            echo "### Install"
+            echo ""
+            echo "Once a release is published, users can install the extension via:"
+            echo ""
+            echo '```'
+            echo "specify extension add --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v${version}.zip"
+            echo '```'
+            echo ""
+            echo "### Artifacts"
+            echo ""
+            if [ -n "$archive" ] && [ -f "$archive" ]; then
+              size=$(du -h "$archive" | cut -f1)
+              echo "| File | Size |"
+              echo "|------|------|"
+              echo "| \`$(basename "$archive")\` | $size |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
-# spec-kit-schedule installer.
+# spec-kit-schedule local-development bootstrap.
 #
+# This is NOT a spec-kit extension lifecycle hook — the spec-kit
+# extension manifest schema does not define install/uninstall hooks,
+# and `specify extension add` will not run this script. It is invoked
+# manually by:
+#   - contributors after `git clone` (and by `make install`),
+#   - teammates who received a shared `spec-kit-schedule.zip` and need
+#     to bootstrap the Python solver dependencies the `specify` CLI
+#     does not install for them.
+#
+# What it does:
 # - Ensures `uv` is available (installs to ~/.local/bin if missing).
 # - Creates an isolated environment via `uv sync`, using the committed
 #   `uv.lock` so every teammate ends up with the same dependency graph.

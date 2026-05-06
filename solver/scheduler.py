@@ -25,9 +25,11 @@ import os
 import sys
 import time
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field as _field
 from statistics import NormalDist
+from typing import Any
 
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -50,6 +52,12 @@ from .defaults import (
     TOKEN_UNIT,
 )
 from .i18n import t
+from .i18n_catalog import (
+    WARN_ANYTIME_TIMEOUT,
+    WARN_COST_SCALE_UNDERFLOW,
+    WARN_PHASE2_FALLBACK,
+    WARN_PHASE3_FALLBACK,
+)
 from .validation import (
     ScheduleInputError,
     find_cycle,
@@ -64,6 +72,18 @@ log = logging.getLogger(__name__)
 # Scaling factor that converts dollar costs to integers for CP-SAT.
 # Four decimal places of dollar precision: $0.0001 is 1 unit.
 _COST_SCALE = 10_000
+
+# Safe headroom under int64 (~9.22e18) for cumulative scaled cost arithmetic
+# inside CP-SAT. 2**62 leaves a 2x safety margin for intermediate sums.
+_COST_INT64_HEADROOM = 2**62
+
+
+def _clear_objective(model: cp_model.CpModel) -> None:
+    model.clear_objective()  # type: ignore[no-untyped-call,unused-ignore]
+
+
+def _clear_hints(model: cp_model.CpModel) -> None:
+    model.clear_hints()  # type: ignore[no-untyped-call,unused-ignore]
 
 
 # ───────────────────────────────────────────────────────────────────────
@@ -119,7 +139,9 @@ class SolverConfig:
 # ───────────────────────────────────────────────────────────────────────
 
 
-def _parse_input(data: dict) -> tuple[list[Task], list[tuple[int, int]], list[Agent], SolverConfig]:
+def _parse_input(
+    data: dict[str, Any],
+) -> tuple[list[Task], list[tuple[int, int]], list[Agent], SolverConfig]:
     tasks: list[Task] = []
     id_to_idx: dict[str, int] = {}
     for i, t_raw in enumerate(data["tasks"]):
@@ -349,8 +371,8 @@ def build_file_conflict_groups(tasks: list[Task]) -> dict[str, list[int]]:
 def _build_node_weighted_graph(
     nodes: range | list[int],
     edges: list[tuple[int, int]],
-    weight_of: dict[int, int],
-    **node_attrs_by_id: dict[int, object],
+    weight_of: Mapping[int, int],
+    **node_attrs_by_id: Mapping[int, object],
 ) -> nx.DiGraph:
     """Shared factory for node-weighted DiGraphs.
 
@@ -419,6 +441,30 @@ def critical_path_bound(
 # ───────────────────────────────────────────────────────────────────────
 
 
+def _symmetry_classes(agents: list[Agent]) -> dict[int, int]:
+    """Map ``agent_index → class_id`` for permutation-equivalent agents.
+
+    Two agents share a class when they have identical skill sets, κ, context
+    budget, speed factor and price. Used to keep the warm-start hint aligned
+    with the symmetry-breaking constraint posted in :func:`_add_objectives`
+    (``L_a >= L_{a'}`` for ``a < a'`` within the same class).
+    """
+    classes: dict[tuple[Any, ...], int] = {}
+    out: dict[int, int] = {}
+    for ag in agents:
+        key = (
+            tuple(sorted(ag.skills)),
+            ag.kappa,
+            ag.context_budget,
+            ag.speed_factor,
+            ag.price_per_1k_tokens,
+        )
+        if key not in classes:
+            classes[key] = len(classes)
+        out[ag.index] = classes[key]
+    return out
+
+
 def list_schedule_heuristic(
     tasks: list[Task],
     edges: list[tuple[int, int]],
@@ -433,8 +479,15 @@ def list_schedule_heuristic(
     """Greedy list scheduling that respects every hard constraint.
 
     The heuristic mirrors the CP-SAT model constraints (precedence, κ, C,
-    file-mutex) so every hint it produces is already feasible; CP-SAT can
-    then start from a valid incumbent instead of discarding the hint.
+    file-mutex, symmetry-class load ordering) so every hint it produces is
+    already feasible; CP-SAT can then start from a valid incumbent instead
+    of discarding the hint.
+
+    When a task has no agent with spare κ AND budget AND skills, it is
+    OMITTED from the returned dict rather than pinned to an arbitrary
+    compatible agent. CP-SAT supports partial hints, and an infeasible
+    pin would be silently discarded anyway — dropping the task keeps the
+    rest of the warm-start valid.
     """
     n = len(tasks)
     if graph is None:
@@ -452,6 +505,7 @@ def list_schedule_heuristic(
         key=lambda i: (est[i], tasks[i].story_priority, i),
     )
 
+    class_of = _symmetry_classes(agents)
     agent_avail = {ag.index: 0 for ag in agents}
     task_count = {ag.index: 0 for ag in agents}
     token_used = {ag.index: 0 for ag in agents}
@@ -475,22 +529,29 @@ def list_schedule_heuristic(
             if pr in task_end:
                 earliest = max(earliest, task_end[pr])
 
+        # Symmetry-canonical: pick the lowest-index feasible peer per class
+        # to keep the hint consistent with ``L_a >= L_{a'}`` posted in C12.
         best_a: int | None = None
         best_start = float("inf")
-        for a_idx in compat[i]:
+        seen_class_feasible: set[int] = set()
+        for a_idx in compat[i]:  # ascending agent index
+            cls = class_of[a_idx]
+            if cls in seen_class_feasible:
+                continue
             ag = agents[a_idx]
             if task_count[a_idx] >= ag.kappa:
                 continue
             if token_used[a_idx] + task.estimated_tokens > ag.context_budget:
                 continue
+            seen_class_feasible.add(cls)
             start = max(earliest, agent_avail[a_idx])
             if start < best_start:
                 best_start = start
                 best_a = a_idx
 
         if best_a is None:
-            best_a = compat[i][0]
-            best_start = max(earliest, agent_avail[best_a])
+            # Partial hints: omit instead of pinning — CP-SAT silently drops infeasible hints.
+            continue
 
         dur = p[(i, best_a)]
         result[i] = (best_a, int(best_start))
@@ -533,41 +594,62 @@ class _ModelVars:
     end: dict[int, cp_model.IntVar]
     dur: dict[int, cp_model.IntVar]
     x: dict[tuple[int, int], cp_model.IntVar]
-    master_iv: dict[tuple[int, int], object]
-    ivs_agent: dict[int, list[object]]
+    master_iv: dict[int, cp_model.IntervalVar]
+    ivs_agent: dict[int, list[cp_model.IntervalVar]]
     load: dict[int, cp_model.IntVar] = _field(default_factory=dict)
-    max_load: cp_model.IntVar | None = None
-    makespan: cp_model.IntVar | None = None
 
 
-def _horizon(
-    n: int,
-    edges: list[tuple[int, int]],
-    agents: list[Agent],
-    min_dur: dict[int, int],
-    file_conflicts: dict[str, list[int]],
-    multiplier: float,
-    *,
-    graph: nx.DiGraph | None = None,
-) -> int:
+@dataclass
+class _HorizonInputs:
+    """Bundle of model data consumed by :func:`_horizon`."""
+
+    n: int
+    edges: list[tuple[int, int]]
+    agents: list[Agent]
+    min_dur: dict[int, int]
+    p: dict[tuple[int, int], int]
+    compat: dict[int, list[int]]
+    file_conflicts: dict[str, list[int]]
+    graph: nx.DiGraph | None = None
+
+
+@dataclass
+class _PreparedInputs:
+    """Bundle produced by :func:`_prepare_solve_inputs`.
+
+    Holds everything ``solve_from_json`` and ``solve_with_fixed`` need
+    between input validation and the call into :func:`solve`.
+    """
+
+    tasks: list[Task]
+    edges: list[tuple[int, int]]
+    agents: list[Agent]
+    config: SolverConfig
+    compat: dict[int, list[int]]
+    p: dict[tuple[int, int], int]
+    min_dur: dict[int, int]
+    file_conflicts: dict[str, list[int]]
+    graph: nx.DiGraph
+    warnings: WarningCollector
+    hints: dict[int, tuple[int, int]] | None = None
+
+
+def _horizon(inputs: _HorizonInputs, multiplier: float) -> int:
     """Upper bound on any feasible makespan.
 
-    Takes the max of three bounds:
-      - critical path (ignores resource contention);
-      - the longest sum-of-durations across any file-mutex group (a single
-        mutex group alone can dominate the schedule);
-      - sum_of_min_durations / num_agents (amortised load per agent).
-    Then inflates by `multiplier` as a safety envelope.
+    Serial-UB ensures H >= OPT even when LB*multiplier underestimates.
     """
-    if n == 0:
+    if inputs.n == 0:
         return 1
-    cp = critical_path_bound(n, edges, min_dur, graph=graph)
-    load_bound = math.ceil(sum(min_dur.values()) / max(1, len(agents)))
+    cp = critical_path_bound(inputs.n, inputs.edges, inputs.min_dur, graph=inputs.graph)
+    load_bound = math.ceil(sum(inputs.min_dur.values()) / max(1, len(inputs.agents)))
     mutex_bound = 0
-    for idxs in file_conflicts.values():
-        mutex_bound = max(mutex_bound, sum(min_dur[i] for i in idxs))
-    base = max(cp, load_bound, mutex_bound, 1)
-    return max(1, int(math.ceil(base * multiplier)))
+    for idxs in inputs.file_conflicts.values():
+        mutex_bound = max(mutex_bound, sum(inputs.min_dur[i] for i in idxs))
+    lb_max = max(cp, load_bound, mutex_bound, 1)
+    inflated_lb = int(math.ceil(lb_max * multiplier))
+    serial_ub = sum(max(inputs.p[(i, a)] for a in inputs.compat[i]) for i in range(inputs.n))
+    return max(1, lb_max, inflated_lb, serial_ub)
 
 
 def _build_variables(
@@ -590,11 +672,11 @@ def _build_variables(
         i: model.new_int_var(min_dur[i], max(p[(i, a)] for a in compat[i]), f"d_{i}")
         for i in range(n)
     }
-    master_iv: dict[int, object] = {
+    master_iv: dict[int, cp_model.IntervalVar] = {
         i: model.new_interval_var(start[i], dur[i], end[i], f"iv_{i}") for i in range(n)
     }
     x: dict[tuple[int, int], cp_model.IntVar] = {}
-    ivs_agent: dict[int, list] = defaultdict(list)
+    ivs_agent: dict[int, list[cp_model.IntervalVar]] = defaultdict(list)
     for i in range(n):
         presences = []
         for a in compat[i]:
@@ -661,10 +743,12 @@ def _add_objectives(
     p: dict[tuple[int, int], int],
     config: SolverConfig,
     horizon: int,
-) -> None:
+) -> tuple[dict[int, cp_model.IntVar], cp_model.IntVar, cp_model.IntVar]:
     """Define load vars, makespan var, and symmetry-breaking constraints.
 
-    Results are stored back onto *vars_* (``load``, ``max_load``, ``makespan``).
+    Returns ``(load, max_load, makespan)`` and also stores ``load`` back onto
+    *vars_* so downstream helpers (e.g. cost-aware scaling) keep their access
+    pattern unchanged.
     """
     n_tasks = len(vars_.start)
     m = len(agents)
@@ -681,24 +765,36 @@ def _add_objectives(
     makespan = model.new_int_var(0, horizon, "Cmax")
     model.add_max_equality(makespan, [vars_.end[i] for i in range(n_tasks)])
     vars_.load = load
-    vars_.max_load = max_load
-    vars_.makespan = makespan
     if config.symmetry_breaking:
-        groups: dict[tuple, list[int]] = defaultdict(list)
+        class_of = _symmetry_classes(agents)
+        groups: dict[int, list[int]] = defaultdict(list)
         for ag in agents:
-            key = (
-                tuple(sorted(ag.skills)),
-                ag.kappa,
-                ag.context_budget,
-                ag.speed_factor,
-                ag.price_per_1k_tokens,
-            )
-            groups[key].append(ag.index)
+            groups[class_of[ag.index]].append(ag.index)
         for group in groups.values():
             if len(group) > 1:
                 ordered = sorted(group)
                 for k in range(len(ordered) - 1):
                     model.add(load[ordered[k]] >= load[ordered[k + 1]])
+    return load, max_load, makespan
+
+
+def _scaled_cost(task: Task, agent: Agent) -> int:
+    return int(round(task.estimated_tokens * agent.price_per_1k_tokens / 1000 * _COST_SCALE))
+
+
+def _cost_signals_underflowed(
+    tasks: list[Task],
+    agents: list[Agent],
+    compat: dict[int, list[int]],
+) -> bool:
+    any_positive_price = any(ag.price_per_1k_tokens > 0 for ag in agents)
+    if not any_positive_price:
+        return False
+    for i, task in enumerate(tasks):
+        for a in compat.get(i, []):
+            if _scaled_cost(task, agents[a]) > 0:
+                return False
+    return True
 
 
 def _add_cost_variable(
@@ -715,12 +811,19 @@ def _add_cost_variable(
     cost_terms = []
     max_cost = 0
     for (i, a), x_var in vars_.x.items():
-        cost_ia = int(
-            round(tasks[i].estimated_tokens * agents[a].price_per_1k_tokens / 1000 * _COST_SCALE)
-        )
+        cost_ia = _scaled_cost(tasks[i], agents[a])
         if cost_ia > 0:
             cost_terms.append(cost_ia * x_var)
             max_cost += cost_ia
+    # Defensive int64 guard: even with config_schema caps in place, library
+    # callers can bypass schema validation. 2**62 leaves comfortable headroom
+    # under the int64 ceiling (~9.22e18) for downstream CP-SAT arithmetic.
+    if max_cost > _COST_INT64_HEADROOM:
+        raise ScheduleInputError(
+            "cost-aware total exceeds safe int64 headroom: "
+            f"max_cost={max_cost} > {_COST_INT64_HEADROOM}. "
+            "Reduce price_per_1k_tokens, estimated_tokens, or task count."
+        )
     total_cost = model.new_int_var(0, max(max_cost, 1), "total_cost")
     if cost_terms:
         model.add(total_cost == sum(cost_terms))
@@ -748,14 +851,24 @@ def build_model(
     model = cp_model.CpModel()
     horizon = max(
         min_horizon,
-        _horizon(n, edges, agents, min_dur, file_conflicts, config.horizon_multiplier, graph=graph),
+        _horizon(
+            _HorizonInputs(
+                n=n,
+                edges=edges,
+                agents=agents,
+                min_dur=min_dur,
+                p=p,
+                compat=compat,
+                file_conflicts=file_conflicts,
+                graph=graph,
+            ),
+            config.horizon_multiplier,
+        ),
     )
     vars_ = _build_variables(model, n, m, compat, p, min_dur, horizon)
     _add_precedence_constraints(model, vars_, edges)
     _add_resource_constraints(model, vars_, agents, tasks, file_conflicts)
-    _add_objectives(model, vars_, agents, p, config, horizon)
-    assert vars_.max_load is not None  # guaranteed by _add_objectives
-    assert vars_.makespan is not None  # guaranteed by _add_objectives
+    load, max_load, makespan = _add_objectives(model, vars_, agents, p, config, horizon)
     total_cost = None
     if config.objective == "cost_aware":
         total_cost = _add_cost_variable(model, vars_, tasks, agents)
@@ -765,9 +878,9 @@ def build_model(
         end=vars_.end,
         dur=vars_.dur,
         x=vars_.x,
-        load=vars_.load,
-        max_load=vars_.max_load,
-        makespan=vars_.makespan,
+        load=load,
+        max_load=max_load,
+        makespan=makespan,
         horizon=horizon,
         total_cost=total_cost,
     )
@@ -775,12 +888,20 @@ def build_model(
 
 def _apply_fixed_constraints(
     bundle: ModelBundle,
-    fixed_constraints: dict[int, tuple[int, int]],
+    fixed_constraints: dict[int, tuple[int, int, int]],
     compat: dict[int, list[int]],
 ) -> None:
-    """Pin start time and agent assignment for each task in fixed_constraints."""
-    for i, (a_fixed, s_fixed) in fixed_constraints.items():
+    """Pin agent, start, and duration for each task in fixed_constraints.
+
+    Pinning ``dur`` (in addition to ``start`` and the ``x[i,a]`` channel) is
+    essential for replan determinism: if ``speed_factor`` or ``token_unit``
+    changes between the original solve and the replan (e.g. recalibration),
+    the duration channelled from ``p[i,a]`` would silently shift, making the
+    "frozen" task land somewhere different than reported.
+    """
+    for i, (a_fixed, s_fixed, d_fixed) in fixed_constraints.items():
         bundle.model.add(bundle.start[i] == s_fixed)
+        bundle.model.add(bundle.dur[i] == d_fixed)
         for a in compat.get(i, []):
             if (i, a) in bundle.x:
                 bundle.model.add(bundle.x[(i, a)] == (1 if a == a_fixed else 0))
@@ -789,7 +910,6 @@ def _apply_fixed_constraints(
 def _apply_hints(
     bundle: ModelBundle,
     hints: dict[int, tuple[int, int]],
-    tasks: list[Task],
     compat: dict[int, list[int]],
 ) -> None:
     for i, (a_hint, s_hint) in hints.items():
@@ -807,7 +927,7 @@ class _AnytimeCallback(cp_model.CpSolverSolutionCallback):
     def __init__(self, t0: float) -> None:
         super().__init__()
         self._t0 = t0
-        self.intermediates: list[dict] = []
+        self.intermediates: list[dict[str, Any]] = []
 
     def on_solution_callback(self) -> None:
         obj = self.objective_value
@@ -835,7 +955,7 @@ def _run_solver(
     model: cp_model.CpModel,
     config: SolverConfig,
     callback: cp_model.CpSolverSolutionCallback | None = None,
-) -> tuple[cp_model.CpSolver, int, float]:
+) -> tuple[cp_model.CpSolver, cp_model.CpSolverStatus, float]:
     solver = cp_model.CpSolver()
     solver.parameters.num_workers = config.num_workers
     solver.parameters.max_time_in_seconds = config.time_limit
@@ -857,7 +977,7 @@ def _extract_assignments(
     tasks: list[Task],
     agents: list[Agent],
     compat: dict[int, list[int]],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     assignments = []
     for i, task in enumerate(tasks):
         assigned = None
@@ -886,8 +1006,8 @@ def _extract_assignments(
     return assignments
 
 
-def _build_waves(assignments: list[dict]) -> list[dict]:
-    waves: dict[int, list[dict]] = defaultdict(list)
+def _build_waves(assignments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    waves: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for a in assignments:
         waves[a["start"]].append(a)
     return [
@@ -897,7 +1017,7 @@ def _build_waves(assignments: list[dict]) -> list[dict]:
 
 
 def _build_schedule_graph(
-    assignments: list[dict],
+    assignments: list[dict[str, Any]],
     edges: list[tuple[int, int]],
     tasks: list[Task],
 ) -> nx.DiGraph:
@@ -952,7 +1072,7 @@ def _build_schedule_graph(
 
 
 def _critical_path(
-    assignments: list[dict],
+    assignments: list[dict[str, Any]],
     edges: list[tuple[int, int]],
     tasks: list[Task],
 ) -> tuple[list[str], list[list[str]], list[list[str]]]:
@@ -977,7 +1097,19 @@ def _critical_path(
 
     dist: dict[int, int] = {}
     best_pred: dict[int, int | None] = {}
-    for u in nx.lexicographical_topological_sort(graph):
+    try:
+        topo_iter = list(nx.lexicographical_topological_sort(graph))
+    except nx.NetworkXUnfeasible:
+        # Defensive: a cycle in the realised-schedule graph indicates an
+        # internal inconsistency (e.g. a bug in resource-arc inference).
+        # Don't crash the whole result — return an empty critical path so
+        # the schedule itself is still surfaced to the caller.
+        log.warning(
+            "critical-path: realised-schedule graph has a cycle; "
+            "returning empty critical path."
+        )
+        return [], [], []
+    for u in topo_iter:
         w = graph.nodes[u]["weight"]
         chosen: int | None = None
         best_len = 0
@@ -1011,15 +1143,15 @@ def _critical_path(
 def _build_agent_summary(
     solver: cp_model.CpSolver,
     bundle: ModelBundle,
-    assignments: list[dict],
+    assignments: list[dict[str, Any]],
     agents: list[Agent],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     summary = []
     for ag in agents:
         a_tasks = [task for task in assignments if task["agent_index"] == ag.index]
         total_tokens = sum(task["tokens"] for task in a_tasks)
         cost = round(total_tokens * ag.price_per_1k_tokens / 1000, 4)
-        row: dict = {
+        row: dict[str, Any] = {
             "agent_id": ag.id,
             "model": ag.model,
             "task_count": len(a_tasks),
@@ -1054,18 +1186,18 @@ def solve(
     hints: dict[int, tuple[int, int]] | None = None,
     *,
     graph: nx.DiGraph | None = None,
-    fixed_constraints: dict[int, tuple[int, int]] | None = None,
-) -> dict:
+    fixed_constraints: dict[int, tuple[int, int, int]] | None = None,
+) -> dict[str, Any]:
     min_horizon = 0
     if fixed_constraints:
-        for i, (a_fixed, s_fixed) in fixed_constraints.items():
+        for i, (a_fixed, s_fixed, d_fixed) in fixed_constraints.items():
             if i < 0 or i >= len(tasks) or a_fixed < 0 or a_fixed >= len(agents):
                 raise ScheduleInputError(t("replan_fixed_missing"))
             if a_fixed not in compat.get(i, []) or (i, a_fixed) not in p:
                 raise ScheduleInputError(
                     t("replan_fixed_incompatible", task_id=tasks[i].id, agent_id=agents[a_fixed].id)
                 )
-            min_horizon = max(min_horizon, s_fixed + p[(i, a_fixed)])
+            min_horizon = max(min_horizon, s_fixed + d_fixed)
 
     bundle = build_model(
         tasks,
@@ -1079,19 +1211,19 @@ def solve(
         graph=graph,
         min_horizon=min_horizon,
     )
-    stats: dict = {"horizon": bundle.horizon}
+    stats: dict[str, Any] = {"horizon": bundle.horizon}
 
     if fixed_constraints:
         _apply_fixed_constraints(bundle, fixed_constraints, compat)
 
     if hints and config.warm_start:
-        _apply_hints(bundle, hints, tasks, compat)
+        _apply_hints(bundle, hints, compat)
 
     if config.objective == "weighted":
         bundle.model.minimize(config.makespan_weight * bundle.makespan + bundle.max_load)
         solver, status, elapsed = _run_solver(bundle.model, config)
         stats["solve_time"] = round(elapsed, 2)
-        stats["phase1_status"] = solver.status_name(status)
+        _record_phase_status(stats, 1, solver, status)
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return {
                 "status": "INFEASIBLE",
@@ -1109,7 +1241,6 @@ def solve(
             stats,
             status,
             warnings,
-            phase2=False,
         )
 
     if config.objective == "cost_aware":
@@ -1123,9 +1254,9 @@ def solve(
 def _solve_phase1_makespan(
     bundle: ModelBundle,
     config: SolverConfig,
-    stats: dict,
+    stats: dict[str, Any],
     warnings: WarningCollector,
-) -> tuple[cp_model.CpSolver, int, _AnytimeCallback | None]:
+) -> tuple[cp_model.CpSolver, cp_model.CpSolverStatus, _AnytimeCallback | None]:
     """Phase 1 shared by lexicographic and cost_aware: minimise makespan."""
     bundle.model.minimize(bundle.makespan)
     callback: _AnytimeCallback | None = None
@@ -1133,12 +1264,12 @@ def _solve_phase1_makespan(
         callback = _AnytimeCallback(time.time())
     solver1, status1, elapsed1 = _run_solver(bundle.model, config, callback=callback)
     stats["phase1_time"] = round(elapsed1, 2)
-    stats["phase1_status"] = solver1.status_name(status1)
+    _record_phase_status(stats, 1, solver1, status1)
     if callback is not None:
         stats["intermediate"] = callback.intermediates
     if status1 == cp_model.FEASIBLE and callback is not None:
         stats["final_gap"] = _compute_gap(solver1)
-        warnings.add("anytime_timeout", t("anytime_timeout"))
+        warnings.add(WARN_ANYTIME_TIMEOUT, t(WARN_ANYTIME_TIMEOUT))
     return solver1, status1, callback
 
 
@@ -1149,13 +1280,60 @@ def _rehint_from(
     compat: dict[int, list[int]],
 ) -> None:
     """Seed the next phase with variable values from a previous solver."""
-    bundle.model.clear_hints()
+    _clear_hints(bundle.model)
     for i in range(len(tasks)):
         bundle.model.add_hint(bundle.start[i], solver.value(bundle.start[i]))
         bundle.model.add_hint(bundle.end[i], solver.value(bundle.end[i]))
         for a in compat[i]:
             if (i, a) in bundle.x:
                 bundle.model.add_hint(bundle.x[(i, a)], solver.value(bundle.x[(i, a)]))
+
+
+def _record_phase_status(
+    stats: dict[str, Any],
+    phase: int,
+    solver: cp_model.CpSolver,
+    status: cp_model.CpSolverStatus,
+) -> None:
+    """Record both a stringified and integer status for ``phase`` in ``stats``.
+
+    The integer ``phase{N}_status_code`` is the canonical comparison surface;
+    the string ``phase{N}_status`` is kept for user-facing reporting.
+    """
+    stats[f"phase{phase}_status"] = solver.status_name(status)
+    stats[f"phase{phase}_status_code"] = int(status)
+
+
+def _phase1_infeasible_message(
+    solver: cp_model.CpSolver,
+    status: cp_model.CpSolverStatus,
+    bundle: ModelBundle,
+) -> str:
+    """Build a diagnostic message when Phase 1 returns no feasible schedule.
+
+    Distinguishes the two common causes by surfacing the horizon and the
+    solver's best lower bound on makespan: if the bound exceeds the horizon
+    the model is genuinely infeasible at that horizon, otherwise the solver
+    timed out before proving INFEASIBLE/finding a schedule.
+    """
+    status_name = solver.status_name(status)
+    horizon = bundle.horizon
+    if status == cp_model.INFEASIBLE:
+        return t("phase1_infeasible_proven", horizon=horizon)
+    bound = solver.best_objective_bound
+    if bound > horizon:
+        return t(
+            "phase1_infeasible_lb_exceeds_horizon",
+            status=status_name,
+            lb=f"{bound:.0f}",
+            horizon=horizon,
+        )
+    return t(
+        "phase1_infeasible_timeout",
+        status=status_name,
+        horizon=horizon,
+        lb=f"{bound:.0f}",
+    )
 
 
 def _solve_lexicographic(
@@ -1165,15 +1343,15 @@ def _solve_lexicographic(
     agents: list[Agent],
     compat: dict[int, list[int]],
     config: SolverConfig,
-    stats: dict,
+    stats: dict[str, Any],
     warnings: WarningCollector,
-) -> dict:
+) -> dict[str, Any]:
     solver1, status1, _cb = _solve_phase1_makespan(bundle, config, stats, warnings)
 
     if status1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return {
             "status": "INFEASIBLE",
-            "message": "Phase 1 found no feasible schedule.",
+            "message": _phase1_infeasible_message(solver1, status1, bundle),
             "stats": stats,
             "warnings": warnings.as_list(),
         }
@@ -1181,21 +1359,21 @@ def _solve_lexicographic(
     ms_star = solver1.value(bundle.makespan)
     stats["makespan_phase1"] = ms_star
 
-    # Phase 2: freeze makespan, minimise max load.
-    bundle.model.add(bundle.makespan <= ms_star)
-    bundle.model.clear_objective()
+    # Phase 2: freeze makespan (== for tighter bound propagation), minimise max load.
+    bundle.model.add(bundle.makespan == ms_star)
+    _clear_objective(bundle.model)
     _rehint_from(bundle, solver1, tasks, compat)
     bundle.model.minimize(bundle.max_load)
 
     solver2, status2, elapsed2 = _run_solver(bundle.model, config)
     stats["phase2_time"] = round(elapsed2, 2)
-    stats["phase2_status"] = solver2.status_name(status2)
+    _record_phase_status(stats, 2, solver2, status2)
 
     if status2 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         solver_final = solver2
         final_status = status2
     else:
-        warnings.add("phase2_fallback", t("phase2_fallback"))
+        warnings.add(WARN_PHASE2_FALLBACK, t(WARN_PHASE2_FALLBACK))
         solver_final = solver1
         final_status = status1
 
@@ -1209,7 +1387,6 @@ def _solve_lexicographic(
         stats,
         final_status,
         warnings,
-        phase2=True,
     )
 
 
@@ -1220,18 +1397,21 @@ def _solve_cost_aware(
     agents: list[Agent],
     compat: dict[int, list[int]],
     config: SolverConfig,
-    stats: dict,
+    stats: dict[str, Any],
     warnings: WarningCollector,
-) -> dict:
+) -> dict[str, Any]:
     """Lexicographic lex(makespan, cost, max_load) three-phase solve."""
     assert bundle.total_cost is not None
+
+    if _cost_signals_underflowed(tasks, agents, compat):
+        warnings.add(WARN_COST_SCALE_UNDERFLOW, t(WARN_COST_SCALE_UNDERFLOW))
 
     solver1, status1, _cb = _solve_phase1_makespan(bundle, config, stats, warnings)
 
     if status1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return {
             "status": "INFEASIBLE",
-            "message": "Phase 1 found no feasible schedule.",
+            "message": _phase1_infeasible_message(solver1, status1, bundle),
             "stats": stats,
             "warnings": warnings.as_list(),
         }
@@ -1239,39 +1419,39 @@ def _solve_cost_aware(
     ms_star = solver1.value(bundle.makespan)
     stats["makespan_phase1"] = ms_star
 
-    # Phase 2: freeze makespan, minimise cost.
-    bundle.model.add(bundle.makespan <= ms_star)
-    bundle.model.clear_objective()
+    # Phase 2: freeze makespan (== for tighter bound propagation), minimise cost.
+    bundle.model.add(bundle.makespan == ms_star)
+    _clear_objective(bundle.model)
     _rehint_from(bundle, solver1, tasks, compat)
     bundle.model.minimize(bundle.total_cost)
 
     solver2, status2, elapsed2 = _run_solver(bundle.model, config)
     stats["phase2_time"] = round(elapsed2, 2)
-    stats["phase2_status"] = solver2.status_name(status2)
+    _record_phase_status(stats, 2, solver2, status2)
 
     if status2 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        warnings.add("phase2_fallback", t("phase2_fallback"))
+        warnings.add(WARN_PHASE2_FALLBACK, t(WARN_PHASE2_FALLBACK))
         return _finalize_result(
-            solver1, bundle, tasks, edges, agents, compat, stats, status1, warnings, phase2=False
+            solver1, bundle, tasks, edges, agents, compat, stats, status1, warnings
         )
 
     cost_star = solver2.value(bundle.total_cost)
 
-    # Phase 3: freeze cost, minimise max_load.
-    bundle.model.add(bundle.total_cost <= cost_star)
-    bundle.model.clear_objective()
+    # Phase 3: freeze cost (== for tighter bound propagation), minimise max_load.
+    bundle.model.add(bundle.total_cost == cost_star)
+    _clear_objective(bundle.model)
     _rehint_from(bundle, solver2, tasks, compat)
     bundle.model.minimize(bundle.max_load)
 
     solver3, status3, elapsed3 = _run_solver(bundle.model, config)
     stats["phase3_time"] = round(elapsed3, 2)
-    stats["phase3_status"] = solver3.status_name(status3)
+    _record_phase_status(stats, 3, solver3, status3)
 
     if status3 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         solver_final = solver3
         final_status = status3
     else:
-        warnings.add("phase2_fallback", t("phase2_fallback"))
+        warnings.add(WARN_PHASE3_FALLBACK, t(WARN_PHASE3_FALLBACK))
         solver_final = solver2
         final_status = status2
 
@@ -1285,7 +1465,6 @@ def _solve_cost_aware(
         stats,
         final_status,
         warnings,
-        phase2=True,
     )
 
 
@@ -1296,11 +1475,10 @@ def _finalize_result(
     edges: list[tuple[int, int]],
     agents: list[Agent],
     compat: dict[int, list[int]],
-    stats: dict,
-    status: int,
+    stats: dict[str, Any],
+    status: cp_model.CpSolverStatus,
     warnings: WarningCollector,
-    phase2: bool,
-) -> dict:
+) -> dict[str, Any]:
     assignments = _extract_assignments(solver, bundle, tasks, agents, compat)
     waves = _build_waves(assignments)
     agent_summary = _build_agent_summary(solver, bundle, assignments, agents)
@@ -1325,6 +1503,14 @@ def _finalize_result(
         status_str = "FEASIBLE"
     else:
         status_str = "UNKNOWN"
+    # Joint-optimum provenness: only report OPTIMAL when every executed phase
+    # proved optimality. Per-phase statuses remain in stats for diagnostics.
+    if status_str == "OPTIMAL":
+        for key in (f"phase{i}_status_code" for i in (1, 2, 3)):
+            phase_code = stats.get(key)
+            if phase_code is not None and phase_code != cp_model.OPTIMAL:
+                status_str = "FEASIBLE"
+                break
     stats["status"] = status_str
 
     return {
@@ -1345,20 +1531,56 @@ def _finalize_result(
 # ───────────────────────────────────────────────────────────────────────
 
 
-def solve_with_fixed(
-    data: dict,
-    fixed_assignments: dict[str, dict],
-    prior_hints: dict[str, dict] | None = None,
-) -> dict:
-    """Solve with selected tasks pinned to a prior assignment.
+def _resolve_fixed_duration(
+    assn: Mapping[str, Any],
+    p_ia: int | None,
+    *,
+    task_id: str,
+) -> int:
+    """Resolve the integer duration for a frozen task assignment.
 
-    fixed_assignments: {task_id: {"agent_id": str, "start": int}}
-        Tasks listed here receive equality constraints on start time and agent.
-    prior_hints: {task_id: {"agent_id": str, "start": int}}
-        Non-fixed tasks are seeded with these values for fast convergence.
-        When None and warm_start is enabled, falls back to the heuristic.
+    Precedence: explicit ``duration`` field, then ``end - start`` if ``end``
+    is present, then the supplied ``p_ia`` fallback (the current solver's
+    duration for the (task, agent) pair). Raises ``ScheduleInputError`` if
+    no source is available or if a source yielded a non-positive integer.
+    This is the single point of duration-fallback logic shared by the
+    replan helper and ``solve_with_fixed``.
     """
-    validate_solver_input(data)
+    d_raw = assn.get("duration")
+    if d_raw is not None:
+        d_fixed = int(d_raw)
+    else:
+        end_raw = assn.get("end")
+        if end_raw is not None:
+            s_raw = assn.get("start")
+            s_fixed = int(s_raw) if s_raw is not None else 0
+            d_fixed = int(end_raw) - s_fixed
+        elif p_ia is not None:
+            d_fixed = int(p_ia)
+        else:
+            d_fixed = 0
+    if d_fixed <= 0:
+        raise ScheduleInputError(
+            t("replan_fixed_invalid_duration", tid=task_id, d=d_fixed)
+        )
+    return d_fixed
+
+
+def _prepare_solve_inputs(
+    data: dict[str, Any],
+    *,
+    validate: bool = True,
+) -> _PreparedInputs:
+    """Validate, parse, preflight, and pre-compute everything ``solve`` needs.
+
+    Centralises the duplicated front-half of :func:`solve_from_json` and
+    :func:`solve_with_fixed`. The default ``hints`` is the warm-start
+    heuristic when ``config.warm_start`` is enabled; callers may override
+    the field on the returned bundle (e.g. ``solve_with_fixed`` does this
+    when prior_hints are supplied).
+    """
+    if validate:
+        validate_solver_input(data)
     tasks, edges, agents, config = _parse_input(data)
 
     _raise_if_cycle(tasks, edges)
@@ -1379,10 +1601,82 @@ def solve_with_fixed(
     file_conflicts = build_file_conflict_groups(tasks)
     precedence_graph = _precedence_graph(len(tasks), edges, min_dur)
 
-    task_id_to_idx = {t.id: t.index for t in tasks}
-    agent_id_to_idx = {a.id: a.index for a in agents}
+    hints: dict[int, tuple[int, int]] | None = None
+    if config.warm_start:
+        hints = list_schedule_heuristic(
+            tasks,
+            edges,
+            agents,
+            compat,
+            p,
+            min_dur,
+            file_conflicts,
+            graph=precedence_graph,
+        )
 
-    fixed_constraints: dict[int, tuple[int, int]] = {}
+    return _PreparedInputs(
+        tasks=tasks,
+        edges=edges,
+        agents=agents,
+        config=config,
+        compat=compat,
+        p=p,
+        min_dur=min_dur,
+        file_conflicts=file_conflicts,
+        graph=precedence_graph,
+        warnings=warnings,
+        hints=hints,
+    )
+
+
+def _decorate_result(
+    result: dict[str, Any],
+    prepared: _PreparedInputs,
+) -> dict[str, Any]:
+    """Append the trailing ``quantile_used``/``edges``/``tasks`` block.
+
+    Shared post-solve decoration for :func:`solve_from_json` and
+    :func:`solve_with_fixed`.
+    """
+    tasks = prepared.tasks
+    result["stats"]["quantile_used"] = prepared.config.stochastic_quantile
+    result["edges"] = [[tasks[s].id, tasks[d].id] for s, d in prepared.edges]
+    result["tasks"] = [
+        {
+            "id": task.id,
+            "phase": task.phase,
+            "story_id": task.story_id,
+            "story_priority": task.story_priority,
+            "required_skill": task.required_skill,
+        }
+        for task in tasks
+    ]
+    return result
+
+
+def solve_with_fixed(
+    data: dict[str, Any],
+    fixed_assignments: dict[str, dict[str, Any]],
+    prior_hints: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Solve with selected tasks pinned to a prior assignment.
+
+    fixed_assignments: {task_id: {"agent_id": str, "start": int}}
+        Tasks listed here receive equality constraints on start time and agent.
+    prior_hints: {task_id: {"agent_id": str, "start": int}}
+        Non-fixed tasks are seeded with these values for fast convergence.
+        When None and warm_start is enabled, falls back to the heuristic.
+    """
+    prepared = _prepare_solve_inputs(data)
+    tasks = prepared.tasks
+    agents = prepared.agents
+    compat = prepared.compat
+    p = prepared.p
+
+    task_id_to_idx = {task.id: task.index for task in tasks}
+    agent_id_to_idx = {ag.id: ag.index for ag in agents}
+
+    fixed_constraints: dict[int, tuple[int, int, int]] = {}
     for task_id, assn in fixed_assignments.items():
         i = task_id_to_idx.get(task_id)
         a = agent_id_to_idx.get(assn.get("agent_id", ""))
@@ -1398,125 +1692,65 @@ def solve_with_fixed(
             raise ScheduleInputError(
                 t("replan_fixed_incompatible", task_id=task_id, agent_id=assn.get("agent_id", ""))
             )
-        fixed_constraints[i] = (a, assn["start"])
+        # Pin the duration recorded in the prior assignment so calibration
+        # changes (speed_factor / token_unit) don't shift the frozen task.
+        # ``_resolve_fixed_duration`` falls back to the current p[i,a] when
+        # the prior record carries neither ``duration`` nor ``end``.
+        s_fixed = int(assn["start"])
+        d_fixed = _resolve_fixed_duration(assn, p[(i, a)], task_id=task_id)
+        fixed_constraints[i] = (a, s_fixed, d_fixed)
 
-    hints: dict[int, tuple[int, int]] | None = None
-    if config.warm_start:
-        if prior_hints:
-            hints = {}
-            fixed_task_ids = set(fixed_assignments.keys())
-            for task_id, assn in prior_hints.items():
-                if task_id in fixed_task_ids:
-                    continue
-                i = task_id_to_idx.get(task_id)
-                a = agent_id_to_idx.get(assn.get("agent_id", ""))
-                if i is not None and a is not None and a in compat.get(i, []):
-                    hints[i] = (a, assn["start"])
-        else:
-            hints = list_schedule_heuristic(
-                tasks,
-                edges,
-                agents,
-                compat,
-                p,
-                min_dur,
-                file_conflicts,
-                graph=precedence_graph,
-            )
+    if prepared.config.warm_start and prior_hints:
+        # Override the heuristic-derived hints with the supplied prior assignments,
+        # filtered to non-fixed, skill-compatible (task, agent) pairs.
+        overridden: dict[int, tuple[int, int]] = {}
+        fixed_task_ids = set(fixed_assignments.keys())
+        for task_id, assn in prior_hints.items():
+            if task_id in fixed_task_ids:
+                continue
+            i = task_id_to_idx.get(task_id)
+            a = agent_id_to_idx.get(assn.get("agent_id", ""))
+            if i is not None and a is not None and a in compat.get(i, []):
+                overridden[i] = (a, assn["start"])
+        prepared.hints = overridden
 
     result = solve(
         tasks,
-        edges,
+        prepared.edges,
         agents,
         compat,
         p,
-        min_dur,
-        file_conflicts,
-        config,
-        warnings,
-        hints,
-        graph=precedence_graph,
+        prepared.min_dur,
+        prepared.file_conflicts,
+        prepared.config,
+        prepared.warnings,
+        prepared.hints,
+        graph=prepared.graph,
         fixed_constraints=fixed_constraints if fixed_constraints else None,
     )
 
-    result["stats"]["quantile_used"] = config.stochastic_quantile
-    result["edges"] = [[tasks[s].id, tasks[d].id] for s, d in edges]
-    result["tasks"] = [
-        {
-            "id": task.id,
-            "phase": task.phase,
-            "story_id": task.story_id,
-            "story_priority": task.story_priority,
-            "required_skill": task.required_skill,
-        }
-        for task in tasks
-    ]
-    return result
+    return _decorate_result(result, prepared)
 
 
-def solve_from_json(data: dict) -> dict:
+def solve_from_json(data: dict[str, Any]) -> dict[str, Any]:
     """Validate, build, solve. Returns the full result envelope."""
-    validate_solver_input(data)
-    tasks, edges, agents, config = _parse_input(data)
-
-    _raise_if_cycle(tasks, edges)
-
-    warnings = WarningCollector()
-    for w in data.get("warnings", []) or []:
-        warnings.add(
-            w.get("code", "upstream"),
-            w.get("message", ""),
-            **w.get("context", {}),
-        )
-
-    preflight_checks(tasks, agents, warnings)
-
-    compat = compute_compatible_agents(tasks, agents)
-    p = compute_durations(tasks, agents, config.token_unit, config.stochastic_quantile)
-    min_dur = compute_min_durations(len(tasks), compat, p)
-    file_conflicts = build_file_conflict_groups(tasks)
-    precedence_graph = _precedence_graph(len(tasks), edges, min_dur)
-
-    hints = None
-    if config.warm_start:
-        hints = list_schedule_heuristic(
-            tasks,
-            edges,
-            agents,
-            compat,
-            p,
-            min_dur,
-            file_conflicts,
-            graph=precedence_graph,
-        )
+    prepared = _prepare_solve_inputs(data)
 
     result = solve(
-        tasks,
-        edges,
-        agents,
-        compat,
-        p,
-        min_dur,
-        file_conflicts,
-        config,
-        warnings,
-        hints,
-        graph=precedence_graph,
+        prepared.tasks,
+        prepared.edges,
+        prepared.agents,
+        prepared.compat,
+        prepared.p,
+        prepared.min_dur,
+        prepared.file_conflicts,
+        prepared.config,
+        prepared.warnings,
+        prepared.hints,
+        graph=prepared.graph,
     )
 
-    result["stats"]["quantile_used"] = config.stochastic_quantile
-    result["edges"] = [[tasks[s].id, tasks[d].id] for s, d in edges]
-    result["tasks"] = [
-        {
-            "id": task.id,
-            "phase": task.phase,
-            "story_id": task.story_id,
-            "story_priority": task.story_priority,
-            "required_skill": task.required_skill,
-        }
-        for task in tasks
-    ]
-    return result
+    return _decorate_result(result, prepared)
 
 
 def _build_argparser() -> argparse.ArgumentParser:

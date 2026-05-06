@@ -87,32 +87,35 @@ agents:
 
 The solver output includes `total_cost` (in the same unit as `price_per_1k_tokens × tokens`) and picks the cheapest assignment that achieves optimal makespan.
 
-## Installation
+## Install
 
-One-shot, uv-based install (installs `uv` itself if absent, creates a
-reproducible virtualenv from `uv.lock`, and runs a smoke test):
-
-```bash
-./bin/install.sh
-```
-
-See [`INSTALL.md`](INSTALL.md) for the zip-sharing flow, contributor setup,
-and the `pip` fallback (`SKIP_UV=1 ./bin/install.sh`) for environments
-where `uv` is blocked.
-
-### Install as a spec-kit extension
+### From a tagged release (recommended)
 
 ```bash
-# From a release archive:
-specify extension add --from /path/to/spec-kit-schedule.zip
-
-# From a local checkout:
-specify extension add --dev /path/to/spec-kit-schedule
+specify extension add --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.5.0.zip
 ```
 
-Running `specify extension add` triggers the bundled `bin/install.sh`
-(declared in `extension.yml`) so teammates get a working environment
-without a separate `pip install` step.
+### Local development install
+
+```bash
+git clone https://github.com/jfranc38/spec-kit-schedule
+cd spec-kit-schedule
+uv sync --extra dev          # bootstrap Python solver dependencies
+specify extension add --dev .
+```
+
+### Python solver dependencies
+
+This extension ships a Python CP-SAT solver under `solver/`. The
+`specify` CLI does not install Python packages, so the solver
+dependencies must be bootstrapped once: `uv sync --extra dev` from the
+cloned repo, or run `bin/install.sh` (which also installs `uv` if
+absent and runs an end-to-end smoke test). PyPI distribution is on the
+roadmap — see [`INSTALL.md`](INSTALL.md) and `CHANGELOG.md`.
+
+See [`INSTALL.md`](INSTALL.md) for the zip-sharing flow, contributor
+setup, and the `pip` fallback (`SKIP_UV=1 ./bin/install.sh`) for
+environments where `uv` is blocked.
 
 ### Recommended Companion
 
@@ -125,7 +128,7 @@ Install the **Explicit Task Dependencies** preset for machine-readable dependenc
 /speckit.schedule.portfolio
 
 # 2. After running /speckit.tasks, generate the optimal schedule
-/speckit.schedule
+/speckit.schedule.run
 
 # 3. (Optional) Visualize the result
 /speckit.schedule.visualize
@@ -202,7 +205,7 @@ agents:
 
 | Command | Description |
 |---------|-------------|
-| `/speckit.schedule` | Parse tasks.md → solve CP-SAT → produce schedule.md (+ optional PNG images) |
+| `/speckit.schedule.run` | Parse tasks.md → solve CP-SAT → produce schedule.md (+ optional PNG images) |
 | `/speckit.schedule.portfolio` | Create or edit agent portfolio configuration |
 | `/speckit.schedule.visualize` | Emit publication-grade `<feature>-dag.png` and `<feature>-gantt.png` from a solver output JSON and embed references in `schedule.md` |
 
@@ -231,7 +234,7 @@ For the complete formal model with sets, parameters, decision variables, constra
 | `sum(estimated_tokens) exceeds sum(context_budget)` | The portfolio cannot hold the feature. | Increase `context_budget`, add agents, or split the feature. |
 | `N tasks require skill 'X' but total κ … is M` | Cardinality cap too low for that skill bucket. | Raise `kappa` on matching agents or add more. |
 
-**Load balance looks uneven.** Check the Warnings section in `schedule.md`: if `phase2_fallback` fired, Phase 2 timed out. Raise `solver.time_limit` or reduce the problem size.
+**Load balance looks uneven.** Check the Warnings section in `schedule.md`: if `phase2_fallback` fired, Phase 2 timed out. In `cost_aware` mode, `phase3_fallback` signals the same condition for the load-balancing pass run after the cost has been pinned. Raise `solver.time_limit` or reduce the problem size.
 
 **Dependency DAG in schedule.md looks wrong.** The renderer draws three arrow styles:
 
@@ -263,6 +266,22 @@ make package      # build dist/spec-kit-schedule.zip for teammates
 make bench        # run benchmarks and write benchmarks/results/latest.md
 make clean        # drop caches, dist, venv
 ```
+
+## When to use
+
+If you're unsure whether the optimisation overhead is worth it for your project, see [`docs/when-to-use.md`](docs/when-to-use.md) for a decision guide covering portfolio size, task graph density, and the heuristics-vs-CP-SAT tradeoff.
+
+## Distribution
+
+The canonical distribution channel is a tagged GitHub Release with the
+extension zip attached as an asset. Install via the `specify` CLI as
+shown under [Install](#install).
+
+> **PyPI distribution is on the roadmap.** The repository keeps the
+> wheel/sdist machinery (`pyproject.toml`, `MANIFEST.in`,
+> `share/spec-kit-schedule/` data layout) intact for that future
+> rollout, but for now `specify extension add` is the supported install
+> path.
 
 ## License
 

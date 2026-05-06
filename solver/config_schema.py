@@ -37,19 +37,24 @@ from .validation import ScheduleInputError
 log = logging.getLogger(__name__)
 
 # Pydantic v2 uses Annotated for constraints on primitive types.
-NonNegativeFloat = Annotated[float, Field(ge=0.0)]
 NonNegativeInt = Annotated[int, Field(ge=0)]
+
+# Bound chosen so that n × _MAX_TOKENS × _MAX_PRICE × _COST_SCALE / 1000
+# stays well within int64 across realistic project sizes; see
+# solver/scheduler.py:_add_cost_variable for the runtime guard.
+_MAX_PRICE_PER_1K_TOKENS = 1e6
+_MAX_TOKENS = 100_000_000
 
 
 class TokenEstimate(BaseModel):
     """Token estimate with optional standard deviation for stochastic mode."""
 
-    mean: PositiveInt
-    std_dev: NonNegativeInt = 0
+    mean: Annotated[int, Field(gt=0, le=_MAX_TOKENS)]
+    std_dev: Annotated[int, Field(ge=0, le=_MAX_TOKENS)] = 0
 
 
 # Accept either a bare integer or a {mean, std_dev} mapping.
-TokenEstimateLike = PositiveInt | TokenEstimate
+TokenEstimateLike = Annotated[int, Field(gt=0, le=_MAX_TOKENS)] | TokenEstimate
 
 
 class AgentConfig(BaseModel):
@@ -64,7 +69,7 @@ class AgentConfig(BaseModel):
     kappa: PositiveInt
     context_budget: PositiveInt
     speed_factor: PositiveFloat = 1.0
-    price_per_1k_tokens: NonNegativeFloat = 0.0
+    price_per_1k_tokens: Annotated[float, Field(ge=0.0, le=_MAX_PRICE_PER_1K_TOKENS)] = 0.0
 
 
 class SkillRule(BaseModel):

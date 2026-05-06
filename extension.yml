@@ -1,51 +1,37 @@
 schema_version: "1.0"
 
 extension:
-  id: "spec-kit-schedule"
+  id: "schedule"
   name: "Spec Kit Schedule — CP-SAT Agent Orchestrator"
   version: "0.5.0"
   description: "Optimal multi-agent task scheduling via CP-SAT solver with DAG precedence, hallucination-aware caps, file-conflict avoidance, stochastic durations, replanning, and interactive HTML output"
   author: "Julio César Franco Ardila"
-  repository: "https://github.com/juliofranco/spec-kit-schedule"
+  repository: "https://github.com/jfranc38/spec-kit-schedule"
   license: "MIT"
-  homepage: "https://github.com/juliofranco/spec-kit-schedule"
+  homepage: "https://github.com/jfranc38/spec-kit-schedule"
 
+# Python package dependencies live in pyproject.toml — the spec-kit
+# extension manifest's `requires.tools[]` is for external CLI tools and
+# MCP servers, not for Python imports. Run `uv sync --extra dev` (or
+# `bin/install.sh`) once after cloning to bootstrap them.
 requires:
-  speckit_version: ">=0.4.0,<1.0.0"
+  # Tested against spec-kit 0.4.x; no known incompatibilities with newer majors yet.
+  speckit_version: ">=0.4.0"
   tools:
     - name: "python3"
       version: ">=3.10,<4.0"
       required: true
-    - name: "ortools"
-      version: ">=9.9,<10.0"
-      required: true
-    - name: "pyyaml"
-      version: ">=6.0,<7.0"
-      required: true
-    - name: "networkx"
-      version: ">=3.1,<4.0"
-      required: true
-    - name: "matplotlib"
-      version: ">=3.7,<4.0"
-      required: false
-    - name: "pydot"
-      version: ">=2.0,<3.0"
-      required: false
-
-# Run the bundled bootstrap on `specify extension add`. If the host
-# spec-kit version does not honour `install`, `INSTALL.md` documents the
-# same one-shot command for manual invocation.
-install:
-  command: "./bin/install.sh"
-
-uninstall:
-  command: "rm -rf .venv dist"
 
 provides:
   commands:
-    - name: "speckit.schedule"
+    # Command IDs follow the canonical pattern
+    # ^speckit\.[a-z0-9-]+\.[a-z0-9-]+$ — three dotted segments where
+    # the middle segment matches `extension.id` ("schedule").
+    - name: "speckit.schedule.run"
       file: "commands/schedule.md"
       description: "Parse tasks.md, solve CP-SAT model, produce schedule.md with agent assignments and wave diagram"
+      aliases:
+        - "speckit.schedule.solve"
     - name: "speckit.schedule.portfolio"
       file: "commands/portfolio.md"
       description: "Define or edit the agent portfolio (models, skills, capacity caps)"

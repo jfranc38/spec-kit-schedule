@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from solver.i18n_catalog import WARN_PHASE2_FALLBACK, WARN_PHASE3_FALLBACK
 from solver.render_schedule import render
 
 
@@ -103,11 +104,24 @@ def test_resource_edges_rendered_as_dotted():
 def test_render_warnings_section_only_when_present():
     data = _minimal_solver_output()
     assert "## ⚠ Warnings" not in render(data, "feat")
-    data["warnings"] = [{"code": "phase2_fallback", "message": "timed out", "context": {"k": 1}}]
+    data["warnings"] = [
+        {"code": WARN_PHASE2_FALLBACK, "message": "timed out", "context": {"k": 1}}
+    ]
     out = render(data, "feat")
     assert "## ⚠ Warnings" in out
-    assert "phase2_fallback" in out
+    assert WARN_PHASE2_FALLBACK in out
     assert "timed out" in out
+
+
+def test_render_phase3_fallback_warning():
+    data = _minimal_solver_output()
+    data["warnings"] = [
+        {"code": WARN_PHASE3_FALLBACK, "message": "phase 3 timed out", "context": {}}
+    ]
+    out = render(data, "feat")
+    assert "## ⚠ Warnings" in out
+    assert WARN_PHASE3_FALLBACK in out
+    assert "phase 3 timed out" in out
 
 
 def test_critical_path_section_when_present():

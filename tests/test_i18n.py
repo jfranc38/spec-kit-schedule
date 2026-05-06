@@ -5,7 +5,14 @@ from __future__ import annotations
 import pytest
 
 from solver.i18n import detect_lang, t
-from solver.i18n_catalog import MESSAGES
+from solver.i18n_catalog import (
+    MESSAGES,
+    WARN_ANYTIME_TIMEOUT,
+    WARN_COST_SCALE_UNDERFLOW,
+    WARN_PARALLEL_WRITE_CONFLICT,
+    WARN_PHASE2_FALLBACK,
+    WARN_PHASE3_FALLBACK,
+)
 
 # ── t() happy path ────────────────────────────────────────────────────────────
 
@@ -51,6 +58,15 @@ class TestTranslate:
 
     def test_phase2_fallback_no_placeholders(self):
         msg = t("phase2_fallback")
+        assert len(msg) > 10
+
+    def test_phase3_fallback_no_placeholders(self):
+        msg = t("phase3_fallback")
+        assert len(msg) > 10
+        assert msg != t("phase2_fallback")
+
+    def test_cost_scale_underflow_no_placeholders(self):
+        msg = t("cost_scale_underflow")
         assert len(msg) > 10
 
     def test_parallel_write_conflict_interpolation(self):
@@ -120,9 +136,24 @@ REQUIRED_KEYS = [
     "kappa_exceeded",
     "parallel_write_conflict",
     "phase2_fallback",
+    "phase3_fallback",
+    "cost_scale_underflow",
     "no_tasks_found",
     "empty_agents",
     "task_no_skill",
+    "phase1_infeasible_proven",
+    "phase1_infeasible_lb_exceeds_horizon",
+    "phase1_infeasible_timeout",
+    "replan_fixed_invalid_duration",
+]
+
+# WARN_* constants must each map to a present catalog key.
+EMITTED_WARN_CODES = [
+    WARN_ANYTIME_TIMEOUT,
+    WARN_COST_SCALE_UNDERFLOW,
+    WARN_PARALLEL_WRITE_CONFLICT,
+    WARN_PHASE2_FALLBACK,
+    WARN_PHASE3_FALLBACK,
 ]
 
 
@@ -144,3 +175,7 @@ class TestCatalogCompleteness:
         snake_re = re.compile(r"^[a-z][a-z0-9_]*$")
         for key in MESSAGES:
             assert snake_re.match(key), f"Key {key!r} is not snake_case"
+
+    @pytest.mark.parametrize("code", EMITTED_WARN_CODES)
+    def test_warn_constant_has_catalog_entry(self, code):
+        assert code in MESSAGES, f"WARN constant {code!r} has no catalog entry"
