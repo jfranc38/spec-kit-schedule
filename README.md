@@ -1,8 +1,8 @@
 # spec-kit-schedule — CP-SAT Multi-Agent Task Orchestrator
 
-[![CI](https://github.com/jfranc38/spec-kit-schedule/actions/workflows/ci.yml/badge.svg)](https://github.com/jfranc38/spec-kit-schedule/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://github.com/jfranc38/spec-kit-schedule)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[CI](https://github.com/jfranc38/spec-kit-schedule/actions/workflows/ci.yml)
+[Python](https://github.com/jfranc38/spec-kit-schedule)
+[License: MIT](LICENSE)
 
 > A [spec-kit](https://github.com/github/spec-kit) extension that uses **constraint programming** (Google OR-Tools CP-SAT) to produce **provably optimal** task-to-agent assignments with DAG precedence, hallucination-aware capacity caps, file-conflict avoidance, stochastic durations, online replanning, and interactive HTML output.
 
@@ -18,9 +18,9 @@ MAQA solves this with a **greedy heuristic** (first-available agent). This exten
 /speckit.tasks  →  tasks.md
                       │
                       ▼
-              parse_tasks ──────────────────────────────────────────────────────────────────┐
-                      │                                                                      │
-                      ▼                                                                      │
+              parse_tasks ────────────────────────────────────────────────────────────────┐
+                      │                                                                   │
+                      ▼                                                                   │
               scheduler (CP-SAT) ─── calibrate (log-ingestion EMA) ─── replan (mid-run) ──┘
                       │
           ┌───────────┴────────────────┬────────────────────┐
@@ -55,11 +55,13 @@ The model is a Multi-Skill RCPSP (Bellenguez-Morineau & Néron 2007) enhanced wi
 
 ### Objectives
 
-| Mode | `objective` value | Behaviour |
-|------|-------------------|-----------|
-| Lexicographic (default) | `lexicographic` | Phase 1: min makespan. Phase 2: pin makespan, min max-load. |
-| Weighted | `weighted` | `W·C_max + L_max` — single-phase; W large enough to dominate. |
-| Cost-aware | `cost_aware` | Phase 1: min makespan. Phase 2: pin makespan, min cost. Phase 3: pin cost, min max-load. |
+
+| Mode                    | `objective` value | Behaviour                                                                                |
+| ----------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
+| Lexicographic (default) | `lexicographic`   | Phase 1: min makespan. Phase 2: pin makespan, min max-load.                              |
+| Weighted                | `weighted`        | `W·C_max + L_max` — single-phase; W large enough to dominate.                            |
+| Cost-aware              | `cost_aware`      | Phase 1: min makespan. Phase 2: pin makespan, min cost. Phase 3: pin cost, min max-load. |
+
 
 **Cost-aware example** (add `objective: cost_aware` to your config and set `price_per_1k_tokens` per agent):
 
@@ -110,9 +112,9 @@ This extension ships a Python CP-SAT solver under `solver/`. The
 dependencies must be bootstrapped once: `uv sync --extra dev` from the
 cloned repo, or run `bin/install.sh` (which also installs `uv` if
 absent and runs an end-to-end smoke test). PyPI distribution is on the
-roadmap — see [`INSTALL.md`](INSTALL.md) and `CHANGELOG.md`.
+roadmap — see `[INSTALL.md](INSTALL.md)` and `CHANGELOG.md`.
 
-See [`INSTALL.md`](INSTALL.md) for the zip-sharing flow, contributor
+See `[INSTALL.md](INSTALL.md)` for the zip-sharing flow, contributor
 setup, and the `pip` fallback (`SKIP_UV=1 ./bin/install.sh`) for
 environments where `uv` is blocked.
 
@@ -202,28 +204,32 @@ agents:
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `/speckit.schedule.run` | Parse tasks.md → solve CP-SAT → produce schedule.md (+ optional PNG images) |
-| `/speckit.schedule.portfolio` | Create or edit agent portfolio configuration |
+
+| Command                       | Description                                                                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `/speckit.schedule.run`       | Parse tasks.md → solve CP-SAT → produce schedule.md (+ optional PNG images)                                                          |
+| `/speckit.schedule.portfolio` | Create or edit agent portfolio configuration                                                                                         |
 | `/speckit.schedule.visualize` | Emit publication-grade `<feature>-dag.png` and `<feature>-gantt.png` from a solver output JSON and embed references in `schedule.md` |
+
 
 ## Mathematical Formulation
 
-For the complete formal model with sets, parameters, decision variables, constraints, and objective function in LaTeX notation, see [`docs/formulation.md`](docs/formulation.md).
+For the complete formal model with sets, parameters, decision variables, constraints, and objective function in LaTeX notation, see `[docs/formulation.md](docs/formulation.md)`.
 
 ## Troubleshooting
 
 **Solver reports `INFEASIBLE` or raises `ScheduleInputError`.** The parser and solver run several sanity checks and prefer loud failure over silent degradation:
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `Duplicate task id …` | Two `- [ ] T###` lines share an id. | Renumber one of them. |
-| `Unresolved dependencies` | `(depends on TNNN)` references a missing task. | Fix the typo or declare the missing task. |
-| `Dependency cycle detected` | Explicit deps + same-file + TDD together form a cycle. | The message prints the cycle; reorder or remove the conflicting `depends on`. |
-| `No agent provides the required skill(s)` | `skill_rules` map a task to a skill that no agent owns. | Add the skill to an agent, or route the path to a different skill in `skill_rules`. |
-| `sum(estimated_tokens) exceeds sum(context_budget)` | The portfolio cannot hold the feature. | Increase `context_budget`, add agents, or split the feature. |
-| `N tasks require skill 'X' but total κ … is M` | Cardinality cap too low for that skill bucket. | Raise `kappa` on matching agents or add more. |
+
+| Error                                               | Cause                                                   | Fix                                                                                 |
+| --------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `Duplicate task id …`                               | Two `- [ ] T###` lines share an id.                     | Renumber one of them.                                                               |
+| `Unresolved dependencies`                           | `(depends on TNNN)` references a missing task.          | Fix the typo or declare the missing task.                                           |
+| `Dependency cycle detected`                         | Explicit deps + same-file + TDD together form a cycle.  | The message prints the cycle; reorder or remove the conflicting `depends on`.       |
+| `No agent provides the required skill(s)`           | `skill_rules` map a task to a skill that no agent owns. | Add the skill to an agent, or route the path to a different skill in `skill_rules`. |
+| `sum(estimated_tokens) exceeds sum(context_budget)` | The portfolio cannot hold the feature.                  | Increase `context_budget`, add agents, or split the feature.                        |
+| `N tasks require skill 'X' but total κ … is M`      | Cardinality cap too low for that skill bucket.          | Raise `kappa` on matching agents or add more.                                       |
+
 
 **Load balance looks uneven.** Check the Warnings section in `schedule.md`: if `phase2_fallback` fired, Phase 2 timed out. In `cost_aware` mode, `phase3_fallback` signals the same condition for the load-balancing pass run after the cost has been pinned. Raise `solver.time_limit` or reduce the problem size.
 
@@ -260,7 +266,7 @@ make clean        # drop caches, dist, venv
 
 ## When to use
 
-If you're unsure whether the optimisation overhead is worth it for your project, see [`docs/when-to-use.md`](docs/when-to-use.md) for a decision guide covering portfolio size, task graph density, and the heuristics-vs-CP-SAT tradeoff.
+If you're unsure whether the optimisation overhead is worth it for your project, see `[docs/when-to-use.md](docs/when-to-use.md)` for a decision guide covering portfolio size, task graph density, and the heuristics-vs-CP-SAT tradeoff.
 
 ## Distribution
 
