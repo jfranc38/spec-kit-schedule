@@ -1,8 +1,16 @@
-# Example portfolio mixing providers: Anthropic Claude, GitHub Copilot,
-# Google Gemini, and a locally-hosted Ollama model. The scheduler is
-# provider-agnostic — `model` and `provider` fields are informational and
-# propagated to schedule.md so downstream executors (e.g. MAQA coordinator,
-# /speckit.implement) can route each task to the right runner.
+# Realistic-price reference config: a 5-agent portfolio mixing Anthropic
+# Claude, GitHub Copilot, Google Gemini, OpenAI, and a locally-hosted
+# Ollama model. The scheduler is provider-agnostic — `model` and `provider`
+# fields are informational and propagated to schedule.md so downstream
+# executors (e.g. MAQA coordinator, /speckit.implement) can route each
+# task to the right runner.
+#
+# Pricing here uses real 2026 list-price scale (e.g. $0.015 / 1K input
+# tokens for claude-opus-4). For an end-to-end runnable scenario whose
+# numbers actually exercise the cost-vs-makespan trade-off in `make
+# examples`, see `examples/04-multi-provider/` — that config scales
+# prices up ~1000× so a 14-task toy problem produces a visibly
+# differentiated solution.
 #
 # The κ / context_budget / speed_factor values below are STARTING estimates.
 # Re-calibrate against your real benchmarks; defaults are biased toward the

@@ -48,7 +48,7 @@ ends up using under your typical task mix.
 ## Step 2: classify by tier
 
 Use the κ / C tier framework from [`formulation.md`](formulation.md)
-(section "Empirical Calibration of κ and C"). The tiers are calibrated
+(section "Hallucination Calibration"). The tiers are calibrated
 from public long-context benchmarks (RULER, NoLiMa) and apply across
 providers, not per-vendor:
 
@@ -232,41 +232,12 @@ agents:
 
 ### Hybrid (Anthropic + OpenAI + local)
 
-A real heterogeneous portfolio with three providers plus a self-hosted
-local model for offline / private work. See
-[`examples/04-multi-provider/`](../examples/04-multi-provider/) for the
-complete worked example with `tasks.md`, expected output, and run
-instructions.
+A real heterogeneous portfolio combines frontier-cloud agents with a
+self-hosted local model for offline / private work. The cloud-side
+agents (Opus, GPT-4o, GPT-4o-mini) follow the same tier conventions as
+the recipes above; the genuinely new piece is the Ollama slot:
 
 ```yaml
-agents:
-  - id: opus
-    provider: anthropic
-    model: claude-opus-4
-    skills: [design, schema, architecture, review]
-    kappa: 6
-    context_budget: 32
-    speed_factor: 0.8
-    price_per_1k_tokens: 15.0
-
-  - id: gpt4o
-    provider: openai
-    model: gpt-4o
-    skills: [python, backend, api, frontend, review]
-    kappa: 10
-    context_budget: 32
-    speed_factor: 1.0
-    price_per_1k_tokens: 5.0
-
-  - id: gpt4o-mini
-    provider: openai
-    model: gpt-4o-mini
-    skills: [python, test, e2e, unit-test]
-    kappa: 12
-    context_budget: 16
-    speed_factor: 1.4
-    price_per_1k_tokens: 0.15
-
   - id: local-qwen
     provider: ollama
     model: qwen2.5-coder:32b
@@ -274,8 +245,16 @@ agents:
     kappa: 8
     context_budget: 16
     speed_factor: 0.6
-    price_per_1k_tokens: 0.0
+    price_per_1k_tokens: 0.0    # self-hosted: no per-token cost
 ```
+
+`price_per_1k_tokens: 0.0` makes the local agent free under
+`objective: cost_aware`, so the solver pulls routine docs/review work
+onto it whenever the skill set lines up. See
+[`examples/04-multi-provider/config.yml`](../examples/04-multi-provider/config.yml)
+for the complete hybrid portfolio (5 agents) along with `tasks.md`,
+expected output, and run instructions in
+[`examples/04-multi-provider/`](../examples/04-multi-provider/).
 
 ## Common pitfalls
 

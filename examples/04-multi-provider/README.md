@@ -87,9 +87,14 @@ list — will differ; the schedule structure should not.)
 
 ## Pricing note
 
-The `price_per_1k_tokens` values are in dollars but scaled up from
-2026 list prices so the cost differential is clearly visible in the
-demo numbers. Relative ratios (Opus ≫ GPT-4o ≫ Sonnet ≫ GPT-4o-mini ≈
-Gemini Flash) match the public pricing pages — replace with your own
-list / contract prices for a real portfolio. See `docs/portfolio-design.md`
-for the full mapping recipe.
+The `price_per_1k_tokens` values are in dollars but scaled up ~1000×
+from 2026 list prices so the cost differential is clearly visible in
+the demo numbers. Without scaling, a 14-task toy problem on real list
+prices would produce sub-cent agent costs that round to noise and
+defeat the point of `objective: cost_aware` as a worked example.
+
+Relative ratios (Opus ≫ GPT-4o ≫ Sonnet ≫ GPT-4o-mini ≈ Gemini Flash)
+match the public pricing pages — replace with your own list / contract
+prices for a real portfolio. For a realistic-price reference config
+(no scaling), see `docs/example-config-mixed.yml`. For the full
+mapping recipe, see `docs/portfolio-design.md`.

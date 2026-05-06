@@ -12,30 +12,19 @@ This command sits between `/speckit.tasks` and `/speckit.implement` in the SDD p
 
 ## Pre-flight: verify Python solver dependencies
 
-Before invoking the solver, run this check from the repository root:
+The solver is a Python package distinct from the spec-kit command
+registration, so it must be installed in a uv-managed venv before any
+of the steps below will work. Run the shared preflight script from the
+repository root — it probes the importable modules and prints an
+actionable install hint if any are missing:
 
 ```bash
-python3 -c "import solver, ortools, networkx, pydantic, yaml" 2>&1 || {
-  cat <<'EOF'
-ERROR: Python solver dependencies are not installed.
-
-This extension's solver is a Python package separate from the
-spec-kit command registration. Install it once with:
-
-  cd <path-to-spec-kit-schedule-clone>
-  ./bin/install.sh        # bootstraps uv + venv + deps + smoke test
-  # OR
-  uv sync --extra dev     # if you already have uv
-
-After bootstrap, re-run the /speckit.schedule.* command.
-EOF
-  exit 2
-}
+./bin/check-deps.sh solver
 ```
 
-If the check fails, surface the error message above to the user verbatim
-and STOP — do not attempt the solver invocations below. If the check
-succeeds, proceed with the workflow.
+If the script exits non-zero, surface its stderr message to the user
+verbatim and STOP — do not attempt the solver invocations below. If
+the check succeeds, proceed with the workflow.
 
 ## Prerequisites
 

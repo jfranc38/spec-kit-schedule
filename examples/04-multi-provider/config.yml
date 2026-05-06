@@ -5,10 +5,16 @@
 # runner. The solver only allocates tasks to slots — it does not invoke
 # any model itself.
 #
-# Pricing is in dollars per 1K tokens but values are scaled up from
-# 2026 list prices so the cost differential is visible in the demo.
-# Relative ratios are realistic (Opus ≫ GPT-4o ≫ Sonnet ≫ GPT-4o-mini
-# ≈ Gemini Flash).
+# Pricing note: `price_per_1k_tokens` values below are in dollars but
+# scaled up ~1000× from real 2026 list prices. The scaling is what
+# makes the cost-vs-makespan trade-off visibly different from the
+# pure-makespan optimum on a 14-task toy problem; without it, the
+# total bill on this small example would round to noise. Relative
+# ratios (Opus ≫ GPT-4o ≫ Sonnet ≫ GPT-4o-mini ≈ Gemini Flash) match
+# the public pricing pages. For real-portfolio pricing guidance see
+# `docs/portfolio-design.md` Step 4 and the κ/C tier table in
+# `docs/formulation.md` (section "Hallucination Calibration").
+# A realistic-price reference config lives at `docs/example-config-mixed.yml`.
 
 agents:
   - id: opus
@@ -56,6 +62,11 @@ agents:
     speed_factor: 1.6
     price_per_1k_tokens: 0.075
 
+# Skill rules: the parser resolves precedence by pattern specificity
+# (longest matching pattern wins; declaration order is only the
+# tiebreaker for equal-length matches). So `docs/ADR-` will correctly
+# beat `docs/` regardless of where it sits in this list — the order
+# below is documentation-only.
 skill_rules:
   - pattern: "tests/"
     skill: "test"
