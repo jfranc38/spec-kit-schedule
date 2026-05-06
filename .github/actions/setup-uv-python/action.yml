@@ -10,7 +10,7 @@ description: |
   less indirection.
 inputs:
   python-version:
-    description: "Python version to install (e.g. '3.12' or '${{ matrix.python-version }}')"
+    description: "Python version to install (e.g. '3.12' or a matrix variable from the caller)"
     required: true
   extras:
     description: "Comma-separated list of project extras to sync (e.g. 'dev,viz'). Empty for no extras."
