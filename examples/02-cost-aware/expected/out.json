@@ -1,0 +1,501 @@
+{
+  "status": "OPTIMAL",
+  "assignments": [
+    {
+      "task_id": "T001",
+      "task_index": 0,
+      "agent_id": "balanced",
+      "agent_index": 1,
+      "start": 0,
+      "end": 15,
+      "duration": 15,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        ".eslintrc.json"
+      ],
+      "tokens": 1500,
+      "required_skill": "frontend"
+    },
+    {
+      "task_id": "T002",
+      "task_index": 1,
+      "agent_id": "cheap",
+      "agent_index": 0,
+      "start": 0,
+      "end": 35,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/models/schema.sql"
+      ],
+      "tokens": 3500,
+      "required_skill": "schema"
+    },
+    {
+      "task_id": "T003",
+      "task_index": 2,
+      "agent_id": "cheap",
+      "agent_index": 0,
+      "start": 35,
+      "end": 70,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/services/core.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "backend"
+    },
+    {
+      "task_id": "T004",
+      "task_index": 3,
+      "agent_id": "cheap",
+      "agent_index": 0,
+      "start": 70,
+      "end": 105,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/api/crud.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "api"
+    },
+    {
+      "task_id": "T005",
+      "task_index": 4,
+      "agent_id": "balanced",
+      "agent_index": 1,
+      "start": 105,
+      "end": 140,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/components/AdminDashboard.tsx"
+      ],
+      "tokens": 3500,
+      "required_skill": "frontend"
+    },
+    {
+      "task_id": "T006",
+      "task_index": 5,
+      "agent_id": "cheap",
+      "agent_index": 0,
+      "start": 105,
+      "end": 140,
+      "duration": 35,
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "tests/test_integration.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "test"
+    },
+    {
+      "task_id": "T007",
+      "task_index": 6,
+      "agent_id": "balanced",
+      "agent_index": 1,
+      "start": 140,
+      "end": 160,
+      "duration": 20,
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "docs/architecture.md"
+      ],
+      "tokens": 2000,
+      "required_skill": "review"
+    },
+    {
+      "task_id": "T008",
+      "task_index": 7,
+      "agent_id": "cheap",
+      "agent_index": 0,
+      "start": 140,
+      "end": 200,
+      "duration": 60,
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/models/schema.sql"
+      ],
+      "tokens": 6000,
+      "required_skill": "schema"
+    }
+  ],
+  "waves": [
+    {
+      "wave": 1,
+      "start_time": 0,
+      "tasks": [
+        {
+          "task_id": "T001",
+          "task_index": 0,
+          "agent_id": "balanced",
+          "agent_index": 1,
+          "start": 0,
+          "end": 15,
+          "duration": 15,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            ".eslintrc.json"
+          ],
+          "tokens": 1500,
+          "required_skill": "frontend"
+        },
+        {
+          "task_id": "T002",
+          "task_index": 1,
+          "agent_id": "cheap",
+          "agent_index": 0,
+          "start": 0,
+          "end": 35,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/models/schema.sql"
+          ],
+          "tokens": 3500,
+          "required_skill": "schema"
+        }
+      ]
+    },
+    {
+      "wave": 2,
+      "start_time": 35,
+      "tasks": [
+        {
+          "task_id": "T003",
+          "task_index": 2,
+          "agent_id": "cheap",
+          "agent_index": 0,
+          "start": 35,
+          "end": 70,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/services/core.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "backend"
+        }
+      ]
+    },
+    {
+      "wave": 3,
+      "start_time": 70,
+      "tasks": [
+        {
+          "task_id": "T004",
+          "task_index": 3,
+          "agent_id": "cheap",
+          "agent_index": 0,
+          "start": 70,
+          "end": 105,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/api/crud.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "api"
+        }
+      ]
+    },
+    {
+      "wave": 4,
+      "start_time": 105,
+      "tasks": [
+        {
+          "task_id": "T005",
+          "task_index": 4,
+          "agent_id": "balanced",
+          "agent_index": 1,
+          "start": 105,
+          "end": 140,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/components/AdminDashboard.tsx"
+          ],
+          "tokens": 3500,
+          "required_skill": "frontend"
+        },
+        {
+          "task_id": "T006",
+          "task_index": 5,
+          "agent_id": "cheap",
+          "agent_index": 0,
+          "start": 105,
+          "end": 140,
+          "duration": 35,
+          "phase": "Polish",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "tests/test_integration.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "test"
+        }
+      ]
+    },
+    {
+      "wave": 5,
+      "start_time": 140,
+      "tasks": [
+        {
+          "task_id": "T007",
+          "task_index": 6,
+          "agent_id": "balanced",
+          "agent_index": 1,
+          "start": 140,
+          "end": 160,
+          "duration": 20,
+          "phase": "Polish",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "docs/architecture.md"
+          ],
+          "tokens": 2000,
+          "required_skill": "review"
+        },
+        {
+          "task_id": "T008",
+          "task_index": 7,
+          "agent_id": "cheap",
+          "agent_index": 0,
+          "start": 140,
+          "end": 200,
+          "duration": 60,
+          "phase": "Polish",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/models/schema.sql"
+          ],
+          "tokens": 6000,
+          "required_skill": "schema"
+        }
+      ]
+    }
+  ],
+  "agent_summary": [
+    {
+      "agent_id": "cheap",
+      "model": "gpt-4o-mini",
+      "task_count": 5,
+      "total_tokens": 20000,
+      "budget_utilization": 62.5,
+      "total_load": 200,
+      "kappa_utilization": 41.7,
+      "cost": 3.0,
+      "tasks": [
+        "T002",
+        "T003",
+        "T004",
+        "T006",
+        "T008"
+      ],
+      "provider": "openai"
+    },
+    {
+      "agent_id": "balanced",
+      "model": "claude-sonnet-4",
+      "task_count": 3,
+      "total_tokens": 7000,
+      "budget_utilization": 21.9,
+      "total_load": 70,
+      "kappa_utilization": 30.0,
+      "cost": 21.0,
+      "tasks": [
+        "T001",
+        "T005",
+        "T007"
+      ],
+      "provider": "anthropic"
+    },
+    {
+      "agent_id": "premium",
+      "model": "claude-opus-4",
+      "task_count": 0,
+      "total_tokens": 0,
+      "budget_utilization": 0.0,
+      "total_load": 0,
+      "kappa_utilization": 0.0,
+      "cost": 0.0,
+      "tasks": [],
+      "provider": "anthropic"
+    }
+  ],
+  "critical_path": [
+    "T002",
+    "T003",
+    "T004",
+    "T006",
+    "T008"
+  ],
+  "critical_path_edges": [
+    [
+      "T002",
+      "T003"
+    ],
+    [
+      "T003",
+      "T004"
+    ],
+    [
+      "T004",
+      "T006"
+    ],
+    [
+      "T006",
+      "T008"
+    ]
+  ],
+  "resource_edges": [
+    [
+      "T001",
+      "T005"
+    ],
+    [
+      "T002",
+      "T008"
+    ]
+  ],
+  "stats": {
+    "horizon": 300,
+    "heuristic_makespan": 200,
+    "phase1_time": 0.0,
+    "phase1_status": "OPTIMAL",
+    "phase1_status_code": 4,
+    "makespan_phase1": 200,
+    "phase2_time": 0.0,
+    "phase2_status": "OPTIMAL",
+    "phase2_status_code": 4,
+    "phase3_time": 0.0,
+    "phase3_status": "OPTIMAL",
+    "phase3_status_code": 4,
+    "total_solve_time": 0.01,
+    "makespan": 200,
+    "max_load": 200,
+    "min_load": 0,
+    "total_tasks": 8,
+    "total_agents": 3,
+    "total_waves": 5,
+    "total_cost": 24.0,
+    "status": "OPTIMAL",
+    "quantile_used": 0.5
+  },
+  "warnings": [],
+  "edges": [
+    [
+      "T002",
+      "T003"
+    ],
+    [
+      "T003",
+      "T004"
+    ],
+    [
+      "T004",
+      "T005"
+    ],
+    [
+      "T004",
+      "T006"
+    ],
+    [
+      "T005",
+      "T007"
+    ],
+    [
+      "T006",
+      "T008"
+    ]
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "frontend"
+    },
+    {
+      "id": "T002",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "schema"
+    },
+    {
+      "id": "T003",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "backend"
+    },
+    {
+      "id": "T004",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "api"
+    },
+    {
+      "id": "T005",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "frontend"
+    },
+    {
+      "id": "T006",
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "test"
+    },
+    {
+      "id": "T007",
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "review"
+    },
+    {
+      "id": "T008",
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "schema"
+    }
+  ]
+}

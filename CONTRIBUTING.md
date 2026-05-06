@@ -11,7 +11,7 @@ set up, run tests, and submit changes.
 ## Development setup
 
 ```bash
-git clone https://github.com/juliofranco/spec-kit-schedule.git
+git clone https://github.com/jfranc38/spec-kit-schedule.git
 cd spec-kit-schedule
 make install          # creates .venv and installs all dev + viz extras
 ```

@@ -1,7 +1,9 @@
 # spec-kit-schedule — CP-SAT Multi-Agent Task Orchestrator
 
-[![PyPI version](https://img.shields.io/pypi/v/spec-kit-schedule)](https://pypi.org/project/spec-kit-schedule/)
-[![Python](https://img.shields.io/pypi/pyversions/spec-kit-schedule)](https://pypi.org/project/spec-kit-schedule/)
+[![CI](https://github.com/jfranc38/spec-kit-schedule/actions/workflows/ci.yml/badge.svg)](https://github.com/jfranc38/spec-kit-schedule/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://github.com/jfranc38/spec-kit-schedule)
+[![Tests](https://img.shields.io/badge/tests-553%20passing-brightgreen)](https://github.com/jfranc38/spec-kit-schedule/actions)
+[![Coverage](https://img.shields.io/badge/coverage-92.51%25-brightgreen)](https://github.com/jfranc38/spec-kit-schedule/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > A [spec-kit](https://github.com/github/spec-kit) extension that uses **constraint programming** (Google OR-Tools CP-SAT) to produce **provably optimal** task-to-agent assignments with DAG precedence, hallucination-aware capacity caps, file-conflict avoidance, stochastic durations, online replanning, and interactive HTML output.
@@ -21,7 +23,7 @@ MAQA solves this with a **greedy heuristic** (first-available agent). This exten
               parse_tasks ──────────────────────────────────────────────────────────────────┐
                       │                                                                      │
                       ▼                                                                      │
-              scheduler (CP-SAT) ─── calibrate (stochastic p50/p90) ─── replan (mid-run) ──┘
+              scheduler (CP-SAT) ─── calibrate (log-ingestion EMA) ─── replan (mid-run) ──┘
                       │
           ┌───────────┴────────────────┬────────────────────┐
           ▼                            ▼                     ▼
@@ -34,7 +36,7 @@ MAQA solves this with a **greedy heuristic** (first-available agent). This exten
 ```
 
 1. **Parse** `tasks.md` into a typed task graph `G = (T, E)` with skill requirements, token estimates, file footprints, and DAG edges (fails fast on duplicate ids, unknown dependencies, or cycles).
-2. **Calibrate** (optional) — run stochastic simulation to produce p50/p90 duration estimates; feed percentiles back into the solver via `calibrate` config.
+2. **Calibrate** (optional) — `solver.calibrate` ingests historical run logs and updates per-agent `speed_factor` and per-complexity token estimates via EMA. Stochastic durations are then applied via deterministic-quantile substitution at solve time (`solver.stochastic_quantile`, default median).
 3. **Solve** a CP-SAT model that assigns each task to a compatible agent and determines start/end times. Preflight catches infeasibility before the solver runs, and a `networkx`-backed priority-rule heuristic provides a feasible warm-start.
 4. **Replan** (optional) — after a partial execution, freeze completed/in-flight tasks and re-solve the residual subgraph to correct for duration overruns without disrupting already-started work.
 5. **Extract** the makespan-driving critical path (node-weighted longest path over the realised schedule graph, including same-agent and file-mutex resource arcs).
@@ -51,7 +53,7 @@ The model is a Multi-Skill RCPSP (Bellenguez-Morineau & Néron 2007) enhanced wi
 - **Cardinality cap (κ)**: Max tasks per agent session — calibrated to empirical hallucination thresholds (RULER, NoLiMa, Chroma).
 - **Context budget (C)**: Max cumulative tokens per agent — prevents context-rot quality degradation.
 - **File mutex**: Non-`[P]` tasks writing the same file cannot execute in parallel across agents.
-- **Stochastic durations**: Each task carries optional `token_std_dev`; the calibration module runs Monte Carlo sampling to compute p50/p90 duration estimates passed to the solver.
+- **Stochastic durations**: Each task carries optional `token_std_dev`; the solver applies deterministic-quantile substitution (`Φ⁻¹(q; μ, σ)` left-truncated at 0) at the configured quantile (`solver.stochastic_quantile`, default median).
 - **Replanning**: `solver.replan` freezes assignments for completed/in-flight tasks and resolves the residual sub-problem with original precedences preserved.
 
 ### Objectives
@@ -92,7 +94,7 @@ The solver output includes `total_cost` (in the same unit as `price_per_1k_token
 ### From a tagged release (recommended)
 
 ```bash
-specify extension add --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.5.0.zip
+specify extension add --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.5.1.zip
 ```
 
 ### Local development install

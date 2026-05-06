@@ -1,5 +1,118 @@
 # Changelog
 
+## [0.5.1] - 2026-05-06
+
+### Added
+- **Architectural split**: `solver/` is now organised as four cohesive
+  layers — `model/` (CP-SAT construction, types, fixed-duration resolution,
+  result-shape TypedDicts), `orchestration/` (Phase-1 runner, lex and
+  cost-aware drivers), `result/` (post-solve extraction + critical path),
+  and the top-level `solver.scheduler` entry point. See
+  [`docs/architecture.md`](docs/architecture.md).
+- **Curated public API**: `solver/__init__.py` now exports an explicit
+  `__all__` (`solve_from_json`, `solve_with_fixed`, `replan`,
+  `parse_tasks_md`, `Task`, `Agent`, `SolverConfig`, `ScheduleInputError`,
+  `WARN_*`, `__version__`). Symbols outside that list are private and may
+  change without notice.
+- **Test suite expansion**: 553 tests total (+57 since v0.5.0) across 7
+  new specialised modules — `test_correctness_invariants.py`,
+  `test_phase3_fallback.py`, `test_phase1_infeasible_message.py`,
+  `test_horizon_stress.py`, `test_gap_tolerance.py`,
+  `test_numerical_scale.py`, `test_invariant_branches.py`. Coverage at
+  92.51%.
+- **CI gates**: `actionlint` (workflow lint), `shellcheck` (shell-script
+  lint), `pip-audit` (CVE scan), `pip-licenses` (license inventory),
+  cross-OS matrix (ubuntu/macos/windows × py3.10–3.12), and a
+  `smoke-stress` target running a medium benchmark each CI run. A
+  composite `setup-uv-python` action consolidates the boilerplate, and
+  `verify-zip-assets.sh` checks the released zip contains the expected
+  payload.
+- **Result schema documentation**: `solver/model/result_types.py` defines
+  `ScheduleResult`, `Assignment`, `AgentSummary`, `WaveBlock`, `Stats`,
+  `WarningRecord` as TypedDicts (`total=False`) — schema-doc only,
+  runtime annotations stay `dict[str, Any]` because of TypedDict
+  variance rules with the literal `stats` dict.
+- **Benchmark CLI flags**: `--num-workers axis` (sweep [1,2,4,8]),
+  `--include-replan` (add a replan benchmark), `--memory` (peak-memory
+  tracking via tracemalloc).
+- **Named constants** for status strings (`STATUS_OPTIMAL`,
+  `STATUS_FEASIBLE`, `STATUS_INFEASIBLE`, `STATUS_UNKNOWN`) and warning
+  codes (`WARN_PHASE2_FALLBACK`, `WARN_PHASE3_FALLBACK`,
+  `WARN_ANYTIME_TIMEOUT`, `WARN_COST_SCALE_UNDERFLOW`,
+  `WARN_PARALLEL_WRITE_CONFLICT`); `ObjectiveMode` Literal type for
+  `objective`.
+- **`--verbose` CLI flag** wired through to CP-SAT's
+  `log_search_progress` so the search log is forwarded to stderr on
+  demand.
+- `examples/` directory with three runnable examples
+  (`01-quickstart`, `02-cost-aware`, `03-replan`) plus
+  `make examples` to verify they all solve.
+- `docs/architecture.md` documenting the post-refactor package layout.
+- `.github/dependabot.yml` (weekly pip + GitHub Actions updates).
+- `.github/ISSUE_TEMPLATE/{bug_report,feature_request}.yml` (YAML
+  forms) and a structured PR template.
+
+### Changed
+- **Replan now pins frozen duration**: `solve_with_fixed`
+  (and `solver.replan`) records the prior task's duration on the
+  `dur[i] == d_fixed` constraint instead of silently re-deriving it
+  from `p[i,a]`. This makes replans deterministic across recalibration
+  changes (speed_factor / token_unit drift no longer shifts a frozen
+  task).
+- **Horizon as a true upper bound**: when the warm-start heuristic
+  produces a feasible schedule, its makespan is now used as the
+  horizon UB (strictly tighter than the previous serial-UB) and is also
+  posted as `makespan <= H_heur` for direct propagation.
+- **Cross-phase time-limit budget**: a 3-phase lex/cost-aware solve no
+  longer burns `3 × config.time_limit` in the worst case. Each phase
+  receives the *remaining* budget via `time_limit_override`.
+- **`status="OPTIMAL"` is joint**: the top-level status downgrades to
+  `FEASIBLE` whenever any executed phase did not prove optimality.
+  Per-phase statuses remain in `stats` for diagnostics.
+- **Cost-aware is now a 3-phase lex**: `lex(C_max, TotalCost, L_max)`.
+  Phase 3 minimises max-load under pinned cost, with its own fallback
+  warning (`WARN_PHASE3_FALLBACK`).
+- **Symmetry equivalence class includes `price_per_1k_tokens`**: agents
+  that differ only in price are no longer treated as interchangeable —
+  the cost-aware Phase 2 needs them distinguishable.
+- **`_MAX_TOKENS` lowered to 1e8**: keeps the cumulative scaled cost
+  arithmetic safely inside int64 even for callers that bypass schema
+  validation.
+- **Benchmark `num_workers` no longer forced to 1**: respects the
+  configured value to surface real-world parallel performance.
+- **Coverage gate raised 85% → 90%** (project is at 92.51%).
+
+### Fixed
+- 19 hardcoded English error / warning strings migrated to the i18n
+  catalog with `en` and `es` translations. Catalog completeness is
+  enforced by `tests/test_i18n.py`.
+- Cost-scale underflow now detected at the partial level (any
+  `(task, agent)` pair with positive raw cost but zero scaled cost),
+  not just total. Surfaces `WARN_COST_SCALE_UNDERFLOW`.
+- `_compute_gap` rounds to 6 dp and treats objectives below
+  `1e-9` as zero, removing a numerical instability around
+  near-zero objectives. The anytime callback now shares this
+  helper so per-incumbent and post-solve gaps agree.
+- `docs/formulation.md` polish: Graham α|β|γ notation, formal
+  proofs for the LP relaxation lower bound, citation block.
+
+### Removed
+- Unused `solver/_assets.py` and the redundant
+  `_ModelVars.ivs_agent` field.
+- `image_prefix` argument of `render_html` (was never wired through).
+- Non-schema `install:` / `uninstall:` keys from `extension.yml` (the
+  `specify` CLI does not consume them).
+- PyPI-centric defaults in `extension.yml` and the README badges.
+  Distribution remains via tagged GitHub Releases until PyPI is
+  configured (see `INSTALL.md`).
+- `docs/HANDOFF-v0.5.0.md` archived to `docs/archive/` — the in-flight
+  plan it described is now superseded by the as-built architecture.
+
+### Security
+- `random_seed=42` set on `CpSolver` for reproducibility across runs of
+  the same model.
+- Sigstore attestations on release zips (`actions/attest-build-provenance`).
+
 ## [0.5.0] - 2026-04-24
 
 ### Added
@@ -7,9 +120,10 @@
   Phase 2 pins `C_max` and minimises total token cost weighted by
   `price_per_1k_tokens` per agent. Solver output includes `total_cost`.
   Parser preserves `price_per_1k_tokens` and `token_std_dev` from config.
-- **Stochastic durations**: Tasks may carry `token_std_dev`; `solver.calibrate`
-  runs Monte Carlo simulation (default 1 000 samples, log-normal draws) and
-  reports p50/p90 makespan quantiles. Config key: `calibrate.percentile`.
+- **Stochastic durations**: Tasks may carry `token_std_dev`; the solver
+  applies deterministic-quantile substitution (`Φ⁻¹(q; μ, σ)`,
+  left-truncated at 0) at the configured quantile (default median).
+  Config key: `solver.stochastic_quantile`.
 - **Anytime callback**: `solver.scheduler` accepts an `on_solution` callable
   invoked at each incumbent improvement — enables streaming progress to UIs
   without polling.
@@ -26,7 +140,8 @@
   command.
 - **`--help` regression test**: `tests/test_cli_help.py` verifies all five CLI
   entry-point modules respond to `--help` without error.
-- PyPI badges in `README.md`; PyPI install section in `INSTALL.md`.
+- PyPI install section in `INSTALL.md` documenting the planned
+  distribution channel (PyPI publish itself remains on the roadmap).
 
 ### Changed
 - `solver/__init__.__version__` bumped to `0.5.0`.

@@ -1,0 +1,32 @@
+agents:
+  - id: backend
+    model: claude-sonnet-4
+    skills: [python, backend, api, schema]
+    kappa: 8
+    context_budget: 32
+    speed_factor: 1.0
+
+  - id: tester
+    model: claude-haiku-4.5
+    skills: [test, e2e, unit-test]
+    kappa: 8
+    context_budget: 24
+    speed_factor: 1.4
+
+skill_rules:
+  - pattern: "tests/"
+    skill: "test"
+  - pattern: "test_"
+    skill: "test"
+  - pattern: "src/services/"
+    skill: "backend"
+  - pattern: "src/api/"
+    skill: "api"
+  - pattern: "src/cli.py"
+    skill: "backend"
+
+default_skill: backend
+
+solver:
+  objective: lexicographic
+  time_limit: 10

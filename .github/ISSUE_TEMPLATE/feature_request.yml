@@ -1,0 +1,55 @@
+name: Feature request
+description: Suggest an improvement for planning, solving, or visualisation
+title: "[Feature] "
+labels:
+  - "enhancement"
+  - "needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Concrete use cases and
+        examples make proposals much easier to evaluate.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What use case is not well served today?
+      placeholder: When I have N agents with heterogeneous prices, I want ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: |
+        Describe the desired behaviour. How should the API, CLI, or output
+        look? Include sketches if helpful.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: What workarounds did you try or consider?
+      placeholder: "I tried setting `objective: cost_aware`, but ..."
+    validations:
+      required: false
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Nice to have
+        - Important
+        - Blocker
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and discussions and did not find a duplicate.
+          required: true

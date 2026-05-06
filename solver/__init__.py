@@ -18,7 +18,7 @@ from .replan import replan
 from .scheduler import solve_from_json, solve_with_fixed
 from .validation import ScheduleInputError
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 __all__ = [
     "Agent",

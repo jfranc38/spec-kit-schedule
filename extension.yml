@@ -3,7 +3,7 @@ schema_version: "1.0"
 extension:
   id: "schedule"
   name: "Spec Kit Schedule — CP-SAT Agent Orchestrator"
-  version: "0.5.0"
+  version: "0.5.1"
   description: "Optimal multi-agent task scheduling via CP-SAT solver with DAG precedence, hallucination-aware caps, file-conflict avoidance, stochastic durations, replanning, and interactive HTML output"
   author: "Julio César Franco Ardila"
   repository: "https://github.com/jfranc38/spec-kit-schedule"

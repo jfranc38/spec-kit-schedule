@@ -1,0 +1,71 @@
+name: Bug report
+description: Report a reproducible problem in spec-kit-schedule
+title: "[Bug] "
+labels:
+  - "bug"
+  - "needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report. Please include enough
+        detail that the issue can be reproduced locally.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? Include expected vs actual behaviour.
+      placeholder: |
+        When I run `python -m solver.scheduler`, I expected ... but observed ...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproducible example
+      description: |
+        Provide the smallest input needed to reproduce the bug: tasks.md
+        content, portfolio config, and the exact command run. Strip any
+        proprietary content first.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Python version, OR-Tools version, and spec-kit-schedule version or commit SHA.
+      placeholder: "Python 3.11.7, OR-Tools 9.10.4067, spec-kit-schedule 0.5.0"
+    validations:
+      required: true
+  - type: textarea
+    id: solver_output
+    attributes:
+      label: Solver output
+      description: |
+        Paste the solver stderr, the value of `result["status"]`, and the
+        first warning emitted (if any).
+      render: text
+    validations:
+      required: false
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - WSL
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I included a minimal reproducible example.
+          required: true

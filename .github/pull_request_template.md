@@ -1,14 +1,27 @@
 ## Summary
 
-Describe the change and why it is needed.
+<!-- 1-3 sentences. What does this PR do and why? -->
 
-## Verification
+## Type of change
 
-- [ ] Tests pass (`make test`)
-- [ ] Lint passes (`make lint`)
-- [ ] CHANGELOG updated, or not needed
-- [ ] Docs updated, or not needed
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Refactor (no behavior change)
+- [ ] Documentation
+- [ ] CI / tooling
 
-## Notes
+## Testing
 
-Call out migrations, compatibility risks, or follow-up work.
+<!-- How was this verified? Tests added, smoke runs, manual checks. -->
+
+## Checklist
+
+- [ ] Tests pass locally (`uv run pytest`)
+- [ ] Type-check passes (`uv run mypy solver`)
+- [ ] Lint passes (`uv run ruff check solver tests`)
+- [ ] Updated CHANGELOG.md if user-facing
+- [ ] Updated docs if behavior or API changed
+
+## Related issues
+
+<!-- Closes #N, refs #M -->

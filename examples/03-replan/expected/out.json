@@ -1,0 +1,400 @@
+{
+  "status": "OPTIMAL",
+  "assignments": [
+    {
+      "task_id": "T001",
+      "task_index": 0,
+      "agent_id": "backend",
+      "agent_index": 0,
+      "start": 0,
+      "end": 35,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/api/spec.yml"
+      ],
+      "tokens": 3500,
+      "required_skill": "api"
+    },
+    {
+      "task_id": "T002",
+      "task_index": 1,
+      "agent_id": "backend",
+      "agent_index": 0,
+      "start": 35,
+      "end": 70,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/services/core.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "backend"
+    },
+    {
+      "task_id": "T003",
+      "task_index": 2,
+      "agent_id": "backend",
+      "agent_index": 0,
+      "start": 70,
+      "end": 105,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/services/workers.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "backend"
+    },
+    {
+      "task_id": "T005",
+      "task_index": 4,
+      "agent_id": "tester",
+      "agent_index": 1,
+      "start": 70,
+      "end": 95,
+      "duration": 25,
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "tests/test_core.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "test"
+    },
+    {
+      "task_id": "T004",
+      "task_index": 3,
+      "agent_id": "backend",
+      "agent_index": 0,
+      "start": 105,
+      "end": 140,
+      "duration": 35,
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "src/cli.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "backend"
+    },
+    {
+      "task_id": "T006",
+      "task_index": 5,
+      "agent_id": "tester",
+      "agent_index": 1,
+      "start": 140,
+      "end": 165,
+      "duration": 25,
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "tests/test_cli.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "test"
+    }
+  ],
+  "waves": [
+    {
+      "wave": 1,
+      "start_time": 0,
+      "tasks": [
+        {
+          "task_id": "T001",
+          "task_index": 0,
+          "agent_id": "backend",
+          "agent_index": 0,
+          "start": 0,
+          "end": 35,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/api/spec.yml"
+          ],
+          "tokens": 3500,
+          "required_skill": "api"
+        }
+      ]
+    },
+    {
+      "wave": 2,
+      "start_time": 35,
+      "tasks": [
+        {
+          "task_id": "T002",
+          "task_index": 1,
+          "agent_id": "backend",
+          "agent_index": 0,
+          "start": 35,
+          "end": 70,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/services/core.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "backend"
+        }
+      ]
+    },
+    {
+      "wave": 3,
+      "start_time": 70,
+      "tasks": [
+        {
+          "task_id": "T003",
+          "task_index": 2,
+          "agent_id": "backend",
+          "agent_index": 0,
+          "start": 70,
+          "end": 105,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/services/workers.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "backend"
+        },
+        {
+          "task_id": "T005",
+          "task_index": 4,
+          "agent_id": "tester",
+          "agent_index": 1,
+          "start": 70,
+          "end": 95,
+          "duration": 25,
+          "phase": "Polish",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "tests/test_core.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "test"
+        }
+      ]
+    },
+    {
+      "wave": 4,
+      "start_time": 105,
+      "tasks": [
+        {
+          "task_id": "T004",
+          "task_index": 3,
+          "agent_id": "backend",
+          "agent_index": 0,
+          "start": 105,
+          "end": 140,
+          "duration": 35,
+          "phase": "Setup",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "src/cli.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "backend"
+        }
+      ]
+    },
+    {
+      "wave": 5,
+      "start_time": 140,
+      "tasks": [
+        {
+          "task_id": "T006",
+          "task_index": 5,
+          "agent_id": "tester",
+          "agent_index": 1,
+          "start": 140,
+          "end": 165,
+          "duration": 25,
+          "phase": "Polish",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "tests/test_cli.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "test"
+        }
+      ]
+    }
+  ],
+  "agent_summary": [
+    {
+      "agent_id": "backend",
+      "model": "claude-sonnet-4",
+      "task_count": 4,
+      "total_tokens": 14000,
+      "budget_utilization": 43.8,
+      "total_load": 140,
+      "kappa_utilization": 50.0,
+      "cost": 0.0,
+      "tasks": [
+        "T001",
+        "T002",
+        "T003",
+        "T004"
+      ]
+    },
+    {
+      "agent_id": "tester",
+      "model": "claude-haiku-4.5",
+      "task_count": 2,
+      "total_tokens": 7000,
+      "budget_utilization": 29.2,
+      "total_load": 50,
+      "kappa_utilization": 25.0,
+      "cost": 0.0,
+      "tasks": [
+        "T005",
+        "T006"
+      ]
+    }
+  ],
+  "critical_path": [
+    "T001",
+    "T002",
+    "T003",
+    "T004",
+    "T006"
+  ],
+  "critical_path_edges": [
+    [
+      "T001",
+      "T002"
+    ],
+    [
+      "T002",
+      "T003"
+    ],
+    [
+      "T003",
+      "T004"
+    ],
+    [
+      "T004",
+      "T006"
+    ]
+  ],
+  "resource_edges": [
+    [
+      "T002",
+      "T003"
+    ],
+    [
+      "T005",
+      "T006"
+    ]
+  ],
+  "stats": {
+    "horizon": 195,
+    "heuristic_makespan": 165,
+    "phase1_time": 0.0,
+    "phase1_status": "OPTIMAL",
+    "phase1_status_code": 4,
+    "makespan_phase1": 165,
+    "phase2_time": 0.0,
+    "phase2_status": "OPTIMAL",
+    "phase2_status_code": 4,
+    "total_solve_time": 0.0,
+    "makespan": 165,
+    "max_load": 140,
+    "min_load": 50,
+    "total_tasks": 6,
+    "total_agents": 2,
+    "total_waves": 5,
+    "total_cost": 0.0,
+    "status": "OPTIMAL",
+    "quantile_used": 0.5
+  },
+  "warnings": [],
+  "edges": [
+    [
+      "T001",
+      "T002"
+    ],
+    [
+      "T001",
+      "T003"
+    ],
+    [
+      "T002",
+      "T004"
+    ],
+    [
+      "T003",
+      "T004"
+    ],
+    [
+      "T002",
+      "T005"
+    ],
+    [
+      "T004",
+      "T006"
+    ]
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "api"
+    },
+    {
+      "id": "T002",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "backend"
+    },
+    {
+      "id": "T003",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "backend"
+    },
+    {
+      "id": "T004",
+      "phase": "Setup",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "backend"
+    },
+    {
+      "id": "T005",
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "test"
+    },
+    {
+      "id": "T006",
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "required_skill": "test"
+    }
+  ]
+}

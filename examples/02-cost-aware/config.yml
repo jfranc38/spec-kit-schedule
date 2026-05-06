@@ -1,0 +1,57 @@
+agents:
+  - id: cheap
+    model: gpt-4o-mini
+    provider: openai
+    skills: [python, backend, api, schema, frontend, react, test, e2e, unit-test, review]
+    kappa: 12
+    context_budget: 32
+    speed_factor: 1.0
+    price_per_1k_tokens: 0.15
+
+  - id: balanced
+    model: claude-sonnet-4
+    provider: anthropic
+    skills: [python, backend, api, schema, frontend, react, test, review]
+    kappa: 10
+    context_budget: 32
+    speed_factor: 1.0
+    price_per_1k_tokens: 3.0
+
+  - id: premium
+    model: claude-opus-4
+    provider: anthropic
+    skills: [python, backend, api, schema, frontend, react, design, review]
+    kappa: 6
+    context_budget: 48
+    speed_factor: 0.8
+    price_per_1k_tokens: 15.0
+
+skill_rules:
+  - pattern: "tests/"
+    skill: "test"
+  - pattern: "test_"
+    skill: "test"
+  - pattern: ".test."
+    skill: "test"
+  - pattern: "src/models/"
+    skill: "schema"
+  - pattern: "src/api/"
+    skill: "api"
+  - pattern: "src/services/"
+    skill: "backend"
+  - pattern: "src/components/"
+    skill: "frontend"
+  - pattern: ".tsx"
+    skill: "frontend"
+  - pattern: "docs/"
+    skill: "review"
+  - pattern: ".md"
+    skill: "review"
+  - pattern: ".eslintrc"
+    skill: "frontend"
+
+default_skill: backend
+
+solver:
+  objective: cost_aware
+  time_limit: 10
