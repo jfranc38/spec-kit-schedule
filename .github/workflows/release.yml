@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup uv + Python
         uses: ./.github/actions/setup-uv-python
@@ -70,12 +70,12 @@ jobs:
         # GitHub Release is still created without attestations.
         # Make the repo public to activate supply-chain provenance.
         continue-on-error: true
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ env.ARCHIVE }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: "v${{ env.VERSION }}"
           tag_name: ${{ github.ref_name }}
