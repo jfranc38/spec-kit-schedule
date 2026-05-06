@@ -65,6 +65,11 @@ jobs:
         run: .github/scripts/verify-zip-assets.sh "$ARCHIVE"
 
       - name: Generate build provenance attestations
+        # Sigstore attestations require the repo to be public (or paid org).
+        # Private user-owned repos: this step warns and continues; the
+        # GitHub Release is still created without attestations.
+        # Make the repo public to activate supply-chain provenance.
+        continue-on-error: true
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: ${{ env.ARCHIVE }}
