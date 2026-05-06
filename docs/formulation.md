@@ -27,11 +27,11 @@ disjunctives) Bellenguez-Morineau & Néron (2007) and Myszkowski et al.
 |--------|-----------|
 | $T = \{1, \ldots, n\}$ | Set of tasks extracted from `tasks.md` |
 | $A = \{1, \ldots, m\}$ | Set of heterogeneous AI agents |
-| $S = \{1, \ldots, L\}$ | Set of skills (e.g., `python`, `test`, `design`) |
+| $\mathbb{S} = \{1, \ldots, L\}$ | Set of skills (e.g., `python`, `test`, `design`) |
 | $E \subseteq T \times T$ | Precedence arcs (DAG edges) |
 | $F$ | Set of all files touched by any task |
 | $F_i \subseteq F$ | File footprint of task $i$ |
-| $S_a \subseteq S$ | Skill set of agent $a$ |
+| $S_a \subseteq \mathbb{S}$ | Skill set of agent $a$ |
 | $\mathcal{E}_i = \{a \in A : s_i \in S_a\}$ | Compatible agents for task $i$ |
 
 ---
@@ -40,7 +40,7 @@ disjunctives) Bellenguez-Morineau & Néron (2007) and Myszkowski et al.
 
 | Symbol | Definition |
 |--------|-----------|
-| $s_i \in S$ | Required skill for task $i$ |
+| $s_i \in \mathbb{S}$ | Required skill for task $i$ |
 | $c_i \in \mathbb{Z}_{\geq 0}$ | Estimated token cost of task $i$ |
 | $\pi_i \in \{1,2,3,\ldots\}$ | Story priority of task $i$ (1 = highest) |
 | $p_{ia} \in \mathbb{Z}_{\geq 0}$ | Processing time of task $i$ on agent $a$ |
@@ -155,6 +155,14 @@ term — $C_{\max}$, $L_{\max}$, $\mathit{TotalCost}$ — is symmetric under
 permutations within an equivalence class). Hence C12 does not eliminate any
 optimum. $\square$
 
+Under objective $f$, including a feature $g$ in the equivalence relation is
+necessary iff $f$ depends on $g$. The chosen tuple
+$(S_a, \kappa_a, C_a, \text{speed}_a, \rho_a)$ is minimal: skills $S_a$ are
+required for feasibility (C2); $\kappa_a$ and $C_a$ bound feasibility (C8, C9);
+$\text{speed}_a$ governs $p_{ia}$ and hence $L_a$ (C10); $\rho_a$ governs
+$\mathit{TotalCost}$ (cost-aware mode). Other agent attributes do not enter
+any objective term.
+
 ---
 
 ## Objective
@@ -194,6 +202,11 @@ scaled by $\Sigma = 10^4$ to preserve four-decimal-place precision:
 
 $$\mathit{TotalCost}_{\text{int}} = \sum_{i \in T} \sum_{a \in \mathcal{E}_i} \mathrm{round}\!\left(\frac{\rho_a \cdot c_i}{1000} \cdot \Sigma\right) \cdot x_{ia}, \qquad \Sigma = 10^4.$$
 
+`round(...)` is Python's built-in `round` (banker's rounding,
+round-half-to-even). The `_COST_SCALE` $= 10^4$ factor preserves four
+decimal places of dollar precision; the rounding-direction quirk is bounded
+by $5 \times 10^{-5}$ USD per task.
+
 The user-facing `total_cost` field is recomputed in USD from the optimal
 assignment as $\sum_{i} (c_i \cdot \rho_{a^*(i)}) / 1000$, where $a^*(i)$
 is the chosen agent. The CP-SAT optimisation and the reported USD figure
@@ -208,6 +221,10 @@ $2^{62}$. Requires `price_per_1k_tokens` on each agent config entry.
 This formulation follows the lexicographic / $\varepsilon$-constraint method
 (Ehrgott 2005, ch. 4) — equality pinning of higher-priority objectives is
 equivalent to setting $\varepsilon$ to the optimal value of the prior phase.
+Phase pinning is the $\varepsilon$-constraint method with $\varepsilon$ set
+to the prior phase's optimum (Ehrgott 2005, ch. 4). The 3-phase pinned solve
+is equivalent to lex-min on the objective vector
+$(C_{\max},\, \mathit{TotalCost},\, L_{\max})$.
 
 ---
 
@@ -273,8 +290,8 @@ The cardinality cap $\kappa_a$ and context budget $C_a$ are empirically calibrat
 
 | Agent Class | $\kappa_a$ | $C_a$ (tokens) | Rationale |
 |-------------|-----------|-----------------|-----------|
-| Large (Opus) | 6 | 32K | RULER: ≥85 % accuracy up to 32 K context |
-| Medium (Sonnet) | 10 | 16K | NoLiMa: safe zone below 16 K |
+| Large (Opus) | 6 | 32K | RULER reports significant 32K-degradation across most models; this envelope conservatively bounds Opus to a regime where strong models retain ≥80% accuracy in RULER-style tasks |
+| Medium (Sonnet) | 10 | 16K | informed by NoLiMa-style benchmarks documenting context-length degradation |
 | Small (Haiku) | 15 | 8K | Anecdotal calibration informed by community findings on long-context coding-task degradation past ~8 K |
 
 These hard inequalities are **not** a linear approximation of the underlying
@@ -331,13 +348,22 @@ envelope preserves linearity while excluding regions of accuracy collapse.
    - $\text{mult}$ defaults to $1.5$ and acts as a multiplicative *safety
      margin* on top of an already-valid upper bound.
 
-   **Lemma (horizon validity).** $H_{\text{heur}}$ is, by construction, the
-   makespan of a feasible schedule and therefore a valid upper bound on
-   $C_{\max}^*$. $H_{\text{serial}}$ is also a valid upper bound (place every
-   task on its slowest compatible agent in topological order). Hence
+   **Lemma (horizon validity).** Given preflight passes (per-skill aggregate
+   token demand fits aggregate budget, per-skill task count fits aggregate
+   $\kappa$), and at least one compatible agent per task has $\kappa \geq 1$
+   and $C \geq c_i$, a totally-serial schedule exists with makespan
+   $\leq H_{\text{serial}}$. The serial UB is a value bound in all cases; the
+   constructibility of the serial schedule depends on these preflight
+   invariants. $H_{\text{heur}}$ is, by construction, the makespan of a
+   feasible schedule (when the heuristic completes) and therefore a valid
+   upper bound on $C_{\max}^*$. Hence
    $H \geq \max(H_{\text{heur}}, H_{\text{serial}}) \geq C_{\max}^*$, and the
    CP-SAT model with horizon $H$ is infeasibility-equivalent to the original
    problem: every feasible schedule fits within $[0, H]$. $\square$
+
+   The `max(..., 1)` floor handles the degenerate $n = 0$ case (empty task
+   set), where $\mathrm{lb}_{\max} = H_{\text{serial}} = 0$. CP-SAT requires
+   non-zero IntVar domains; $H \geq 1$ is the minimal valid horizon.
 
 4. **Warm-start**: a greedy priority-rule heuristic seeds the solver.
    Priorities are earliest-start times from a `networkx` topological DP;
@@ -347,7 +373,12 @@ envelope preserves linearity while excluding regions of accuracy collapse.
    $\kappa$-saturated under the partial schedule), the heuristic emits a
    *partial* hint covering only the tasks it could place; CP-SAT accepts
    partial hints as a valid starting point. Empirically 2–5× speedup on
-   200+ task instances.
+   200+ task instances. The heuristic mirrors precedence (C5), per-agent
+   disjunctive (C6), file-mutex (C7), cardinality cap (C8), context budget
+   (C9), skill eligibility (C2), and the symmetry-class load ordering (C12).
+   It does not anticipate the full CP-SAT propagation, so its assignments
+   are advisory hints — CP-SAT validates and discards infeasibilities
+   silently.
 
 5. **Critical-path extraction**: after the final phase, the *realised-schedule
    graph* — original precedence edges plus induced resource arcs for
@@ -371,6 +402,13 @@ $$\text{gap} = \frac{|\,\text{obj} - \text{best\_bound}\,|}{|\text{obj}|}$$
 from CP-SAT for the most recent timed-out phase. The schedule is feasible
 but not proven lex-optimal.
 
+For `lexicographic` mode, the relevant phases are 1 and 2. For `cost_aware`,
+phases 1, 2, 3. For `weighted` (single-phase), only phase 1.
+
+Note: `intermediate` records improving incumbents from `_AnytimeCallback`;
+it does NOT capture lower-bound improvements between incumbents. CP-SAT's
+bound-improvement curve is therefore not visible here.
+
 ---
 
 ## Computational Complexity
@@ -382,7 +420,7 @@ and so are all of its multi-skill extensions (Bellenguez-Morineau & Néron
 restriction:
 
 - **Without cardinality / budget caps and file mutexes**, set $|A| = m$
-  identical agents with $S_a = S$, $\kappa_a = \infty$, $C_a = \infty$,
+  identical agents with $S_a = \mathbb{S}$, $\kappa_a = \infty$, $C_a = \infty$,
   $E = \varnothing$. The residual problem is $P\,\|\,C_{\max}$
   (parallel-identical-machine makespan minimisation). When $m$ is part of
   the input (as in our portfolio configuration), this is **strongly

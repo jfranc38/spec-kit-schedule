@@ -24,9 +24,10 @@ import json
 import os
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -149,7 +150,7 @@ def _parse_table_rows(lines: list[str]) -> list[dict[str, str]]:
     return rows
 
 
-def _parse_waves(text: str, wave_indices: list[tuple[int, int, re.Match]]) -> list[Wave]:
+def _parse_waves(text: str, wave_indices: list[tuple[int, int, re.Match[str]]]) -> list[Wave]:
     """Extract Wave objects from the Execution Waves section of the document."""
     waves: list[Wave] = []
     for _pos, (start_char, end_char, m) in enumerate(wave_indices):
@@ -238,7 +239,7 @@ def parse_schedule_md(path: str | Path) -> ExecutionPlan:
         raise ScheduleInputError(t("schedule_file_no_waves", path=p))
 
     # Build (start_char, end_char, match) spans.
-    spans: list[tuple[int, int, re.Match]] = []
+    spans: list[tuple[int, int, re.Match[str]]] = []
     for i, m in enumerate(wave_matches):
         start_char = m.start()
         end_char = wave_matches[i + 1].start() if i + 1 < len(wave_matches) else len(text)
@@ -250,18 +251,28 @@ def parse_schedule_md(path: str | Path) -> ExecutionPlan:
     for wave in waves:
         if not wave.tasks:
             raise ScheduleInputError(
-                f"Wave {wave.index} (t={wave.start_time}) in {p} has no parseable tasks"
+                t(
+                    "wave_exec_no_tasks_in_wave",
+                    index=wave.index,
+                    start_time=wave.start_time,
+                    path=p,
+                )
             )
 
     # Warn (via error) if wave count mismatches declared metadata.
     if len(waves) != declared_waves:
         raise ScheduleInputError(
-            f"Metadata declares {declared_waves} waves but {len(waves)} were parsed in {p}"
+            t(
+                "wave_exec_wave_count_mismatch",
+                declared=declared_waves,
+                parsed=len(waves),
+                path=p,
+            )
         )
 
     agents = _parse_agents(text)
     if not agents:
-        raise ScheduleInputError(f"No agent headings found in {p}")
+        raise ScheduleInputError(t("wave_exec_no_agents", path=p))
 
     # Cross-check: every task's agent_id must appear in the agent list.
     agent_ids = {a.id for a in agents}
@@ -269,8 +280,11 @@ def parse_schedule_md(path: str | Path) -> ExecutionPlan:
         for task in wave.tasks:
             if task.agent_id not in agent_ids:
                 raise ScheduleInputError(
-                    f"Task {task.task_id} references unknown agent "
-                    f"{task.agent_id!r} not in agent assignments section"
+                    t(
+                        "wave_exec_unknown_agent",
+                        task_id=task.task_id,
+                        agent_id=task.agent_id,
+                    )
                 )
 
     return ExecutionPlan(
@@ -284,7 +298,7 @@ def parse_schedule_md(path: str | Path) -> ExecutionPlan:
 
 # ── Serialisation helpers ─────────────────────────────────────────────────────
 
-def _plan_to_dict(plan: ExecutionPlan) -> dict:
+def _plan_to_dict(plan: ExecutionPlan) -> dict[str, Any]:
     return {
         "feature_name": plan.feature_name,
         "makespan": plan.makespan,
@@ -389,7 +403,13 @@ def _emit_table(plan: ExecutionPlan) -> str:
 
 _Format = Literal["json", "shell", "table"]
 
-_FORMATTERS: dict[str, object] = {
+# Callable[..., str] keeps mypy happy at the call site; ``object`` here
+# would force a ``# type: ignore[operator]`` because mypy cannot prove
+# each entry is callable. The narrower type is also more honest about
+# what the dispatcher dict actually holds.
+_Formatter = Callable[[ExecutionPlan], str]
+
+_FORMATTERS: dict[str, _Formatter] = {
     "json": _emit_json,
     "shell": _emit_shell,
     "table": _emit_table,
@@ -422,7 +442,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     formatter = _FORMATTERS[args.fmt]
-    output = formatter(plan)  # type: ignore[operator]
+    output = formatter(plan)
     sys.stdout.write(output)
     if not output.endswith("\n"):
         sys.stdout.write("\n")

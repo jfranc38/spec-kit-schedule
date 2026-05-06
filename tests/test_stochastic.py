@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from solver.model.types import Agent, Task
 from solver.scheduler import (
-    Agent,
-    Task,
     _quantile_tokens,
     compute_durations,
     solve_from_json,

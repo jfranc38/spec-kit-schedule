@@ -23,14 +23,24 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]  # PyYAML ships no type stubs by default
 
 from .defaults import (
+    ANYTIME_DEFAULT,
     CONTEXT_BUDGET_KTOKENS_DEFAULT,
+    COST_WEIGHT_DEFAULT,
+    HORIZON_MULTIPLIER,
     KAPPA_DEFAULT,
+    MAKESPAN_WEIGHT,
+    NUM_WORKERS,
+    OBJECTIVE,
     SPEED_FACTOR_DEFAULT,
+    STOCHASTIC_QUANTILE_DEFAULT,
+    TIME_LIMIT_SECONDS,
     TOKEN_ESTIMATES,
+    TOKEN_UNIT,
 )
 from .i18n import t
 from .validation import ScheduleInputError
@@ -42,13 +52,16 @@ log = logging.getLogger(__name__)
 # Detection helpers
 # ---------------------------------------------------------------------------
 
-def _read_package_json(project_dir: Path) -> dict:
+def _read_package_json(project_dir: Path) -> dict[str, Any]:
     """Return parsed package.json or empty dict if absent/unreadable."""
     pkg = project_dir / "package.json"
     if not pkg.is_file():
         return {}
     try:
-        return json.loads(pkg.read_text(encoding="utf-8"))
+        # ``json.loads`` returns ``Any``; the explicit cast tells mypy we
+        # only ever consume top-level mapping shapes from package.json.
+        parsed: dict[str, Any] = json.loads(pkg.read_text(encoding="utf-8"))
+        return parsed
     except Exception:
         log.debug("Could not parse package.json in %s", project_dir)
         return {}
@@ -75,8 +88,12 @@ def _list_direct_dirs(project_dir: Path) -> set[str]:
         return set()
 
 
-def _detect_stacks(project_dir: Path) -> dict[str, bool]:
-    """Return a dict of detected stack signals."""
+def _detect_stacks(project_dir: Path) -> dict[str, Any]:
+    """Return a dict of detected stack signals.
+
+    Mostly bool flags, plus the ``frontend_framework`` key (str) and
+    ``dirs`` (``set[str]``) used downstream by ``_build_skill_rules``.
+    """
     pkg = _read_package_json(project_dir)
     all_deps: set[str] = set()
     for key in ("dependencies", "devDependencies", "peerDependencies"):
@@ -116,8 +133,10 @@ def _detect_stacks(project_dir: Path) -> dict[str, bool]:
     )
 
     # DB migration detection
-    migrations_detected = "migrations" in dirs or "db" in dirs and _has_glob(
-        project_dir, "*.sql"
+    # Either an explicit `migrations/` dir, or a `db/` dir that also contains
+    # `.sql` files (a bare `db/` could just be a config helper).
+    migrations_detected = "migrations" in dirs or (
+        "db" in dirs and _has_glob(project_dir, "*.sql")
     )
 
     # Deploy/infra detection
@@ -145,7 +164,7 @@ def _detect_stacks(project_dir: Path) -> dict[str, bool]:
     }
 
 
-def _build_backend_skills(stacks: dict) -> list[str]:
+def _build_backend_skills(stacks: dict[str, Any]) -> list[str]:
     """Build the skills list for a backend agent based on detected stacks."""
     skills = ["backend", "api", "database"]
     if stacks["python"]:
@@ -161,7 +180,7 @@ def _build_backend_skills(stacks: dict) -> list[str]:
     return skills
 
 
-def _build_skill_rules(stacks: dict) -> list[dict]:
+def _build_skill_rules(stacks: dict[str, Any]) -> list[dict[str, str]]:
     """Build skill_rules list based on detected project layout."""
     dirs: set[str] = stacks.get("dirs", set())
 
@@ -221,7 +240,7 @@ def detect_portfolio(
     project_dir: Path,
     *,
     default_provider: str = "anthropic",
-) -> dict:
+) -> dict[str, Any]:
     """Inspect files under project_dir and return a schedule-config.yml dict.
 
     The returned dict is validated against solver.config_schema.Config before
@@ -247,7 +266,7 @@ def detect_portfolio(
     stacks = _detect_stacks(project_dir)
     log.debug("Detected stacks in %s: %s", project_dir, stacks)
 
-    agents: list[dict] = []
+    agents: list[dict[str, Any]] = []
 
     # Always emit architect
     agents.append({
@@ -335,17 +354,17 @@ def detect_portfolio(
             "review": ["review", "validate", "verify", "analyze", "audit"],
         },
         "solver": {
-            "objective": "lexicographic",
-            "makespan_weight": 100,
-            "cost_weight": 0,
-            "time_limit": 60,
-            "num_workers": 8,
+            "objective": OBJECTIVE,
+            "makespan_weight": MAKESPAN_WEIGHT,
+            "cost_weight": COST_WEIGHT_DEFAULT,
+            "time_limit": TIME_LIMIT_SECONDS,
+            "num_workers": NUM_WORKERS,
             "symmetry_breaking": True,
             "warm_start": True,
-            "horizon_multiplier": 1.5,
-            "token_unit": 100,
-            "stochastic_quantile": 0.5,
-            "anytime": False,
+            "horizon_multiplier": HORIZON_MULTIPLIER,
+            "token_unit": TOKEN_UNIT,
+            "stochastic_quantile": STOCHASTIC_QUANTILE_DEFAULT,
+            "anytime": ANYTIME_DEFAULT,
         },
     }
 
@@ -378,10 +397,12 @@ _HEADER_TEMPLATE = """\
 """
 
 
-def _to_yaml(config_dict: dict, project_dir: Path) -> str:
+def _to_yaml(config_dict: dict[str, Any], project_dir: Path) -> str:
     ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
     header = _HEADER_TEMPLATE.format(ts=ts, project_dir=project_dir)
-    body = yaml.dump(config_dict, sort_keys=False, default_flow_style=False, allow_unicode=True)
+    body: str = yaml.dump(
+        config_dict, sort_keys=False, default_flow_style=False, allow_unicode=True
+    )
     return header + body
 
 
@@ -389,7 +410,7 @@ def _to_yaml(config_dict: dict, project_dir: Path) -> str:
 # Interactive prompt
 # ---------------------------------------------------------------------------
 
-def _interactive_refine(config_dict: dict) -> dict:
+def _interactive_refine(config_dict: dict[str, Any]) -> dict[str, Any]:
     """Prompt the user to review/override each inferred agent."""
     print("\nInteractive mode: review each detected agent (press Enter to keep default).\n")
     new_agents = []

@@ -13,6 +13,8 @@ from collections.abc import Iterable
 
 import networkx as nx
 
+from .i18n import t
+
 
 class ScheduleInputError(ValueError):
     """Raised when user input is semantically invalid."""
@@ -50,9 +52,9 @@ def find_cycle(n: int, edges: Iterable[tuple[int, int]]) -> list[int] | None:
     return nodes
 
 
-def require_positive(value, name: str) -> None:
+def require_positive(value: object, name: str) -> None:
     if not isinstance(value, int | float) or value <= 0:
-        raise ScheduleInputError(f"{name} must be > 0; got {value!r}")
+        raise ScheduleInputError(t("validation_must_be_positive", name=name, value=value))
 
 
 KNOWN_PROVIDERS = frozenset(
@@ -72,7 +74,7 @@ KNOWN_PROVIDERS = frozenset(
 )
 
 
-def validate_agent_config(agent: dict) -> None:
+def validate_agent_config(agent: dict[str, object]) -> None:
     """Validate a single agent block via pydantic AgentConfig.
 
     Thin wrapper that converts pydantic ValidationError into ScheduleInputError
@@ -91,13 +93,17 @@ def validate_agent_config(agent: dict) -> None:
                 msg = err.get("msg", str(err))
                 agent_id = agent.get("id", "<unknown>")
                 parts.append(f"agent {agent_id!r}.{loc}: {msg}")
-            raise ScheduleInputError("; ".join(parts)) from exc
-        raise ScheduleInputError(f"agent config error: {exc}") from exc
+            raise ScheduleInputError(
+                t("validation_agent_config_errors", details="; ".join(parts))
+            ) from exc
+        raise ScheduleInputError(
+            t("validation_agent_config_generic", error=exc)
+        ) from exc
     # `provider` is intentionally free-form: KNOWN_PROVIDERS is a discovery
     # hint for docs/tooling, not an allow-list, so bespoke runners work.
 
 
-def validate_solver_config(cfg: dict) -> None:
+def validate_solver_config(cfg: dict[str, object]) -> None:
     """Validate solver options block via pydantic SolverOptions.
 
     Thin wrapper that converts pydantic ValidationError into ScheduleInputError.
@@ -114,37 +120,45 @@ def validate_solver_config(cfg: dict) -> None:
                 loc = ".".join(str(s) for s in err["loc"]) if err.get("loc") else "?"
                 msg = err.get("msg", str(err))
                 parts.append(f"solver.{loc}: {msg}")
-            raise ScheduleInputError("; ".join(parts)) from exc
-        raise ScheduleInputError(f"solver config error: {exc}") from exc
+            raise ScheduleInputError(
+                t("validation_solver_config_errors", details="; ".join(parts))
+            ) from exc
+        raise ScheduleInputError(
+            t("validation_solver_config_generic", error=exc)
+        ) from exc
 
 
-def validate_solver_input(data: dict) -> None:
+def validate_solver_input(data: dict[str, object]) -> None:
     """Validate the JSON handed from parse_tasks to scheduler."""
     if not isinstance(data, dict):
-        raise ScheduleInputError("Solver input must be a JSON object")
+        raise ScheduleInputError(t("validation_input_not_object"))
     required = {"tasks", "edges", "agents", "config"}
     missing = required - set(data.keys())
     if missing:
-        raise ScheduleInputError(f"Solver input missing top-level keys: {sorted(missing)}")
+        raise ScheduleInputError(
+            t("validation_input_missing_keys", missing=sorted(missing))
+        )
     if not isinstance(data["tasks"], list) or not data["tasks"]:
-        raise ScheduleInputError("Solver input 'tasks' must be a non-empty list")
+        raise ScheduleInputError(t("validation_input_tasks_not_list"))
     if not isinstance(data["edges"], list):
-        raise ScheduleInputError("Solver input 'edges' must be a list")
+        raise ScheduleInputError(t("validation_input_edges_not_list"))
     if not isinstance(data["agents"], list) or not data["agents"]:
-        raise ScheduleInputError("Solver input 'agents' must be a non-empty list")
+        raise ScheduleInputError(t("validation_input_agents_not_list"))
     if not isinstance(data["config"], dict):
-        raise ScheduleInputError("Solver input 'config' must be an object")
+        raise ScheduleInputError(t("validation_input_config_not_object"))
 
     seen_ids: set[str] = set()
-    for t in data["tasks"]:
-        if "id" not in t:
-            raise ScheduleInputError(f"Task missing 'id': {t}")
-        if t["id"] in seen_ids:
-            raise ScheduleInputError(f"Duplicate task id in solver input: {t['id']}")
-        seen_ids.add(t["id"])
+    for task in data["tasks"]:
+        if "id" not in task:
+            raise ScheduleInputError(t("validation_task_missing_id", task=task))
+        if task["id"] in seen_ids:
+            raise ScheduleInputError(
+                t("validation_duplicate_task_id_input", task_id=task["id"])
+            )
+        seen_ids.add(task["id"])
         require_positive(
-            t.get("estimated_tokens", 1),
-            f"task {t['id']!r}.estimated_tokens",
+            task.get("estimated_tokens", 1),
+            f"task {task['id']!r}.estimated_tokens",
         )
 
     for a in data["agents"]:
@@ -152,12 +166,12 @@ def validate_solver_input(data: dict) -> None:
 
     validate_solver_config(data["config"])
 
-    ids = {t["id"] for t in data["tasks"]}
+    ids = {task["id"] for task in data["tasks"]}
     for e in data["edges"]:
         if not (isinstance(e, list | tuple) and len(e) == 2):
-            raise ScheduleInputError(f"Malformed edge (expected [src_id, dst_id]): {e}")
+            raise ScheduleInputError(t("validation_malformed_edge", edge=e))
         src, dst = e
         if src not in ids:
-            raise ScheduleInputError(f"Edge references unknown task id {src!r}")
+            raise ScheduleInputError(t("validation_edge_unknown_task", task_id=src))
         if dst not in ids:
-            raise ScheduleInputError(f"Edge references unknown task id {dst!r}")
+            raise ScheduleInputError(t("validation_edge_unknown_task", task_id=dst))

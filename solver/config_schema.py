@@ -18,17 +18,19 @@ __all__ = [
 
 import logging
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
-import yaml
+import yaml  # type: ignore[import-untyped]  # PyYAML ships no type stubs by default
 from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, PositiveInt, field_validator
 
 from .defaults import (
+    COST_WEIGHT_DEFAULT,
     DEFAULT_SKILL,
     HORIZON_MULTIPLIER,
     MAKESPAN_WEIGHT,
     NUM_WORKERS,
     OBJECTIVE,
+    RANDOM_SEED_DEFAULT,
     TIME_LIMIT_SECONDS,
     TOKEN_UNIT,
 )
@@ -84,17 +86,32 @@ class SolverOptions(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    objective: Literal["lexicographic", "weighted", "cost_aware"] = OBJECTIVE
+    # ``OBJECTIVE`` is a plain ``str`` constant; cast tells mypy the value
+    # always matches the Literal at runtime (validated by config_schema).
+    objective: Literal["lexicographic", "weighted", "cost_aware"] = cast(
+        Literal["lexicographic", "weighted", "cost_aware"], OBJECTIVE
+    )
     makespan_weight: PositiveInt = MAKESPAN_WEIGHT
-    cost_weight: NonNegativeInt = 0
+    cost_weight: NonNegativeInt = COST_WEIGHT_DEFAULT
     time_limit: PositiveInt = TIME_LIMIT_SECONDS
     num_workers: PositiveInt = NUM_WORKERS
     symmetry_breaking: bool = True
     warm_start: bool = True
     horizon_multiplier: PositiveFloat = HORIZON_MULTIPLIER
     token_unit: PositiveInt = TOKEN_UNIT
+    # Schema accepts the closed interval [0, 1]; runtime in
+    # ``_quantile_tokens`` rejects exactly 0 and 1 because ``Φ⁻¹(0)`` and
+    # ``Φ⁻¹(1)`` are unbounded and crash ``statistics.NormalDist.inv_cdf``.
+    # The closed-interval cap stays for backwards compatibility with configs
+    # that already serialise these boundary values; the runtime guard is the
+    # authoritative check.
     stochastic_quantile: float = Field(0.5, ge=0.0, le=1.0)
     anytime: bool = False
+    # Determinism: same model + same seed → same incumbent across runs.
+    random_seed: NonNegativeInt = RANDOM_SEED_DEFAULT
+    # Forwards CP-SAT's search log to stderr. Off by default because the log
+    # is verbose; the CLI ``--verbose`` flag flips this on.
+    verbose: bool = False
 
 
 class Config(BaseModel):
@@ -112,14 +129,24 @@ class Config(BaseModel):
     default_skill: str = DEFAULT_SKILL
     token_estimates: dict[str, TokenEstimateLike] = {}
     complexity_verbs: dict[str, list[str]] = {}
-    solver: SolverOptions = Field(default_factory=SolverOptions)
+    # Pydantic's generated stubs trip mypy on ``Field(default_factory=Type)``
+    # because the type tracker doesn't see ``Type()`` as zero-arg-callable
+    # equivalent (every field default has its own type). The constructor is
+    # zero-arg at runtime — pydantic fills the unset fields from each field's
+    # own default. The cast keeps the code path unchanged.
+    solver: SolverOptions = Field(default_factory=SolverOptions)  # type: ignore[arg-type]
 
     @field_validator("token_estimates", mode="before")
     @classmethod
     def _coerce_token_estimates(
-        cls, raw: dict[str, object]
-    ) -> dict[str, TokenEstimate | int]:
-        """Accept plain ints as well as {mean, std_dev} dicts."""
+        cls, raw: object
+    ) -> object:
+        """Accept plain ints as well as {mean, std_dev} dicts.
+
+        Returns ``object`` to match pydantic's pre-validator contract: the
+        validator hands back a value pydantic re-validates against
+        ``dict[str, TokenEstimateLike]``.
+        """
         if not isinstance(raw, dict):
             return raw
         out: dict[str, object] = {}

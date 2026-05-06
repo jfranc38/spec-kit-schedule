@@ -226,6 +226,42 @@ class TestSolveWithFixed:
         with pytest.raises(ScheduleInputError, match="Frozen task"):
             solve_with_fixed(si, fixed)
 
+    def test_frozen_task_on_agent_that_lost_skill_raises(self):
+        """Prior agent assignment becomes incompatible after a config edit.
+
+        Original: T001 on A0 (skills=[backend]). Replan: A0 now exposes only
+        ``frontend``, so A0 is no longer skill-compatible with the backend
+        task. The frozen pin must surface the canonical i18n-keyed
+        ``replan_fixed_incompatible`` message.
+        """
+        si = _make_solver_input(2, chain=False)
+        prior = solve_from_json(si)
+        assert prior["status"] in {"OPTIMAL", "FEASIBLE"}
+
+        # Strip backend from A0 and add a frontend backup so preflight passes
+        # for the non-frozen task; the frozen one is what should still fail.
+        si["agents"][0]["skills"] = ["frontend"]
+        si["agents"].append(
+            {
+                "id": "A1",
+                "model": "test",
+                "skills": ["backend"],
+                "kappa": 10,
+                "context_budget": 100_000,
+                "speed_factor": 1.0,
+            }
+        )
+        fixed = {"T001": {"agent_id": "A0", "start": 0}}
+        with pytest.raises(ScheduleInputError, match="incompatible"):
+            solve_with_fixed(si, fixed)
+
+    def test_fixed_invalid_duration_raises(self):
+        """``end < start`` yields a non-positive duration → error."""
+        si = _make_solver_input(2, chain=False)
+        fixed = {"T001": {"agent_id": "A0", "start": 10, "end": 8}}
+        with pytest.raises(ScheduleInputError, match="duration"):
+            solve_with_fixed(si, fixed)
+
 
 # ───────────────────────────────────────────────────────────────────────
 # Integration tests: replan()
@@ -522,12 +558,16 @@ class TestReplanCLIInProcess:
         assert "T999" in capsys.readouterr().err
 
     def test_main_invalid_tasks_md_returns_2(self, tmp_path: Path, seeded, capsys):
+        """Tighten the assertion from generic "ERROR" to the
+        canonical i18n-keyed ``no_tasks_found`` message fragment."""
         prior_path, _, config_path = seeded
         bad_tasks = tmp_path / "bad-tasks.md"
         bad_tasks.write_text("# header only — no tasks here\n", encoding="utf-8")
         rc = replan_main([str(prior_path), str(bad_tasks), str(config_path)])
         assert rc == 2
-        assert "ERROR" in capsys.readouterr().err
+        err = capsys.readouterr().err
+        assert "ERROR" in err
+        assert "No tasks found" in err
 
     def test_main_verbose_flag(self, seeded, capsys):
         prior_path, tasks_path, config_path = seeded

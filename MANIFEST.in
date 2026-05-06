@@ -1,3 +1,15 @@
+# MANIFEST.in vs `[tool.setuptools.data-files]` (pyproject.toml):
+#
+# - This file controls the SDIST contents (`uv build --sdist` /
+#   `python -m build --sdist`) and supplements wheel data inclusion when
+#   `include-package-data = true`.
+# - The `data-files` block in pyproject.toml is what produces the
+#   `share/spec-kit-schedule/...` payload INSIDE the wheel/sdist so the
+#   spec-kit `specify` CLI can locate the extension after install.
+#
+# Both must list the asset paths; one without the other ships an
+# incomplete artifact. Keep them in sync when adding new commands or
+# templates.
 include LICENSE
 include README.md
 include CHANGELOG.md

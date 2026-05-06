@@ -35,6 +35,7 @@ from .defaults import (
     CONTEXT_BUDGET_KTOKENS_DEFAULT,
     KAPPA_DEFAULT,
     SPEED_FACTOR_DEFAULT,
+    STORY_PRIORITY_DEFAULT,
     TOKEN_ESTIMATES,
 )
 from .i18n import t
@@ -159,17 +160,17 @@ def classify_complexity(
 def _detect_phase(line: str) -> tuple[str, str | None, int] | None:
     """Return (phase, story_id, priority) or None if line is not a header."""
     if PHASE_SETUP_RE.match(line):
-        return ("Setup", None, 99)
+        return ("Setup", None, STORY_PRIORITY_DEFAULT)
     if PHASE_FOUND_RE.match(line):
-        return ("Foundational", None, 99)
+        return ("Foundational", None, STORY_PRIORITY_DEFAULT)
     m = PHASE_STORY_RE.match(line)
     if m:
         num = m.group(1)
         pm = PRIORITY_RE.search(line)
-        priority = int(pm.group(1)) if pm else 99
+        priority = int(pm.group(1)) if pm else STORY_PRIORITY_DEFAULT
         return (f"User Story {num}", f"US{num}", priority)
     if PHASE_POLISH_RE.match(line):
-        return ("Polish", None, 99)
+        return ("Polish", None, STORY_PRIORITY_DEFAULT)
     return None
 
 
@@ -248,7 +249,7 @@ def parse_tasks_md(
     task_ids: set[str] = set()
     current_phase = "Setup"
     current_story_id: str | None = None
-    current_priority = 99
+    current_priority = STORY_PRIORITY_DEFAULT
 
     for line_num, line in enumerate(lines, start=1):
         phase_hit = _detect_phase(line)
@@ -296,7 +297,10 @@ def parse_tasks_md(
         vm = VERB_RE.match(desc)
         verb = vm.group(1) if vm else "implement"
         complexity = classify_complexity(verb, complexity_verbs)
-        estimate = token_est.get(complexity, token_est.get("medium", {"mean": 3500, "std_dev": 0}))
+        estimate = token_est.get(
+            complexity,
+            token_est.get("medium", {"mean": TOKEN_ESTIMATES["medium"], "std_dev": 0}),
+        )
         if isinstance(estimate, dict):
             tokens = int(estimate["mean"])
             token_std_dev = int(estimate.get("std_dev", 0))

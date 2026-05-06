@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import math
-
 from solver.scheduler import solve_from_json
-from tests.conftest import (
+from tests._helpers import (
     TERMINAL_STATUSES,
     make_agent,
     make_chain_edges,
@@ -114,4 +112,5 @@ class TestHorizonScalesWithMultiplier:
         h_small = small["stats"]["horizon"]
         h_big = big["stats"]["horizon"]
         assert h_big >= 2 * h_small - 1
-        assert h_big <= 2 * h_small + math.ceil(h_small)
+        # Precise off-by-one band (was previously a loose 3*h_small bound).
+        assert h_big <= 2 * h_small + 1

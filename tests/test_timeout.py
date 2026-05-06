@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from ortools.sat.python import cp_model
+
 from solver.i18n_catalog import WARN_ANYTIME_TIMEOUT
+from solver.orchestration import runner
 from solver.scheduler import solve_from_json
-from tests.conftest import make_chain_problem
+from tests._helpers import make_chain_problem
 
 # Slack on top of the configured budget. CP-SAT can overshoot the wall
 # limit by a small amount while finishing the current restart.
@@ -67,13 +70,24 @@ class TestAnytimeTimeoutPath:
         assert "intermediate" in result["stats"]
         assert isinstance(result["stats"]["intermediate"], list)
 
-    def test_anytime_warning_only_when_feasible(self) -> None:
+    def test_anytime_warning_emitted_on_forced_feasible(self, monkeypatch) -> None:
+        """Deterministic — force Phase 1 to return FEASIBLE.
+
+        The branch in ``_solve_phase1_makespan`` that emits
+        ``WARN_ANYTIME_TIMEOUT`` only triggers when status is FEASIBLE
+        (not OPTIMAL). Wrap ``_run_solver`` so we always get FEASIBLE
+        on the first call regardless of how fast CP-SAT actually finishes.
+        """
+        real_run = runner._run_solver
+
+        def fake_run(model, config, callback=None, **kwargs):
+            solver, status, elapsed = real_run(model, config, callback, **kwargs)
+            if status == cp_model.OPTIMAL:
+                return solver, cp_model.FEASIBLE, elapsed
+            return solver, status, elapsed
+
+        monkeypatch.setattr(runner, "_run_solver", fake_run)
         result = solve_from_json(_build_problem(time_limit=1, anytime=True))
         warning_codes = {w.get("code") for w in result.get("warnings", [])}
-        if result["status"] == "FEASIBLE":
-            # On timeout, anytime mode must surface the warning + gap.
-            assert WARN_ANYTIME_TIMEOUT in warning_codes
-            assert "final_gap" in result["stats"]
-        else:
-            # OPTIMAL solves should not raise the timeout warning.
-            assert WARN_ANYTIME_TIMEOUT not in warning_codes
+        assert WARN_ANYTIME_TIMEOUT in warning_codes
+        assert "final_gap" in result["stats"]

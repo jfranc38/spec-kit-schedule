@@ -18,6 +18,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,7 +26,10 @@ if __package__ in (None, ""):
 
 import networkx as nx
 
-from .defaults import AGENT_COLORS, CRITICAL_COLOR, CRITICAL_HATCH
+from .defaults import CRITICAL_COLOR, CRITICAL_HATCH, palette_for
+from .model.result_types import (
+    ScheduleResult,  # noqa: F401  (schema doc — see render_*() docstrings)
+)
 
 __all__ = ["render_dag", "render_gantt", "main"]
 
@@ -46,7 +50,7 @@ _NORMAL_EDGE_WIDTH = 1.0
 _GANTT_BAR_HEIGHT = 0.55
 
 
-def _hierarchical_layout(graph: nx.DiGraph) -> dict:
+def _hierarchical_layout(graph: nx.DiGraph) -> dict[Any, Any]:
     """Layered left-to-right layout mimicking graphviz `dot`.
 
     Each node's layer is its longest-path distance from any source; the
@@ -62,7 +66,10 @@ def _hierarchical_layout(graph: nx.DiGraph) -> dict:
             (graph.nodes[p]["_layer"] for p in preds),
             default=-1,
         )
-    return nx.multipartite_layout(graph, subset_key="_layer", align="vertical")
+    # ``nx.multipartite_layout`` is annotated to return ``Any``; reify the
+    # result so mypy --strict's ``no-any-return`` rule sees a concrete dict.
+    layout: dict[Any, Any] = nx.multipartite_layout(graph, subset_key="_layer", align="vertical")
+    return layout
 
 
 def _require_matplotlib() -> None:
@@ -76,12 +83,15 @@ def _require_matplotlib() -> None:
 
 
 def render_dag(
-    data: dict,
+    data: dict[str, Any],
     output: Path,
     *,
     dpi: int = 150,
 ) -> Path:
-    """Write a coloured DAG to `output`, one colour per agent."""
+    """Write a coloured DAG to `output`, one colour per agent.
+
+    The expected shape of ``data`` is :class:`solver.model.result_types.ScheduleResult`.
+    """
     _require_matplotlib()
     import matplotlib.pyplot as plt
 
@@ -104,8 +114,7 @@ def render_dag(
     # arrow into it must be visible.
     graph.add_edges_from(critical_path_edges)
 
-    agents_sorted = sorted({a["agent_id"] for a in assignments})
-    color_by_agent = {ag: AGENT_COLORS[i % len(AGENT_COLORS)] for i, ag in enumerate(agents_sorted)}
+    _, color_by_agent = palette_for(assignments)
 
     pos = _hierarchical_layout(graph)
 
@@ -120,7 +129,7 @@ def render_dag(
 
     # Width scales with layer count, height with the widest layer, so
     # portraits of 500-task graphs don't crush labels into a tiny strip.
-    layer_counts: dict = {}
+    layer_counts: dict[Any, int] = {}
     for n in graph.nodes:
         layer_counts[graph.nodes[n].get("_layer", 0)] = (
             layer_counts.get(graph.nodes[n].get("_layer", 0), 0) + 1
@@ -182,12 +191,12 @@ def render_dag(
     )
 
     legend_handles = [
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=c, markersize=10, label=ag)
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=c, markersize=10, label=ag)  # type: ignore[attr-defined,unused-ignore]
         for ag, c in color_by_agent.items()
     ]
     if critical_path:
         legend_handles.append(
-            plt.Line2D(
+            plt.Line2D(  # type: ignore[attr-defined,unused-ignore]
                 [0], [0], color=CRITICAL_COLOR, lw=_CRITICAL_EDGE_WIDTH, label="critical path"
             )
         )
@@ -201,12 +210,15 @@ def render_dag(
 
 
 def render_gantt(
-    data: dict,
+    data: dict[str, Any],
     output: Path,
     *,
     dpi: int = 150,
 ) -> Path:
-    """Write a horizontal Gantt chart (one row per agent) to `output`."""
+    """Write a horizontal Gantt chart (one row per agent) to `output`.
+
+    The expected shape of ``data`` is :class:`solver.model.result_types.ScheduleResult`.
+    """
     _require_matplotlib()
     import matplotlib.pyplot as plt
 
@@ -215,8 +227,7 @@ def render_gantt(
     stats = data.get("stats", {})
     makespan = stats.get("makespan", 0)
 
-    agents_sorted = sorted({a["agent_id"] for a in assignments})
-    color_by_agent = {ag: AGENT_COLORS[i % len(AGENT_COLORS)] for i, ag in enumerate(agents_sorted)}
+    agents_sorted, color_by_agent = palette_for(assignments)
     row = {ag: i for i, ag in enumerate(agents_sorted)}
 
     fig, ax = plt.subplots(figsize=(max(10, makespan / 15), max(3, len(agents_sorted) * 0.7)))

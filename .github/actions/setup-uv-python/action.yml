@@ -1,5 +1,13 @@
 name: "Setup uv + Python"
-description: "Install uv, install Python, and sync project deps with the requested extras."
+description: |
+  Install uv, install Python, and sync project deps with the requested extras.
+
+  Single source of truth for Python + uv setup across all workflows
+  (ci.yml, release.yml). Per-job python-version is the only knob each
+  workflow tweaks; everything else (uv install, cache, frozen-lock sync,
+  extras) flows through this composite. There is intentionally no
+  workflow_call template — composite actions cover the same ground with
+  less indirection.
 inputs:
   python-version:
     description: "Python version to install (e.g. '3.12' or '${{ matrix.python-version }}')"

@@ -15,7 +15,7 @@ from solver.render_schedule import render as render_md
 from solver.replan import replan
 from solver.scheduler import solve_from_json
 from solver.validation import ScheduleInputError
-from tests.conftest import (
+from tests._helpers import (
     TERMINAL_STATUSES,
     make_agent,
     make_chain_edges,

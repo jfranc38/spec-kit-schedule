@@ -7,16 +7,16 @@ import pytest
 from ortools.sat.python import cp_model
 from pydantic import ValidationError
 
-from solver import scheduler
 from solver.config_schema import _MAX_TOKENS, TokenEstimate
+from solver.model.types import Agent, Task
+from solver.orchestration import runner
+from solver.result import extract as _result_extract
 from solver.scheduler import (
-    Agent,
-    Task,
     list_schedule_heuristic,
     solve_from_json,
     solve_with_fixed,
 )
-from tests.conftest import TERMINAL_STATUSES, make_agent, make_solver_input, make_task
+from tests._helpers import TERMINAL_STATUSES, make_agent, make_solver_input, make_task
 
 # ─────────────────────────────────────────────────────────────────────
 # Skill-bottleneck horizon
@@ -53,7 +53,14 @@ def test_skill_bottleneck_finds_optimum() -> None:
 
 def test_replan_pins_duration() -> None:
     """``fixed_assignments`` pins ``dur[i] == d_fixed`` so configuration drift
-    cannot shift a frozen task off its prior duration."""
+    cannot shift a frozen task off its prior duration.
+
+    A "drifted" duration (different from what the current config would
+    derive for the same task/agent) is the canonical replan-after-recalibration
+    case: we still expect the replan to honour the supplied duration. The
+    solver realigns the channel by treating the frozen pair as having
+    ``p[i, a_fixed] = d_fixed``.
+    """
     data = make_solver_input(
         tasks=[
             make_task("T001", file_paths=["a.py"], estimated_tokens=1000),
@@ -74,9 +81,16 @@ def test_replan_pins_duration() -> None:
     new_t1 = next(a for a in result["assignments"] if a["task_id"] == "T001")
     assert new_t1["duration"] == prior_duration
 
-    # (b) Inconsistent duration: pin fights the channel → INFEASIBLE.
-    bad = solve_with_fixed(data, {"T001": {**base, "duration": prior_duration + 1}})
-    assert bad["status"] == "INFEASIBLE"
+    # (b) Drifted duration (e.g. recalibration changed speed_factor between
+    # runs). The frozen duration must be honoured — NOT INFEASIBLE — and
+    # the original ``p[i, a]`` must NOT silently override the supplied value.
+    drifted_duration = prior_duration + 1
+    drifted = solve_with_fixed(
+        data, {"T001": {**base, "duration": drifted_duration}}
+    )
+    assert drifted["status"] in TERMINAL_STATUSES
+    drifted_t1 = next(a for a in drifted["assignments"] if a["task_id"] == "T001")
+    assert drifted_t1["duration"] == drifted_duration
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -88,12 +102,12 @@ def test_phase1_feasible_downgrades_top_status(monkeypatch: pytest.MonkeyPatch) 
     """When Phase 1 returns FEASIBLE, the top-level status must be FEASIBLE
     even if Phase 2 proves OPTIMAL on the load-balance subproblem.
     """
-    real_run = scheduler._run_solver
+    real_run = runner._run_solver
     calls = {"n": 0}
 
-    def fake_run(model, config, callback=None):
+    def fake_run(model, config, callback=None, **kwargs):
         calls["n"] += 1
-        solver, status, elapsed = real_run(model, config, callback)
+        solver, status, elapsed = real_run(model, config, callback, **kwargs)
         if calls["n"] == 1 and status == cp_model.OPTIMAL:
             # Pretend Phase 1 didn't prove optimality. Solver still has a
             # valid solution (so values + hints work), only the status is
@@ -101,7 +115,7 @@ def test_phase1_feasible_downgrades_top_status(monkeypatch: pytest.MonkeyPatch) 
             return solver, cp_model.FEASIBLE, elapsed
         return solver, status, elapsed
 
-    monkeypatch.setattr(scheduler, "_run_solver", fake_run)
+    monkeypatch.setattr(runner, "_run_solver", fake_run)
 
     data = make_solver_input(
         tasks=[
@@ -190,13 +204,21 @@ def test_phase2_pin_preserves_phase1_makespan() -> None:
 # ─────────────────────────────────────────────────────────────────────
 
 
-def test_critical_path_cycle_handled_gracefully(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A cycle in the realised-schedule graph yields an empty critical path."""
+def test_critical_path_cycle_handled_gracefully(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A cycle in the realised-schedule graph yields an empty critical path.
+
+    Asserts the schedule itself survives (assignments non-empty) and the
+    cycle is logged via ``logging.warning`` (the result envelope's
+    WarningCollector path is reserved for user-facing solver warnings; the
+    critical-path cycle is a defensive log).
+    """
     def raise_unfeasible(_graph):
         raise nx.NetworkXUnfeasible("synthetic cycle")
 
     monkeypatch.setattr(
-        scheduler.nx, "lexicographical_topological_sort", raise_unfeasible
+        _result_extract.nx, "lexicographical_topological_sort", raise_unfeasible
     )
 
     data = make_solver_input(
@@ -204,11 +226,17 @@ def test_critical_path_cycle_handled_gracefully(monkeypatch: pytest.MonkeyPatch)
         agents=[make_agent("A0")],
         config={"time_limit": 5},
     )
-    result = solve_from_json(data)
+    with caplog.at_level("WARNING", logger="solver.result.extract"):
+        result = solve_from_json(data)
     assert result["status"] in TERMINAL_STATUSES
     assert result["critical_path"] == []
     assert result["critical_path_edges"] == []
     assert result["resource_edges"] == []
+    # Schedule itself must still be present.
+    assert len(result["assignments"]) == 1
+    assert result["assignments"][0]["task_id"] == "T001"
+    # Defensive cycle warning must be logged.
+    assert any("cycle" in rec.getMessage().lower() for rec in caplog.records)
 
 
 # ─────────────────────────────────────────────────────────────────────

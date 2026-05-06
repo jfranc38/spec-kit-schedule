@@ -7,11 +7,21 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: Tests (${{ matrix.os }} / ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12"]
+        include:
+          # CI-G7: keep ubuntu primary, but exercise macOS at one Python.
+          # OR-Tools occasionally has macOS-specific issues; allow this
+          # combination to fail without blocking the merge.
+          - os: macos-latest
+            python-version: "3.12"
+            allow-failure: true
+    continue-on-error: ${{ matrix.allow-failure == true }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,11 +41,65 @@ jobs:
         run: uv run mypy solver
 
       - name: Tests with coverage
-        # Coverage gate: 85% — observed 91% locally with viz extras (matching CI sync).
-        run: uv run pytest --cov=solver --cov-report=term-missing --cov-fail-under=85
+        # CI-G5: gate at 90% — coverage observed locally at 92% with viz extras.
+        run: uv run pytest --cov=solver --cov-report=term-missing --cov-fail-under=90
 
       - name: Smoke test (docs example)
         run: make smoke
+
+  workflow-lint:
+    name: Lint workflows + shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: actionlint
+        # CI-G1: blocking. Pinned action; sources actionlint binary.
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color
+
+      - name: shellcheck
+        # CI-G2: blocking. Lint the shell scripts shipped in the repo.
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: "."
+          additional_files: "bin/install.sh bin/uninstall.sh"
+          ignore_paths: ".venv .git dist"
+
+  security:
+    name: Dependency audit + license report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv + Python
+        uses: ./.github/actions/setup-uv-python
+        with:
+          python-version: "3.12"
+          extras: "dev"
+
+      - name: pip-audit
+        # CI-G3: non-blocking initially — audit the lockfile for known CVEs.
+        # Once the warning queue is clean, flip continue-on-error to false.
+        continue-on-error: true
+        run: uv run --with pip-audit pip-audit --strict --progress-spinner=off
+
+      - name: pip-licenses
+        # CI-G4: non-blocking. Generate a markdown license report and upload.
+        run: |
+          uv run --with pip-licenses pip-licenses \
+            --format=markdown \
+            --with-urls \
+            --output-file=licenses.md
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: licenses-report
+          path: licenses.md
+          if-no-files-found: error
+          retention-days: 30
 
   package:
     runs-on: ubuntu-latest
@@ -120,3 +184,33 @@ jobs:
             benchmarks/results/latest.md
           retention-days: 14
           if-no-files-found: error
+
+  smoke-stress:
+    name: Smoke stress (medium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # CI-G6: a small step up from the tiny smoke; runs only on push to main
+    # to keep PR cycle time bounded. Times out at 10 minutes.
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv + Python
+        uses: ./.github/actions/setup-uv-python
+        with:
+          python-version: "3.12"
+          extras: "dev"
+
+      - name: Run medium smoke stress
+        run: make smoke-stress
+
+      - name: Upload smoke-stress artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-stress-medium
+          path: |
+            benchmarks/results/*.json
+            benchmarks/results/latest.md
+          if-no-files-found: ignore
+          retention-days: 14

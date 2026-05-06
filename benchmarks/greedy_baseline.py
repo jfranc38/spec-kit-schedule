@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 import sys
-from collections import defaultdict
+from collections import defaultdict, deque
 
 __all__ = ["greedy_solve"]
 
@@ -19,7 +19,12 @@ _STATUS_INFEASIBLE = "GREEDY_INFEASIBLE"
 
 
 def _topological_sort(task_ids: list[str], edges: list[list[str]]) -> list[str]:
-    """Kahn's algorithm; raises ValueError on cycle."""
+    """Kahn's algorithm; raises ValueError on cycle.
+
+    Uses ``collections.deque.popleft()`` (O(1)) rather than ``list.pop(0)``
+    (O(n)) so the routine stays linear in the graph size — the previous
+    quadratic behaviour was visible on the ``xl`` shape (n=400).
+    """
     in_degree: dict[str, int] = dict.fromkeys(task_ids, 0)
     adjacency: dict[str, list[str]] = {t: [] for t in task_ids}
     for src, dst in edges:
@@ -27,10 +32,10 @@ def _topological_sort(task_ids: list[str], edges: list[list[str]]) -> list[str]:
             adjacency[src].append(dst)
             in_degree[dst] += 1
 
-    queue = sorted(t for t, d in in_degree.items() if d == 0)
+    queue: deque[str] = deque(sorted(t for t, d in in_degree.items() if d == 0))
     order: list[str] = []
     while queue:
-        node = queue.pop(0)
+        node = queue.popleft()
         order.append(node)
         for nxt in sorted(adjacency[node]):
             in_degree[nxt] -= 1

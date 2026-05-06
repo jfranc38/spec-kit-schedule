@@ -1,4 +1,4 @@
-.PHONY: install sync test cov lint typecheck fmt smoke schedule schedule-all bench bench-report clean package help
+.PHONY: install sync test cov lint typecheck fmt smoke smoke-stress schedule schedule-all bench bench-scaling bench-replan bench-memory bench-report clean package help
 
 SHELL := /usr/bin/env bash
 UV    ?= uv
@@ -37,6 +37,9 @@ smoke: ## End-to-end pipeline against the docs example
 	echo "smoke OK ($$(wc -l <$$tmp/schedule.md) lines)"; \
 	rm -rf $$tmp
 
+smoke-stress: ## Medium-scale stress smoke (runs the medium benchmark size)
+	$(UV) run -- python -m benchmarks.run --size medium --time-limit 30
+
 schedule: ## Rebuild docs/example-schedule.md + docs/images/* from current code
 	@set -e; \
 	tmp=$$(mktemp -d); \
@@ -71,6 +74,15 @@ package: ## Produce a distributable zip of the extension
 
 bench: ## Run all benchmark problems and write latest.md
 	$(UV) run --extra viz -- python -m benchmarks.run --all --time-limit 60
+
+bench-scaling: ## Run all problems with --num-workers axis (sweep [1,2,4,8])
+	$(UV) run --extra viz -- python -m benchmarks.run --all --time-limit 60 --num-workers axis
+
+bench-replan: ## Run all problems and include the replan benchmark
+	$(UV) run --extra viz -- python -m benchmarks.run --all --time-limit 60 --include-replan
+
+bench-memory: ## Run all problems with peak-memory tracking enabled
+	$(UV) run --extra viz -- python -m benchmarks.run --all --time-limit 60 --memory
 
 bench-report: ## Print the latest benchmark table
 	@cat benchmarks/results/latest.md 2>/dev/null || echo "run 'make bench' first"

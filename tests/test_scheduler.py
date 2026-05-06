@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from solver.model.types import Agent, Task
 from solver.scheduler import (
-    Agent,
-    Task,
     build_file_conflict_groups,
     compute_compatible_agents,
     compute_durations,
@@ -170,7 +169,7 @@ class TestSolveFromJson:
             "config": {"time_limit": 5, "num_workers": 1},
         }
 
-    def test_happy_path(self):
+    def test_chain_runs_in_order(self):
         result = solve_from_json(self._base_input())
         assert result["status"] in {"OPTIMAL", "FEASIBLE"}
         assert len(result["assignments"]) == 2

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from solver.scheduler import solve_from_json
-from tests.conftest import TERMINAL_STATUSES, make_agent, make_solver_input, make_task
+from tests._helpers import TERMINAL_STATUSES, make_agent, make_solver_input, make_task
 
 _NUM_TASKS = 6
 _NUM_AGENTS = 3

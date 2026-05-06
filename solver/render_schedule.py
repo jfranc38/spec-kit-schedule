@@ -17,12 +17,14 @@ import os
 import sys
 from collections import defaultdict
 from itertools import pairwise
+from typing import Any
 
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = "solver"  # noqa: A001
 
-from .defaults import AGENT_COLORS
+from .defaults import AGENT_COLORS, CRITICAL_COLOR
+from .model.result_types import ScheduleResult  # noqa: F401  (schema doc — see render() docstring)
 
 __all__ = ["render", "main"]
 
@@ -32,17 +34,27 @@ def _mermaid_id(agent_id: str) -> str:
 
 
 def render(
-    data: dict,
+    data: dict[str, Any],
     feature_name: str,
     *,
     image_prefix: str | None = None,
 ) -> str:
     """Render solver output as schedule.md markdown.
 
+    The expected shape is :class:`solver.model.result_types.ScheduleResult`;
+    raw ``dict[str, Any]`` stays as the runtime annotation so legacy
+    callers don't have to import the TypedDict.
+
     If `image_prefix` is given, insert `![](…-dag.png)` / `…-gantt.png`
     references so consumers that cannot render Mermaid (printed reports,
     slide decks, some IDEs) still see the charts. Callers typically pass
-    e.g. `images/my-feature` after running `python -m solver.visualize`.
+    e.g. `images/my-feature` after running `python -m solver.visualize`,
+    which produces ``{prefix}-dag.{ext}`` and ``{prefix}-gantt.{ext}``.
+
+    Note: the HTML renderer (``solver.render_html``) deliberately omits
+    this knob — its output is a self-contained Plotly document, so
+    embedding pre-rendered PNGs would be redundant. Markdown can only
+    reference external images, hence the asymmetry.
     """
     stats = data.get("stats", {})
     assignments = data.get("assignments", [])
@@ -179,7 +191,7 @@ def render(
     lines.append("    axisFormat %s")
     lines.append("")
 
-    agent_tasks_map: dict[str, list[dict]] = defaultdict(list)
+    agent_tasks_map: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for a in assignments:
         agent_tasks_map[a["agent_id"]].append(a)
 
@@ -214,7 +226,9 @@ def render(
             f"    classDef {_mermaid_id(ag_id)} " f"fill:{color},color:#fff,stroke:{color}"
         )
     if critical_set:
-        lines.append("    classDef critical stroke:#D0021B,stroke-width:4px," "color:#fff")
+        lines.append(
+            f"    classDef critical stroke:{CRITICAL_COLOR},stroke-width:4px,color:#fff"
+        )
     lines.append("")
 
     drawn: set[tuple[str, str]] = set()

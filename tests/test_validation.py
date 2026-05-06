@@ -50,7 +50,7 @@ class TestFindCycle:
 
 
 class TestAgentConfig:
-    def test_happy_path(self):
+    def test_minimal_valid_agent_passes(self):
         validate_agent_config(
             {
                 "id": "a",
@@ -107,7 +107,7 @@ class TestSolverInput:
             "config": {},
         }
 
-    def test_happy_path(self):
+    def test_complete_input_passes_validation(self):
         validate_solver_input(self._base())
 
     def test_missing_top_level_key_raises(self):

@@ -28,9 +28,9 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
-import yaml
+import yaml  # type: ignore[import-untyped]  # PyYAML ships no type stubs by default
 
 from .config_schema import Config, load_config
 from .i18n import t
@@ -105,9 +105,11 @@ def _ema_update(old: float, raw_new: float, alpha: float) -> float:
     return old + alpha * (raw_new - old)
 
 
-def _load_runs(runs_path: Path, collector: WarningCollector) -> tuple[list[dict], int]:
+def _load_runs(
+    runs_path: Path, collector: WarningCollector
+) -> tuple[list[dict[str, Any]], int]:
     """Parse runs.jsonl and return (valid_rows, skipped_count)."""
-    valid: list[dict] = []
+    valid: list[dict[str, Any]] = []
     skipped = 0
     try:
         text = runs_path.read_text(encoding="utf-8")

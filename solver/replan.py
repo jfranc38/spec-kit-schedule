@@ -18,16 +18,18 @@ import sys
 import tempfile
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = "solver"  # noqa: A001
 
-import yaml
+import yaml  # type: ignore[import-untyped]  # PyYAML ships no type stubs by default
 
 from .i18n import t
+from .model.fixed import resolve_fixed_duration
 from .parse_tasks import parse_tasks_md
-from .scheduler import _resolve_fixed_duration, solve_with_fixed
+from .scheduler import solve_with_fixed
 from .validation import ScheduleInputError
 
 __all__ = ["replan", "main"]
@@ -66,9 +68,9 @@ def _reachable_non_completed(
 
 
 def _remove_completed(
-    solver_input: dict,
+    solver_input: dict[str, Any],
     completed_ids: set[str],
-) -> tuple[dict, int]:
+) -> tuple[dict[str, Any], int]:
     """Remove completed tasks and maintain transitive precedence.
 
     For each completed task C, all non-completed ancestors (reachable via
@@ -111,39 +113,39 @@ def _remove_completed(
 
 
 def _build_fixed_assignments(
-    prior_assignments: list[dict],
+    prior_assignments: list[dict[str, Any]],
     freeze_before: int,
     active_task_ids: set[str],
-) -> dict[str, dict]:
+) -> dict[str, dict[str, Any]]:
     """Return tasks from prior output whose start < freeze_before.
 
-    Propagates the prior duration via ``_resolve_fixed_duration`` so the
+    Propagates the prior duration via ``resolve_fixed_duration`` so the
     scheduler can pin the frozen task's duration as well as its start and
     agent — see ``_apply_fixed_constraints``.
     """
-    fixed: dict[str, dict] = {}
+    fixed: dict[str, dict[str, Any]] = {}
     for assn in prior_assignments:
         task_id = assn.get("task_id", "")
         if task_id not in active_task_ids:
             continue
         if assn.get("start", 0) < freeze_before:
-            entry: dict = {
+            entry: dict[str, Any] = {
                 "agent_id": assn["agent_id"],
                 "start": assn["start"],
             }
             if "duration" in assn or "end" in assn:
-                entry["duration"] = _resolve_fixed_duration(assn, None, task_id=task_id)
+                entry["duration"] = resolve_fixed_duration(assn, None, task_id=task_id)
             fixed[task_id] = entry
     return fixed
 
 
 def _build_prior_hints(
-    prior_assignments: list[dict],
+    prior_assignments: list[dict[str, Any]],
     fixed_ids: set[str],
     active_task_ids: set[str],
-) -> dict[str, dict]:
+) -> dict[str, dict[str, Any]]:
     """Return prior assignments as hints for non-fixed active tasks."""
-    hints: dict[str, dict] = {}
+    hints: dict[str, dict[str, Any]] = {}
     for assn in prior_assignments:
         task_id = assn.get("task_id", "")
         if task_id in fixed_ids or task_id not in active_task_ids:
@@ -161,11 +163,11 @@ def _build_prior_hints(
 
 
 def replan(
-    prior_output: dict,
-    solver_input: dict,
+    prior_output: dict[str, Any],
+    solver_input: dict[str, Any],
     freeze_before: int | None = None,
     completed_ids: set[str] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Incrementally replan from a prior solver output.
 
     Applies completed-task removal and freeze constraints, then delegates
@@ -175,7 +177,7 @@ def replan(
     The caller is responsible for setting ``stats["replan"]["added_count"]``
     and ``stats["replan"]["reused_from"]`` when additional context is known.
     """
-    prior_assignments: list[dict] = prior_output.get("assignments", [])
+    prior_assignments: list[dict[str, Any]] = prior_output.get("assignments", [])
 
     completed_count = 0
     if completed_ids:
@@ -183,7 +185,7 @@ def replan(
 
     active_task_ids = {task["id"] for task in solver_input["tasks"]}
 
-    fixed_assignments: dict[str, dict] = {}
+    fixed_assignments: dict[str, dict[str, Any]] = {}
     if freeze_before is not None:
         fixed_assignments = _build_fixed_assignments(
             prior_assignments, freeze_before, active_task_ids

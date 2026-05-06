@@ -145,6 +145,27 @@ REQUIRED_KEYS = [
     "phase1_infeasible_lb_exceeds_horizon",
     "phase1_infeasible_timeout",
     "replan_fixed_invalid_duration",
+    # validation.py
+    "validation_must_be_positive",
+    "validation_agent_config_errors",
+    "validation_agent_config_generic",
+    "validation_solver_config_errors",
+    "validation_solver_config_generic",
+    "validation_input_not_object",
+    "validation_input_missing_keys",
+    "validation_input_tasks_not_list",
+    "validation_input_edges_not_list",
+    "validation_input_agents_not_list",
+    "validation_input_config_not_object",
+    "validation_task_missing_id",
+    "validation_duplicate_task_id_input",
+    "validation_malformed_edge",
+    "validation_edge_unknown_task",
+    # wave_executor.py
+    "wave_exec_no_tasks_in_wave",
+    "wave_exec_wave_count_mismatch",
+    "wave_exec_no_agents",
+    "wave_exec_unknown_agent",
 ]
 
 # WARN_* constants must each map to a present catalog key.

@@ -129,18 +129,18 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "cost_scale_underflow": {
         "en": (
-            "Cost-aware signals collapsed to zero after integer scaling: "
-            "all per-task scaled costs round to 0 even though some agents "
-            "have price_per_1k_tokens > 0. The cost objective will not "
-            "discriminate between agents. Increase price_per_1k_tokens "
-            "values or raise the internal _COST_SCALE constant."
+            "Cost-aware scaling caused some task-cost coefficients to "
+            "underflow to 0 after integer rounding. Affected (task, agent) "
+            "pairs cannot be discriminated by the cost objective. Increase "
+            "price granularity (price_per_1k_tokens), check token estimates, "
+            "or raise the internal _COST_SCALE constant."
         ),
         "es": (
-            "Las señales de cost-aware colapsaron a cero tras el escalado entero: "
-            "todos los costos por tarea redondean a 0 aunque algunos agentes "
-            "tienen price_per_1k_tokens > 0. El objetivo de costo no podrá "
-            "diferenciar entre agentes. Aumente los valores de price_per_1k_tokens "
-            "o suba la constante interna _COST_SCALE."
+            "El escalado cost-aware provocó que algunos coeficientes de costo "
+            "por tarea se redondearan a 0. Los pares (tarea, agente) afectados "
+            "no pueden ser discriminados por el objetivo de costo. Aumente la "
+            "granularidad del precio (price_per_1k_tokens), revise las "
+            "estimaciones de tokens, o suba la constante interna _COST_SCALE."
         ),
     },
     "no_tasks_found": {
@@ -305,6 +305,90 @@ MESSAGES: dict[str, dict[str, str]] = {
             "horizon={horizon}, lb≈{lb}). "
             "Esto suele significar que se agotó el time_limit antes de probar "
             "factibilidad; considere aumentar time_limit o num_workers."
+        ),
+    },
+    # ── validation.py ─────────────────────────────────────────────────────────
+    "validation_must_be_positive": {
+        "en": "{name} must be > 0; got {value!r}",
+        "es": "{name} debe ser > 0; se recibió {value!r}",
+    },
+    "validation_agent_config_errors": {
+        "en": "{details}",
+        "es": "{details}",
+    },
+    "validation_agent_config_generic": {
+        "en": "agent config error: {error}",
+        "es": "error de configuración del agente: {error}",
+    },
+    "validation_solver_config_errors": {
+        "en": "{details}",
+        "es": "{details}",
+    },
+    "validation_solver_config_generic": {
+        "en": "solver config error: {error}",
+        "es": "error de configuración del solver: {error}",
+    },
+    "validation_input_not_object": {
+        "en": "Solver input must be a JSON object",
+        "es": "La entrada del solver debe ser un objeto JSON",
+    },
+    "validation_input_missing_keys": {
+        "en": "Solver input missing top-level keys: {missing}",
+        "es": "Faltan claves de nivel superior en la entrada del solver: {missing}",
+    },
+    "validation_input_tasks_not_list": {
+        "en": "Solver input 'tasks' must be a non-empty list",
+        "es": "El campo 'tasks' de la entrada del solver debe ser una lista no vacía",
+    },
+    "validation_input_edges_not_list": {
+        "en": "Solver input 'edges' must be a list",
+        "es": "El campo 'edges' de la entrada del solver debe ser una lista",
+    },
+    "validation_input_agents_not_list": {
+        "en": "Solver input 'agents' must be a non-empty list",
+        "es": "El campo 'agents' de la entrada del solver debe ser una lista no vacía",
+    },
+    "validation_input_config_not_object": {
+        "en": "Solver input 'config' must be an object",
+        "es": "El campo 'config' de la entrada del solver debe ser un objeto",
+    },
+    "validation_task_missing_id": {
+        "en": "Task missing 'id': {task}",
+        "es": "Tarea sin 'id': {task}",
+    },
+    "validation_duplicate_task_id_input": {
+        "en": "Duplicate task id in solver input: {task_id}",
+        "es": "ID de tarea duplicado en la entrada del solver: {task_id}",
+    },
+    "validation_malformed_edge": {
+        "en": "Malformed edge (expected [src_id, dst_id]): {edge}",
+        "es": "Arista mal formada (se esperaba [src_id, dst_id]): {edge}",
+    },
+    "validation_edge_unknown_task": {
+        "en": "Edge references unknown task id {task_id!r}",
+        "es": "La arista referencia un id de tarea desconocido {task_id!r}",
+    },
+    # ── wave_executor.py ──────────────────────────────────────────────────────
+    "wave_exec_no_tasks_in_wave": {
+        "en": "Wave {index} (t={start_time}) in {path} has no parseable tasks",
+        "es": "La wave {index} (t={start_time}) en {path} no tiene tareas analizables",
+    },
+    "wave_exec_wave_count_mismatch": {
+        "en": "Metadata declares {declared} waves but {parsed} were parsed in {path}",
+        "es": "Los metadatos declaran {declared} waves pero se analizaron {parsed} en {path}",
+    },
+    "wave_exec_no_agents": {
+        "en": "No agent headings found in {path}",
+        "es": "No se encontraron encabezados de agentes en {path}",
+    },
+    "wave_exec_unknown_agent": {
+        "en": (
+            "Task {task_id} references unknown agent {agent_id!r} not in agent "
+            "assignments section"
+        ),
+        "es": (
+            "La tarea {task_id} referencia un agente desconocido {agent_id!r} que no "
+            "está en la sección de asignaciones de agentes"
         ),
     },
 }

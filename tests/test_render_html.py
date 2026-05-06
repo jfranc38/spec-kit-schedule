@@ -197,11 +197,10 @@ def test_render_dag_section_present():
     assert "DAG" in result
 
 
-def test_render_image_prefix_ignored():
-    """image_prefix is accepted for API parity but has no effect in HTML."""
-    r1 = render(_minimal_data(), "feat")
-    r2 = render(_minimal_data(), "feat", image_prefix="images/test")
-    assert r1 == r2
+def test_render_default_uses_cdn_plotly():
+    """Default ``inline_plotly=False`` should ship the CDN script tag."""
+    out = render(_minimal_data(), "feat")
+    assert "cdn.plot.ly" in out
 
 
 def test_render_two_agents():

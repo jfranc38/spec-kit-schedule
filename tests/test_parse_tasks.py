@@ -34,7 +34,7 @@ class TestInferSkill:
 
 
 class TestClassifyComplexity:
-    def test_happy_path(self):
+    def test_known_verb_classified_to_simple(self):
         verbs = {"simple": ["add"], "medium": ["implement"], "complex": [], "review": []}
         assert classify_complexity("Add", verbs) == "simple"
 

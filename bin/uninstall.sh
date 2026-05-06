@@ -20,10 +20,7 @@
 #   - Only removes ./.venv if --purge is passed AND .venv exists.
 #   - Never touches the user's source files, config, or git state.
 
-set -eu
-# Enable pipefail when running under bash for safer pipelines.
-# shellcheck disable=SC3040
-(set -o pipefail) 2>/dev/null && set -o pipefail || true
+set -euo pipefail
 
 PROG="$(basename "$0")"
 

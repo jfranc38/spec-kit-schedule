@@ -7,13 +7,16 @@ and parser defaults to drift in the past — do not reintroduce that.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from types import MappingProxyType
+from typing import Any
 
 __all__ = [
     "TOKEN_ESTIMATES",
     "COMPLEXITY_VERBS",
     "DEFAULT_SKILL",
     "TOKEN_UNIT",
+    "TOKENS_PER_KILOTOKEN",
     "HORIZON_MULTIPLIER",
     "TIME_LIMIT_SECONDS",
     "NUM_WORKERS",
@@ -21,12 +24,16 @@ __all__ = [
     "CONTEXT_BUDGET_KTOKENS_DEFAULT",
     "SPEED_FACTOR_DEFAULT",
     "MAKESPAN_WEIGHT",
+    "COST_WEIGHT_DEFAULT",
     "OBJECTIVE",
     "STOCHASTIC_QUANTILE_DEFAULT",
     "ANYTIME_DEFAULT",
+    "RANDOM_SEED_DEFAULT",
+    "STORY_PRIORITY_DEFAULT",
     "AGENT_COLORS",
     "CRITICAL_COLOR",
     "CRITICAL_HATCH",
+    "palette_for",
 ]
 
 
@@ -145,11 +152,19 @@ COMPLEXITY_VERBS: dict[str, list[str]] = {
 DEFAULT_SKILL = "backend"
 
 TOKEN_UNIT = 100
+# Conversion factor between raw tokens and the per-1k pricing units used by
+# agent ``price_per_1k_tokens``. A small constant, but giving it a name keeps
+# cost arithmetic readable everywhere it appears.
+TOKENS_PER_KILOTOKEN = 1000
 HORIZON_MULTIPLIER = 1.5
 
 TIME_LIMIT_SECONDS = 60
 NUM_WORKERS = 8
 MAKESPAN_WEIGHT = 100
+# Weight on the cost term when the objective references it. Default is 0
+# because the canonical objective is lexicographic; cost-aware enables the
+# term explicitly.
+COST_WEIGHT_DEFAULT = 0
 OBJECTIVE = "lexicographic"
 
 KAPPA_DEFAULT = 10
@@ -157,3 +172,29 @@ CONTEXT_BUDGET_KTOKENS_DEFAULT = 16
 SPEED_FACTOR_DEFAULT = 1.0
 STOCHASTIC_QUANTILE_DEFAULT = 0.5
 ANYTIME_DEFAULT = False
+# CP-SAT random seed. Constant by default so reruns of the same model are
+# reproducible; callers that want exploration can override.
+RANDOM_SEED_DEFAULT = 42
+# Sentinel priority for tasks not pinned to a user story. Higher = lower
+# priority in the heuristic's tiebreak order.
+STORY_PRIORITY_DEFAULT = 99
+
+
+def palette_for(
+    assignments: Iterable[dict[str, Any]],
+) -> tuple[list[str], dict[str, str]]:
+    """Return ``(agents_sorted, color_by_agent)`` for the renderers.
+
+    Shared by ``solver.visualize`` (matplotlib DAG + Gantt) and
+    ``solver.render_html`` (Plotly figures) so both views colour each
+    agent identically when a schedule is rendered to multiple formats.
+
+    The agent list is alphabetically sorted because the renderers using
+    this helper iterate over agents in row order; sort keeps that order
+    deterministic and stable across runs.
+    """
+    agents_sorted = sorted({a["agent_id"] for a in assignments})
+    color_by_agent = {
+        ag: AGENT_COLORS[i % len(AGENT_COLORS)] for i, ag in enumerate(agents_sorted)
+    }
+    return agents_sorted, color_by_agent

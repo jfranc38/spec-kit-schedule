@@ -5,8 +5,8 @@ Gantt and DAG charts. No external image files required.
 
 Usage
 -----
-    python -m solver.render_html out.json <feature> [--image-prefix prefix]
-        [--inline-plotly] > schedule.html
+    python -m solver.render_html out.json <feature> [--inline-plotly]
+        > schedule.html
 """
 
 from __future__ import annotations
@@ -19,14 +19,30 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from itertools import pairwise
+from typing import Any
 
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = "solver"  # noqa: A001
 
-from .defaults import AGENT_COLORS, CRITICAL_COLOR
+from .defaults import AGENT_COLORS, CRITICAL_COLOR, palette_for
+from .model.build import cost_dollars
+from .model.result_types import ScheduleResult  # noqa: F401  (schema doc — see render() docstring)
 
 __all__ = ["render", "main"]
+
+# Plotly figure dimensions (Gantt chart). Centralised so the renderer
+# can be tuned without hunting through the chart-builder body.
+_GANTT_MIN_HEIGHT = 300
+_GANTT_PER_AGENT_HEIGHT = 80
+_GANTT_BAR_WIDTH = 0.55
+_GANTT_MARGIN_T = 60
+_GANTT_MARGIN_R = 20
+_GANTT_MARGIN_B = 60
+_GANTT_MARGIN_L = 120
+# Extra title-area padding included in the height calculation so the
+# top margin doesn't crowd a one-row Gantt.
+_GANTT_TITLE_PAD = 120
 
 _FALLBACK_COLOR = "#888888"
 _RESOURCE_EDGE_COLOR = "#999999"
@@ -62,7 +78,7 @@ def _color_for_agent(agent_id: str, agents_sorted: list[str]) -> str:
 # HTML section builders (pure string; no plotly dependency)
 # ---------------------------------------------------------------------------
 
-def _header_html(data: dict, feature_name: str) -> str:
+def _header_html(data: dict[str, Any], feature_name: str) -> str:
     stats = data.get("stats", {})
     status = stats.get("status", data.get("status", "UNKNOWN"))
     makespan = stats.get("makespan", "?")
@@ -89,7 +105,7 @@ def _header_html(data: dict, feature_name: str) -> str:
 """
 
 
-def _warnings_html(data: dict) -> str:
+def _warnings_html(data: dict[str, Any]) -> str:
     warnings = data.get("warnings", [])
     if not warnings:
         return ""
@@ -111,10 +127,10 @@ def _warnings_html(data: dict) -> str:
 """
 
 
-def _agent_assignments_html(data: dict, agents_sorted: list[str]) -> str:
+def _agent_assignments_html(data: dict[str, Any], agents_sorted: list[str]) -> str:
     assignments = data.get("assignments", [])
     agent_summary = data.get("agent_summary", [])
-    by_agent: dict[str, list[dict]] = defaultdict(list)
+    by_agent: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for a in assignments:
         by_agent[a["agent_id"]].append(a)
 
@@ -158,7 +174,7 @@ def _agent_assignments_html(data: dict, agents_sorted: list[str]) -> str:
 """
 
 
-def _waves_html(data: dict) -> str:
+def _waves_html(data: dict[str, Any]) -> str:
     waves = data.get("waves", [])
     if not waves:
         return ""
@@ -199,7 +215,7 @@ def _waves_html(data: dict) -> str:
 """
 
 
-def _critical_path_html(data: dict) -> str:
+def _critical_path_html(data: dict[str, Any]) -> str:
     critical_path: list[str] = data.get("critical_path", [])
     if not critical_path:
         return ""
@@ -237,7 +253,7 @@ def _critical_path_html(data: dict) -> str:
 """
 
 
-def _stats_html(data: dict) -> str:
+def _stats_html(data: dict[str, Any]) -> str:
     stats = data.get("stats", {})
     max_load = stats.get("max_load")
     min_load = stats.get("min_load")
@@ -280,10 +296,10 @@ def _stats_html(data: dict) -> str:
 # Plotly chart builders
 # ---------------------------------------------------------------------------
 
-def _build_gantt_figure(data: dict, agents_sorted: list[str]) -> object:
+def _build_gantt_figure(data: dict[str, Any], agents_sorted: list[str]) -> object:
     """Return a plotly Figure for the Gantt chart."""
     _require_plotly()
-    import plotly.graph_objects as go  # type: ignore[import]
+    import plotly.graph_objects as go
 
     assignments = data.get("assignments", [])
     critical_set = set(data.get("critical_path", []))
@@ -309,7 +325,7 @@ def _build_gantt_figure(data: dict, agents_sorted: list[str]) -> object:
         color = _color_for_agent(agent_id, agents_sorted)
         tokens = a.get("tokens", 0)
         price = price_by_agent.get(agent_id, 0.0)
-        cost_str = f"${tokens * price / 1000:.4f}" if price > 0 else "n/a"
+        cost_str = f"${cost_dollars(tokens, price):.4f}" if price > 0 else "n/a"
         files_str = ", ".join(a.get("file_paths", []))
         hover = (
             f"<b>{a['task_id']}</b><br>"
@@ -321,7 +337,7 @@ def _build_gantt_figure(data: dict, agents_sorted: list[str]) -> object:
             f"Critical: {'yes' if is_crit else 'no'}<br>"
             f"Cost: {cost_str}"
         )
-        marker: dict = {
+        marker: dict[str, Any] = {
             "color": color,
             "line": {
                 "color": _CRITICAL_BORDER_COLOR if is_crit else "#333333",
@@ -343,7 +359,7 @@ def _build_gantt_figure(data: dict, agents_sorted: list[str]) -> object:
             hovertemplate=hover + "<extra></extra>",
             marker=marker,
             showlegend=False,
-            width=0.55,
+            width=_GANTT_BAR_WIDTH,
         ))
 
     fig = go.Figure(data=traces)
@@ -356,9 +372,17 @@ def _build_gantt_figure(data: dict, agents_sorted: list[str]) -> object:
             "autorange": "reversed",
         },
         barmode="overlay",
-        height=max(300, len(agents_sorted) * 80 + 120),
+        height=max(
+            _GANTT_MIN_HEIGHT,
+            len(agents_sorted) * _GANTT_PER_AGENT_HEIGHT + _GANTT_TITLE_PAD,
+        ),
         template="plotly_white",
-        margin={"l": 120, "r": 20, "t": 60, "b": 60},
+        margin={
+            "l": _GANTT_MARGIN_L,
+            "r": _GANTT_MARGIN_R,
+            "t": _GANTT_MARGIN_T,
+            "b": _GANTT_MARGIN_B,
+        },
         legend_title="Legend",
     )
     # Legend items for agents
@@ -417,10 +441,10 @@ def _hierarchical_positions(
     return pos
 
 
-def _build_dag_figure(data: dict, agents_sorted: list[str]) -> object:
+def _build_dag_figure(data: dict[str, Any], agents_sorted: list[str]) -> object:
     """Return a plotly Figure for the dependency DAG."""
     _require_plotly()
-    import plotly.graph_objects as go  # type: ignore[import]
+    import plotly.graph_objects as go
 
     assignments = data.get("assignments", [])
     parser_edges = [(e[0], e[1]) for e in data.get("edges", [])]
@@ -545,10 +569,9 @@ def _build_dag_figure(data: dict, agents_sorted: list[str]) -> object:
 # ---------------------------------------------------------------------------
 
 def render(
-    data: dict,
+    data: dict[str, Any],
     feature_name: str,
     *,
-    image_prefix: str | None = None,
     inline_plotly: bool = False,
 ) -> str:
     """Render solver output as a self-contained HTML string.
@@ -556,21 +579,23 @@ def render(
     Parameters
     ----------
     data:
-        Solver output dict (same contract as render_schedule.render).
+        Solver output dict. The expected shape is
+        :class:`solver.model.result_types.ScheduleResult` — every key the
+        renderer reads is documented there. The annotation stays as
+        ``dict[str, Any]`` because mypy's TypedDict variance rules block
+        passing a ``ScheduleResult`` value to helpers expecting
+        ``dict[str, Any]``; treat ``ScheduleResult`` as the schema doc.
     feature_name:
         Human-readable feature name shown in the header.
-    image_prefix:
-        Unused in the HTML renderer (kept for API parity with
-        render_schedule.render). Ignored silently.
     inline_plotly:
         When True, embed the full plotly.js bundle (~4 MB) so the file
         works fully offline. When False (default), load from CDN.
     """
     _require_plotly()
-    import plotly.io as pio  # type: ignore[import]
+    import plotly.io as pio
 
     assignments = data.get("assignments", [])
-    agents_sorted = sorted({a["agent_id"] for a in assignments})
+    agents_sorted, _color_by_agent = palette_for(assignments)
 
     # Build HTML sections
     header = _header_html(data, feature_name)
@@ -676,11 +701,6 @@ def _build_argparser() -> argparse.ArgumentParser:
     ap.add_argument("input", help="Path to solver output JSON")
     ap.add_argument("feature_name")
     ap.add_argument(
-        "--image-prefix",
-        default=None,
-        help="Accepted for API parity; not used in HTML output.",
-    )
-    ap.add_argument(
         "--inline-plotly",
         action="store_true",
         default=False,
@@ -697,7 +717,6 @@ def main(argv: list[str] | None = None) -> int:
         html_out = render(
             data,
             args.feature_name,
-            image_prefix=args.image_prefix,
             inline_plotly=args.inline_plotly,
         )
     except ImportError as exc:

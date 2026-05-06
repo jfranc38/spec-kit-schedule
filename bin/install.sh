@@ -45,6 +45,9 @@ smoke_test() {
   log "running smoke test against docs/example-tasks.md ..."
   local tmp
   tmp="$(mktemp -d)"
+  # trap RETURN runs on function exit; the wc -l below completes first
+  # because it's part of the function body, not the trap itself, so the
+  # tmpdir is still present when the line count is read.
   trap 'rm -rf "$tmp"' RETURN
   "${RUNNER[@]}" python -m solver.parse_tasks docs/example-tasks.md docs/example-config.yml > "$tmp/in.json"
   "${RUNNER[@]}" python -m solver.scheduler < "$tmp/in.json" > "$tmp/out.json"

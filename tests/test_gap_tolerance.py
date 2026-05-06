@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from solver.scheduler import solve_from_json
-from tests.conftest import TERMINAL_STATUSES, make_chain_problem
+from tests._helpers import TERMINAL_STATUSES, make_chain_problem
 
 
 def _problem(n_tasks: int = 8, **config_overrides: object) -> dict:

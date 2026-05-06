@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from solver.config_schema import AgentConfig, TokenEstimate
 from solver.i18n_catalog import WARN_COST_SCALE_UNDERFLOW
 from solver.scheduler import solve_from_json
-from tests.conftest import make_agent, make_solver_input, make_task
+from tests._helpers import make_agent, make_solver_input, make_task
 
 
 def _agent(**overrides) -> dict:

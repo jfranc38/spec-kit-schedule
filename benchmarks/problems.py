@@ -239,7 +239,9 @@ def generate(*, size: str, seed: int = 42) -> dict:
         "agents": agents,
         "config": {
             "time_limit": 60,
-            "num_workers": 1,
+            # Worker count is intentionally omitted: the benchmark runner
+            # injects it (default = solver.defaults.NUM_WORKERS = 8) and
+            # exposes a --num-workers axis for scaling experiments.
             "objective": "lexicographic",
             "warm_start": True,
         },

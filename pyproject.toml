@@ -59,6 +59,7 @@ dev = [
     "ruff>=0.5",
     "mypy>=1.10",
     "pre-commit>=3.6",
+    "hypothesis>=6,<7",
 ]
 viz = [
     "matplotlib>=3.7,<4",
@@ -117,23 +118,3 @@ disallow_untyped_defs = true
 warn_return_any = true
 strict_equality = true
 ignore_missing_imports = true
-
-# Pre-existing modules not in scope for v0.5.0 strict clean-up.
-# Each override uses the minimum relaxation needed to keep CI green while
-# the relevant module owner migrates incrementally.
-[[tool.mypy.overrides]]
-module = [
-    "solver.validation",
-    "solver.config_schema",
-    "solver.render_schedule",
-    "solver.render_html",
-    "solver.wave_executor",
-    "solver.autodetect",
-    "solver.calibrate",
-    "solver.replan",
-    "solver.visualize",
-]
-disallow_untyped_defs = false
-warn_return_any = false
-warn_unused_ignores = false
-disable_error_code = ["type-arg", "no-untyped-def", "no-untyped-call", "arg-type", "return-value", "assignment", "import-untyped", "union-attr", "unused-ignore", "no-any-return", "attr-defined", "dict-item", "misc", "index"]
