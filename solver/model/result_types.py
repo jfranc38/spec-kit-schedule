@@ -5,6 +5,13 @@ The renderers (markdown, HTML, image) consume the same JSON dict that
 that contract so renderer entry points cannot drift from the solver schema
 and so future renderer authors have one place to look up the keys.
 
+Documentation-only: implementations across the package return
+``dict[str, Any]`` because mypy's TypedDict-vs-``dict[str, Any]`` variance
+rules reject the literal envelopes built inside ``_finalize_result`` (the
+inner ``stats`` is a plain dict and the ``Stats`` TypedDict slot does not
+accept it). Treat ``ScheduleResult`` as the schema reference; the runtime
+annotation stays as ``dict[str, Any]`` end-to-end.
+
 Defined as a :class:`TypedDict` (``total=False``) so legacy callers that build
 the dict piecemeal keep type-checking; the keys listed here document what
 every renderer is allowed to read.

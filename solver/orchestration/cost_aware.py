@@ -7,7 +7,6 @@ fallback warning when the next phase fails to find a solution in time.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from ortools.sat.python import cp_model
@@ -19,14 +18,11 @@ from ..i18n_catalog import (
     WARN_PHASE3_FALLBACK,
 )
 from ..model.types import Agent, SolverConfig, Task
-from ..result.extract import _finalize_result
 from ..warnings_collector import WarningCollector
 from . import runner
 
 if TYPE_CHECKING:
     from ..model.build import ModelBundle
-
-log = logging.getLogger(__name__)
 
 
 def _solve_cost_aware(
@@ -47,11 +43,8 @@ def _solve_cost_aware(
     if _cost_signals_underflowed(tasks, agents, compat):
         warnings.add(WARN_COST_SCALE_UNDERFLOW, t(WARN_COST_SCALE_UNDERFLOW))
 
-    solver1, status1, _cb = runner._solve_phase1_makespan(bundle, config, stats, warnings)
-    log.info(
-        "phase=1 status=%s elapsed=%.2fs",
-        solver1.status_name(status1),
-        stats.get("phase1_time", 0.0),
+    solver1, status1, elapsed1 = runner._solve_phase1_makespan(
+        bundle, config, stats, warnings
     )
 
     if status1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -63,23 +56,17 @@ def _solve_cost_aware(
             warnings=warnings,
         )
 
-    ms_star = solver1.value(bundle.makespan)
-    stats["makespan_phase1"] = ms_star
-
     # Phase 2: freeze makespan (== for tighter bound propagation), minimise cost.
-    bundle.model.add(bundle.makespan == ms_star)
-    elapsed1 = float(stats.get("phase1_time", 0.0))
-    solver2, status2, elapsed2 = runner._run_phase(
+    solver2, status2, elapsed2 = runner._freeze_makespan_and_run_phase2(
         bundle,
+        solver1,
+        status1,
         config,
-        phase=2,
         minimize_expr=bundle.total_cost,
-        fallback_solver=solver1,
-        fallback_status=status1,
+        fallback_warning_code=WARN_PHASE2_FALLBACK,
         stats=stats,
         warnings=warnings,
-        fallback_warning_code=WARN_PHASE2_FALLBACK,
-        elapsed_so_far=elapsed1,
+        elapsed1=elapsed1,
         tasks=tasks,
         compat=compat,
     )
@@ -88,9 +75,9 @@ def _solve_cost_aware(
     # the cost objective never converged, so there's no point posting
     # ``total_cost == cost_star`` for Phase 3 — finalise here instead.
     if status2 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        stats["total_solve_time"] = round(elapsed1 + elapsed2, 2)
-        return _finalize_result(
-            solver2, bundle, tasks, edges, agents, compat, stats, status2, warnings
+        return runner._finalize_with_total_time(
+            solver2, bundle, tasks, edges, agents, compat, stats, status2, warnings,
+            elapsed_total=elapsed1 + elapsed2,
         )
 
     cost_star = solver2.value(bundle.total_cost)
@@ -111,9 +98,8 @@ def _solve_cost_aware(
         tasks=tasks,
         compat=compat,
     )
-    stats["total_solve_time"] = round(elapsed1 + elapsed2 + elapsed3, 2)
 
-    return _finalize_result(
+    return runner._finalize_with_total_time(
         solver_final,
         bundle,
         tasks,
@@ -123,4 +109,5 @@ def _solve_cost_aware(
         stats,
         final_status,
         warnings,
+        elapsed_total=elapsed1 + elapsed2 + elapsed3,
     )

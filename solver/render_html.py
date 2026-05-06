@@ -25,7 +25,15 @@ if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = "solver"  # noqa: A001
 
-from .defaults import AGENT_COLORS, CRITICAL_COLOR, palette_for
+from ._render_helpers import format_agent_model_label, task_label
+from .defaults import (
+    AGENT_COLORS,
+    CRITICAL_COLOR,
+    STATUS_FEASIBLE,
+    STATUS_OPTIMAL,
+    STATUS_UNKNOWN,
+    palette_for,
+)
 from .model.build import cost_dollars
 from .model.result_types import ScheduleResult  # noqa: F401  (schema doc — see render() docstring)
 
@@ -80,13 +88,13 @@ def _color_for_agent(agent_id: str, agents_sorted: list[str]) -> str:
 
 def _header_html(data: dict[str, Any], feature_name: str) -> str:
     stats = data.get("stats", {})
-    status = stats.get("status", data.get("status", "UNKNOWN"))
+    status = stats.get("status", data.get("status", STATUS_UNKNOWN))
     makespan = stats.get("makespan", "?")
     waves = stats.get("total_waves", "?")
     agents = stats.get("total_agents", "?")
     ts = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    badge_color = "#2ecc71" if "OPTIMAL" in str(status) else (
-        "#f39c12" if "FEASIBLE" in str(status) else "#e74c3c"
+    badge_color = "#2ecc71" if STATUS_OPTIMAL in str(status) else (
+        "#f39c12" if STATUS_FEASIBLE in str(status) else "#e74c3c"
     )
     return f"""
 <div class="card header-card">
@@ -141,16 +149,14 @@ def _agent_assignments_html(data: dict[str, Any], agents_sorted: list[str]) -> s
         summary = summary_by_id.get(agent_id, {})
         budget_pct = summary.get("budget_utilization", 0)
         kappa_pct = summary.get("kappa_utilization", 0)
-        model = summary.get("model", "?")
-        provider = summary.get("provider")
-        model_label = f"{_esc(model)} &middot; {_esc(provider)}" if provider else _esc(model)
+        model_label = format_agent_model_label(summary, sep="&middot;", esc=_esc)
         task_count = summary.get("task_count", 0)
         total_tokens = summary.get("total_tokens", 0)
 
         task_items = []
         for t in sorted(by_agent.get(agent_id, []), key=lambda x: x["start"]):
             files = ", ".join(f"<code>{_esc(f)}</code>" for f in t.get("file_paths", []))
-            label = t.get("story_id") or t.get("phase", "?")
+            label = task_label(t)
             task_items.append(
                 f"<li><strong>{_esc(t['task_id'])}</strong> "
                 f"[{_esc(label)}] "

@@ -20,6 +20,7 @@ from ..defaults import (
     STOCHASTIC_QUANTILE_DEFAULT,
     TIME_LIMIT_SECONDS,
     TOKEN_UNIT,
+    ObjectiveMode,
 )
 
 # Per-(task_index, agent_index) processing time in time units.
@@ -60,7 +61,7 @@ class Agent:
 
 @dataclass
 class SolverConfig:
-    objective: str = OBJECTIVE
+    objective: ObjectiveMode = OBJECTIVE
     makespan_weight: int = MAKESPAN_WEIGHT
     cost_weight: int = COST_WEIGHT_DEFAULT
     time_limit: int = TIME_LIMIT_SECONDS

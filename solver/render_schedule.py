@@ -23,6 +23,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = "solver"  # noqa: A001
 
+from ._render_helpers import format_agent_model_label, task_label
 from .defaults import AGENT_COLORS, CRITICAL_COLOR
 from .model.result_types import ScheduleResult  # noqa: F401  (schema doc — see render() docstring)
 
@@ -109,8 +110,7 @@ def render(
     for ag in agent_summary:
         budget_pct = ag.get("budget_utilization", 0)
         kappa_pct = ag.get("kappa_utilization", 0)
-        provider = ag.get("provider")
-        model_label = f"{ag['model']} · {provider}" if provider else ag["model"]
+        model_label = format_agent_model_label(ag)
         lines.append(
             f"### {ag['agent_id']} ({model_label}) — "
             f"{ag['task_count']} tasks, "
@@ -122,7 +122,7 @@ def render(
         agent_tasks.sort(key=lambda t: t["start"])
         for t in agent_tasks:
             files = ", ".join(f"`{f}`" for f in t.get("file_paths", []))
-            label = t.get("story_id") or t.get("phase", "?")
+            label = task_label(t)
             lines.append(f"- **{t['task_id']}** [{label}] t={t['start']}→{t['end']} | {files}")
         lines.append("")
 
@@ -141,7 +141,7 @@ def render(
         lines.append("|------|-------|----------|-------|-------|")
         for t in wave_tasks:
             files = ", ".join(f"`{f}`" for f in t.get("file_paths", []))
-            label = t.get("story_id") or t.get("phase", "?")
+            label = task_label(t)
             lines.append(
                 f"| {t['task_id']} | {t['agent_id']} | {t['duration']} | " f"{files} | {label} |"
             )

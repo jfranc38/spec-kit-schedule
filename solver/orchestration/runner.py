@@ -15,9 +15,10 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from ortools.sat.python import cp_model
 
+from ..defaults import STATUS_INFEASIBLE
 from ..i18n import t
 from ..i18n_catalog import WARN_ANYTIME_TIMEOUT
-from ..model.types import SolverConfig, Task
+from ..model.types import Agent, SolverConfig, Task
 from ..warnings_collector import WarningCollector
 
 if TYPE_CHECKING:
@@ -26,9 +27,10 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-# Threshold below which the objective is treated as zero for gap computation.
-# Objectives this small (after CP-SAT's integer scaling) make ``|obj-bound|/|obj|``
-# numerically unstable; reporting the gap as ``0.0`` is the documented behaviour.
+# Threshold below which the relative gap is reported as 0.0 (avoids division
+# by near-zero). Objectives this small (after CP-SAT's integer scaling) make
+# ``|obj-bound|/|obj|`` numerically unstable; reporting the gap as ``0.0`` is
+# the documented behaviour.
 _GAP_OBJ_EPSILON = 1e-9
 
 
@@ -174,7 +176,7 @@ def _phase1_infeasible_envelope(
     warnings).
     """
     return {
-        "status": "INFEASIBLE",
+        "status": STATUS_INFEASIBLE,
         "message": _phase1_infeasible_message(solver1, status1, horizon=horizon),
         "stats": stats,
         "warnings": warnings.as_list(),
@@ -186,8 +188,15 @@ def _solve_phase1_makespan(
     config: SolverConfig,
     stats: dict[str, Any],
     warnings: WarningCollector,
-) -> tuple[cp_model.CpSolver, cp_model.CpSolverStatus, _AnytimeCallback | None]:
-    """Phase 1 shared by lexicographic and cost_aware: minimise makespan."""
+) -> tuple[cp_model.CpSolver, cp_model.CpSolverStatus, float]:
+    """Phase 1 shared by lexicographic and cost_aware: minimise makespan.
+
+    Returns ``(solver, status, elapsed)``. The elapsed time is also recorded
+    on ``stats["phase1_time"]`` (rounded to 2 dp) for display, but the raw
+    value is returned so callers can sum across phases without rounding loss.
+    Logs a single ``phase=1`` line so both orchestration modules share the
+    same diagnostic format.
+    """
     bundle.model.minimize(bundle.makespan)
     callback: _AnytimeCallback | None = None
     if config.anytime:
@@ -200,7 +209,18 @@ def _solve_phase1_makespan(
     if status1 == cp_model.FEASIBLE and callback is not None:
         stats["final_gap"] = _compute_gap(solver1)
         warnings.add(WARN_ANYTIME_TIMEOUT, t(WARN_ANYTIME_TIMEOUT))
-    return solver1, status1, callback
+    gap = (
+        _compute_gap(solver1)
+        if status1 in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+        else 0.0
+    )
+    log.info(
+        "phase=1 status=%s elapsed=%.2fs gap=%.6f",
+        solver1.status_name(status1),
+        elapsed1,
+        gap,
+    )
+    return solver1, status1, elapsed1
 
 
 def _run_phase(
@@ -265,3 +285,71 @@ def _run_phase(
     return fallback_solver, fallback_status, elapsed_phase
 
 
+def _freeze_makespan_and_run_phase2(
+    bundle: ModelBundle,
+    solver1: cp_model.CpSolver,
+    status1: cp_model.CpSolverStatus,
+    config: SolverConfig,
+    *,
+    minimize_expr: Any,
+    fallback_warning_code: str,
+    stats: dict[str, Any],
+    warnings: WarningCollector,
+    elapsed1: float,
+    tasks: list[Task],
+    compat: dict[int, list[int]],
+) -> tuple[cp_model.CpSolver, cp_model.CpSolverStatus, float]:
+    """Pin Phase 1's optimal makespan and run Phase 2 with ``minimize_expr``.
+
+    Both lexicographic and cost-aware orchestrations enter Phase 2 by
+    freezing the optimal makespan (``==`` for tight bound propagation) and
+    then handing off to :func:`_run_phase`. Centralising the pin and the
+    bookkeeping (``makespan_phase1`` stat, elapsed_so_far accounting) keeps
+    the two callers identical at the freeze boundary.
+    """
+    ms_star = solver1.value(bundle.makespan)
+    stats["makespan_phase1"] = ms_star
+    bundle.model.add(bundle.makespan == ms_star)
+    return _run_phase(
+        bundle,
+        config,
+        phase=2,
+        minimize_expr=minimize_expr,
+        fallback_solver=solver1,
+        fallback_status=status1,
+        stats=stats,
+        warnings=warnings,
+        fallback_warning_code=fallback_warning_code,
+        elapsed_so_far=elapsed1,
+        tasks=tasks,
+        compat=compat,
+    )
+
+
+def _finalize_with_total_time(
+    solver: cp_model.CpSolver,
+    bundle: ModelBundle,
+    tasks: list[Task],
+    edges: list[tuple[int, int]],
+    agents: list[Agent],
+    compat: dict[int, list[int]],
+    stats: dict[str, Any],
+    status: cp_model.CpSolverStatus,
+    warnings: WarningCollector,
+    *,
+    elapsed_total: float,
+) -> dict[str, Any]:
+    """Stamp ``stats["total_solve_time"]`` and call :func:`_finalize_result`.
+
+    Centralises the ``round(elapsed_total, 2)`` convention used at every
+    final-result return site in the orchestration modules so the rounding
+    can't drift between lex.py and cost_aware.py.
+    """
+    # Local import keeps runner.py free of result.* coupling at module load
+    # (same rationale as the import inside ``_run_phase``).
+    from ..result.extract import _finalize_result
+
+    stats["total_solve_time"] = round(elapsed_total, 2)
+    return _finalize_result(
+        solver, bundle, tasks, edges, agents, compat, stats, status, warnings
+    )

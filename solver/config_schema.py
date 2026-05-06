@@ -18,7 +18,7 @@ __all__ = [
 
 import logging
 from pathlib import Path
-from typing import Annotated, Literal, cast
+from typing import Annotated
 
 import yaml  # type: ignore[import-untyped]  # PyYAML ships no type stubs by default
 from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, PositiveInt, field_validator
@@ -33,6 +33,7 @@ from .defaults import (
     RANDOM_SEED_DEFAULT,
     TIME_LIMIT_SECONDS,
     TOKEN_UNIT,
+    ObjectiveMode,
 )
 from .validation import ScheduleInputError
 
@@ -86,11 +87,9 @@ class SolverOptions(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # ``OBJECTIVE`` is a plain ``str`` constant; cast tells mypy the value
-    # always matches the Literal at runtime (validated by config_schema).
-    objective: Literal["lexicographic", "weighted", "cost_aware"] = cast(
-        Literal["lexicographic", "weighted", "cost_aware"], OBJECTIVE
-    )
+    # ``ObjectiveMode`` is the canonical Literal; ``OBJECTIVE`` is one of the
+    # three values, so the assignment type-checks without a cast.
+    objective: ObjectiveMode = OBJECTIVE
     makespan_weight: PositiveInt = MAKESPAN_WEIGHT
     cost_weight: NonNegativeInt = COST_WEIGHT_DEFAULT
     time_limit: PositiveInt = TIME_LIMIT_SECONDS

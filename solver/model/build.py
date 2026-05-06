@@ -24,7 +24,7 @@ from typing import Any
 import networkx as nx
 from ortools.sat.python import cp_model
 
-from ..defaults import TOKENS_PER_KILOTOKEN
+from ..defaults import OBJECTIVE_COST_AWARE, TOKENS_PER_KILOTOKEN
 from ..validation import ScheduleInputError
 from ..warnings_collector import WarningCollector
 from .types import Agent, Durations, SolverConfig, Task
@@ -475,7 +475,7 @@ def build_model(
     if heuristic_makespan is not None and heuristic_makespan >= 1:
         model.add(makespan <= heuristic_makespan)
     total_cost = None
-    if config.objective == "cost_aware":
+    if config.objective == OBJECTIVE_COST_AWARE:
         total_cost = _add_cost_variable(model, vars_, tasks, agents)
     return ModelBundle(
         model=model,

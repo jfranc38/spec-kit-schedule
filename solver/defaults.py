@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Final, Literal
 
 __all__ = [
     "TOKEN_ESTIMATES",
@@ -26,6 +26,14 @@ __all__ = [
     "MAKESPAN_WEIGHT",
     "COST_WEIGHT_DEFAULT",
     "OBJECTIVE",
+    "OBJECTIVE_LEXICOGRAPHIC",
+    "OBJECTIVE_WEIGHTED",
+    "OBJECTIVE_COST_AWARE",
+    "ObjectiveMode",
+    "STATUS_OPTIMAL",
+    "STATUS_FEASIBLE",
+    "STATUS_INFEASIBLE",
+    "STATUS_UNKNOWN",
     "STOCHASTIC_QUANTILE_DEFAULT",
     "ANYTIME_DEFAULT",
     "RANDOM_SEED_DEFAULT",
@@ -165,7 +173,24 @@ MAKESPAN_WEIGHT = 100
 # because the canonical objective is lexicographic; cost-aware enables the
 # term explicitly.
 COST_WEIGHT_DEFAULT = 0
-OBJECTIVE = "lexicographic"
+
+# Objective-mode literals. Constants stay paired with the Literal type so
+# both producers (``SolverOptions`` schema in ``config_schema``) and consumers
+# (the ``solve``/``build_model`` mode-dispatch branches) read from a single
+# source of truth.
+ObjectiveMode = Literal["lexicographic", "weighted", "cost_aware"]
+OBJECTIVE_LEXICOGRAPHIC: Final[ObjectiveMode] = "lexicographic"
+OBJECTIVE_WEIGHTED: Final[ObjectiveMode] = "weighted"
+OBJECTIVE_COST_AWARE: Final[ObjectiveMode] = "cost_aware"
+OBJECTIVE: ObjectiveMode = OBJECTIVE_LEXICOGRAPHIC
+
+# Solver status strings. Mirror the four CP-SAT outcomes the result envelope
+# can carry; centralising the spellings keeps the renderer, the orchestration
+# envelope, and ``_finalize_result`` from drifting.
+STATUS_OPTIMAL: Final[str] = "OPTIMAL"
+STATUS_FEASIBLE: Final[str] = "FEASIBLE"
+STATUS_INFEASIBLE: Final[str] = "INFEASIBLE"
+STATUS_UNKNOWN: Final[str] = "UNKNOWN"
 
 KAPPA_DEFAULT = 10
 CONTEXT_BUDGET_KTOKENS_DEFAULT = 16

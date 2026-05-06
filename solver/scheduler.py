@@ -43,8 +43,11 @@ from .defaults import (
     MAKESPAN_WEIGHT,
     NUM_WORKERS,
     OBJECTIVE,
+    OBJECTIVE_COST_AWARE,
+    OBJECTIVE_WEIGHTED,
     RANDOM_SEED_DEFAULT,
     SPEED_FACTOR_DEFAULT,
+    STATUS_INFEASIBLE,
     STOCHASTIC_QUANTILE_DEFAULT,
     STORY_PRIORITY_DEFAULT,
     TIME_LIMIT_SECONDS,
@@ -563,14 +566,14 @@ def solve(
 
     # Weighted is the only single-phase objective and is short enough to inline.
     # Lex/cost_aware delegate to dedicated orchestration modules below.
-    if config.objective == "weighted":
+    if config.objective == OBJECTIVE_WEIGHTED:
         bundle.model.minimize(config.makespan_weight * bundle.makespan + bundle.max_load)
         solver, status, elapsed = runner._run_solver(bundle.model, config)
         stats["solve_time"] = round(elapsed, 2)
         runner._record_phase_status(stats, 1, solver, status)
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return {
-                "status": "INFEASIBLE",
+                "status": STATUS_INFEASIBLE,
                 "message": "No feasible schedule found (weighted objective).",
                 "stats": stats,
                 "warnings": warnings.as_list(),
@@ -587,7 +590,7 @@ def solve(
             warnings,
         )
 
-    if config.objective == "cost_aware":
+    if config.objective == OBJECTIVE_COST_AWARE:
         assert bundle.total_cost is not None, "cost_aware requires total_cost variable in bundle"
         return _solve_cost_aware(bundle, tasks, edges, agents, compat, config, stats, warnings)
 

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 import networkx as nx
 from ortools.sat.python import cp_model
 
+from ..defaults import STATUS_FEASIBLE, STATUS_OPTIMAL, STATUS_UNKNOWN
 from ..model.types import Agent, Durations, Task
 
 if TYPE_CHECKING:
@@ -378,9 +379,17 @@ def _build_agent_summary(
 ) -> list[dict[str, Any]]:
     from ..model.build import cost_dollars
 
+    # Group assignments by agent index in a single pass so the per-agent
+    # iteration below is O(n + m) instead of O(n × m). Negligible for
+    # realistic project sizes but tidier and avoids the inner ``filter``-
+    # like scan on each agent.
+    by_agent: dict[int | None, list[dict[str, Any]]] = defaultdict(list)
+    for task in assignments:
+        by_agent[task["agent_index"]].append(task)
+
     summary = []
     for ag in agents:
-        a_tasks = [task for task in assignments if task["agent_index"] == ag.index]
+        a_tasks = by_agent.get(ag.index, [])
         total_tokens = sum(task["tokens"] for task in a_tasks)
         cost = round(cost_dollars(total_tokens, ag.price_per_1k_tokens), 4)
         row: dict[str, Any] = {
@@ -411,6 +420,13 @@ def _finalize_result(
     status: cp_model.CpSolverStatus,
     warnings: Any,
 ) -> dict[str, Any]:
+    # Return shape mirrors :class:`solver.model.result_types.ScheduleResult`
+    # (TypedDict, ``total=False``) — the runtime annotation stays
+    # ``dict[str, Any]`` because mypy's TypedDict-vs-``dict[str, Any]``
+    # variance rules reject ``stats`` (assembled here as a plain dict)
+    # against the typed ``Stats`` slot. ``ScheduleResult`` is therefore
+    # documentation-only; implementations across the package return
+    # ``dict[str, Any]`` end-to-end.
     assignments = _extract_assignments(solver, bundle, tasks, agents, compat)
     waves = _build_waves(assignments)
     agent_summary = _build_agent_summary(solver, bundle, assignments, agents)
@@ -430,18 +446,18 @@ def _finalize_result(
     stats["total_cost"] = round(sum(row["cost"] for row in agent_summary), 4)
 
     if status == cp_model.OPTIMAL:
-        status_str = "OPTIMAL"
+        status_str = STATUS_OPTIMAL
     elif status == cp_model.FEASIBLE:
-        status_str = "FEASIBLE"
+        status_str = STATUS_FEASIBLE
     else:
-        status_str = "UNKNOWN"
+        status_str = STATUS_UNKNOWN
     # Joint-optimum provenness: only report OPTIMAL when every executed phase
     # proved optimality. Per-phase statuses remain in stats for diagnostics.
-    if status_str == "OPTIMAL":
+    if status_str == STATUS_OPTIMAL:
         for key in (f"phase{i}_status_code" for i in (1, 2, 3)):
             phase_code = stats.get(key)
             if phase_code is not None and phase_code != cp_model.OPTIMAL:
-                status_str = "FEASIBLE"
+                status_str = STATUS_FEASIBLE
                 break
     stats["status"] = status_str
 
