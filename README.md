@@ -93,7 +93,7 @@ The solver output includes `total_cost` (in the same unit as `price_per_1k_token
 ### From a tagged release (recommended)
 
 ```bash
-specify extension add --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.5.1.zip
+specify extension add --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.5.2.zip
 ```
 
 ### Local development install

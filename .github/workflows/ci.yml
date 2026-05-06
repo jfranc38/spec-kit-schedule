@@ -15,13 +15,11 @@ jobs:
         os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12"]
         include:
-          # CI-G7: keep ubuntu primary, but exercise macOS at one Python.
-          # OR-Tools occasionally has macOS-specific issues; allow this
-          # combination to fail without blocking the merge.
+          # Exercise macOS at one Python version. Blocking — if OR-Tools
+          # ever ships a macOS-specific regression we want to know
+          # immediately rather than via silent soft-fail.
           - os: macos-latest
             python-version: "3.12"
-            allow-failure: true
-    continue-on-error: ${{ matrix.allow-failure == true }}
     steps:
       - uses: actions/checkout@v6
 

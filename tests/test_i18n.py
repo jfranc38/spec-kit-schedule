@@ -104,6 +104,8 @@ class TestDetectLang:
         assert detect_lang() == "en"
 
     def test_lang_es_es_utf8(self, monkeypatch):
+        for var in ("LANGUAGE", "LC_ALL", "LC_MESSAGES"):
+            monkeypatch.delenv(var, raising=False)
         monkeypatch.setenv("LANG", "es_ES.UTF-8")
         assert detect_lang() == "es"
 

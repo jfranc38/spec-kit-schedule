@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.5.2] - 2026-05-06
+
+### Added
+- **Explicit `(skill: X)` annotation** in `tasks.md`: overrides the
+  parser's path-based skill auto-inference. Documented in the new
+  [`docs/tasks-format.md`](docs/tasks-format.md) reference.
+- **`Implementation` phase recognised** by the parser
+  (`Implementation`, `Implement`, `Build`, `Development`, `Develop`).
+  The four shipped examples already used `## Implementation Phase`;
+  tasks under that header now carry `phase="Implementation"` instead
+  of silently falling back to `Setup`.
+- **Top-level `makespan`, `max_load`, `total_cost`** in solver
+  result dicts (mirrored from `stats[...]`). Programmatic consumers
+  no longer get `None` on direct attribute access.
+- **`docs/tasks-format.md`** (NEW): authoritative reference for
+  recognised phase headers, annotations, skill inference, and common
+  pitfalls. Linked from architecture docs and every example README.
+- **Multi-provider portfolio support documented**: `docs/portfolio-design.md`
+  now has provider-specific recipes (Cursor, Copilot, Claude Code,
+  Hybrid+local) plus a `context_budget` units sub-section clarifying
+  the value-times-1000 multiplier.
+- **`examples/04-multi-provider/`** (NEW): 5-agent hybrid portfolio
+  (Anthropic + OpenAI + Google) demonstrating cost-aware optimisation
+  across providers.
+
+### Changed
+- `bin/check-deps.sh` probes the project venv via `uv run --no-sync`
+  when uv + uv.lock are present, eliminating the false-positive where
+  system-Python deps masked an empty venv. Falls back to `python3` for
+  non-uv install paths.
+- `solver/parse_tasks.py` strips `(skill: X)` from task descriptions
+  before action-verb extraction, so the annotation does not leak into
+  display fields.
+- `pyproject.toml`: `plotly` upper bound widened to `>=5,<7`
+  (Plotly 6 verified compatible).
+- macOS CI matrix now blocking — the locale-dependent `detect_lang`
+  test is fixed and the soft-fail safety valve is no longer needed.
+
+### Fixed
+- `test_lang_es_es_utf8` was flaky on macOS GitHub runners because it
+  set `LANG=es_ES.UTF-8` without clearing higher-priority `LANGUAGE` /
+  `LC_ALL` / `LC_MESSAGES` env vars. The test now clears them first.
+- `bin/check-deps.sh` no longer silently passes when system Python
+  has the deps but the project venv is empty.
+
 ## [0.5.1] - 2026-05-06
 
 ### Added
