@@ -63,7 +63,7 @@ dev = [
 ]
 viz = [
     "matplotlib>=3.7,<4",
-    "pydot>=2.0,<3",
+    "pydot>=2.0,<5",
     "plotly>=5,<6",
 ]
 
