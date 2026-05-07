@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.3] - 2026-05-06
+
+### Fixed
+- **Install command syntax**: README and INSTALL.md showed
+  `specify extension add --from URL` — the `EXTENSION` positional arg
+  is required, so the canonical form is
+  `specify extension add schedule --from URL`. Same for the `--dev`
+  variant. Caught when a user tried the documented command verbatim
+  and got `Missing argument 'EXTENSION'`.
+- **Release zip leanness**: The zip published by `git archive` now
+  excludes developer-only paths via `.gitattributes` `export-ignore`.
+  Stripped: `.github/`, `tests/`, `benchmarks/`, build artefacts,
+  `.gitignore`, `.pre-commit-config.yaml`, `MANIFEST.in`, `Makefile`,
+  `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, several heavy reference
+  docs (`HANDOFF*.md`, `calibration.md`, `determinism.md`,
+  `example-config-mixed.yml`, generated `example-schedule.{md,html}`),
+  and per-example `expected/` baselines. The shipped zip dropped
+  ~18% (718 KB → 585 KB), and the top-level layout now matches
+  the lean shape used by peer community extensions like `verify`.
+
 ## [0.5.2] - 2026-05-06
 
 ### Added
