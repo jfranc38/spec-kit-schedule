@@ -99,7 +99,7 @@ jobs:
             echo "Once a release is published, users can install the extension via:"
             echo ""
             echo '```'
-            echo "specify extension add --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v${version}.zip"
+            echo "specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v${version}.zip"
             echo '```'
             echo ""
             echo "### Artifacts"

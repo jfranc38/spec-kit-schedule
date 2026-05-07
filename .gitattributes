@@ -1,0 +1,29 @@
+# Exclude developer-only paths from `git archive` output (the release zip
+# attached to GitHub Releases and consumed by `specify extension add --from`).
+# Keeps the user-facing extension archive lean: only the manifest, commands,
+# templates, solver source, runtime scripts, and user docs are shipped.
+
+.github                  export-ignore
+.gitignore               export-ignore
+.gitattributes           export-ignore
+.pre-commit-config.yaml  export-ignore
+.coverage                export-ignore
+
+benchmarks               export-ignore
+tests                    export-ignore
+build                    export-ignore
+dist                     export-ignore
+spec_kit_schedule.egg-info export-ignore
+
+CODE_OF_CONDUCT.md       export-ignore
+CONTRIBUTING.md          export-ignore
+MANIFEST.in              export-ignore
+Makefile                 export-ignore
+
+docs/HANDOFF*.md         export-ignore
+docs/calibration.md      export-ignore
+docs/determinism.md      export-ignore
+docs/example-config-mixed.yml export-ignore
+docs/example-schedule.html export-ignore
+docs/example-schedule.md export-ignore
+examples/*/expected      export-ignore

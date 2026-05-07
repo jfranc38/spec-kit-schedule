@@ -93,7 +93,7 @@ The solver output includes `total_cost` (in the same unit as `price_per_1k_token
 ### From a tagged release (recommended)
 
 ```bash
-specify extension add --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.5.2.zip
+specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.5.3.zip
 ```
 
 ### Local development install
@@ -102,7 +102,7 @@ specify extension add --from https://github.com/jfranc38/spec-kit-schedule/archi
 git clone https://github.com/jfranc38/spec-kit-schedule
 cd spec-kit-schedule
 uv sync --extra dev          # bootstrap Python solver dependencies
-specify extension add --dev .
+specify extension add schedule --dev .
 ```
 
 ### Python solver dependencies
