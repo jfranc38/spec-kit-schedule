@@ -14,13 +14,13 @@ the team wants a static artifact pinned to a release.
 ## Pre-flight: verify Python solver + visualization dependencies
 
 The visualizer needs both the core solver stack and the `viz` extras
-(matplotlib + plotly). Run the shared preflight script from the
-repository root in `viz` mode — it probes every importable module the
-visualizer requires and prints an actionable install hint if any are
-missing:
+(matplotlib + plotly). v0.6.0+ probes the encapsulated venv first
+(`.specify/extensions/schedule/.venv/bin/python`) and falls back to
+the legacy `uv run` and system `python3` paths. Run the shared
+preflight script in `viz` mode:
 
 ```bash
-./bin/check-deps.sh viz
+.specify/extensions/schedule/bin/check-deps.sh viz
 ```
 
 If the script exits non-zero, surface its stderr message to the user
@@ -58,18 +58,25 @@ still works but the images are not produced.
 
 ## Workflow
 
+Use the encapsulated Python interpreter so dependencies resolve from
+the extension's own venv:
+
+```bash
+PY=".specify/extensions/schedule/.venv/bin/python"
+```
+
 1. Run the solver and capture its JSON output (typically already produced
    by `/speckit.schedule.run`).
 2. Invoke the visualiser against that JSON:
    ```bash
-   python -m solver.visualize solver_output.json <outdir> --feature <name>
+   "$PY" -m solver.visualize solver_output.json <outdir> --feature <name>
    ```
    `<outdir>` is created if missing; outputs are `<feature>-dag.<format>`
    and `<feature>-gantt.<format>` where `--format` defaults to `png`.
 3. Re-render the markdown with the `--image-prefix` flag so both PNGs are
    referenced inline:
    ```bash
-   python -m solver.render_schedule solver_output.json <feature> \
+   "$PY" -m solver.render_schedule solver_output.json <feature> \
        --image-prefix images/<feature> > schedule.md
    ```
 

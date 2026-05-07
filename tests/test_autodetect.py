@@ -312,6 +312,90 @@ class TestDetectPortfolio:
         assert "frontend" in _agent_ids(result)
 
 
+class TestAIFleetIntegration:
+    """v0.6.0+: AI-aware fleet discovery + base portfolio fallback."""
+
+    def test_no_integration_marker_no_fleet(self, tmp_path: Path) -> None:
+        """Default behaviour preserved: no AI marker → no extra agents."""
+        (tmp_path / ".specify").mkdir()
+        result = detect_portfolio(tmp_path, auto_detect_integration=True)
+        # Only the architect (no stack signals were created)
+        ids = _agent_ids(result)
+        assert ids == {"architect"}
+        assert "discovered_reviewers" not in result
+
+    def test_explicit_integration_key_with_implementer(self, tmp_path: Path) -> None:
+        """Explicit ``integration_key`` triggers fleet discovery + base slots."""
+        (tmp_path / ".specify").mkdir()
+        agents_dir = tmp_path / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "implementer.md").write_text(
+            "---\ndescription: Builds features end-to-end.\nmodel: opus\n---\n",
+            encoding="utf-8",
+        )
+        result = detect_portfolio(tmp_path, integration_key="claude")
+        ids = _agent_ids(result)
+        # Discovered implementer + base portfolio's frontier/mid/small
+        assert "implementer" in ids
+        assert "frontier" in ids
+        assert "mid" in ids
+        assert "small" in ids
+
+    def test_reviewer_only_fleet_does_not_pollute_agents(self, tmp_path: Path) -> None:
+        """Reviewers go to ``discovered_reviewers``, NOT the scheduler agents."""
+        (tmp_path / ".specify").mkdir()
+        agents_dir = tmp_path / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "code-review.md").write_text(
+            "---\ndescription: Reviews PRs for security issues.\n---\n",
+            encoding="utf-8",
+        )
+        result = detect_portfolio(tmp_path, integration_key="claude")
+        # Reviewer is NOT a scheduler agent
+        assert "code-review" not in _agent_ids(result)
+        # But it IS surfaced in the metadata
+        assert "discovered_reviewers" in result
+        assert any(r["name"] == "code-review" for r in result["discovered_reviewers"])
+
+    def test_integration_marker_picked_up_by_auto_detect(self, tmp_path: Path) -> None:
+        """``auto_detect_integration=True`` reads .specify/integration.json."""
+        (tmp_path / ".specify").mkdir()
+        (tmp_path / ".specify" / "integration.json").write_text(
+            json.dumps({"integration_key": "claude"}), encoding="utf-8"
+        )
+        agents_dir = tmp_path / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "feature-builder.md").write_text(
+            "---\ndescription: Builds features.\n---\n", encoding="utf-8"
+        )
+        result = detect_portfolio(tmp_path, auto_detect_integration=True)
+        assert "feature-builder" in _agent_ids(result)
+        # Display name was recorded for the UI prompt
+        assert result.get("integration_display_name") == "Claude Code"
+
+    def test_use_base_portfolio_flag(self, tmp_path: Path) -> None:
+        """``use_base_portfolio=True`` always emits frontier/mid/small."""
+        (tmp_path / ".specify").mkdir()
+        result = detect_portfolio(tmp_path, use_base_portfolio=True)
+        ids = _agent_ids(result)
+        assert {"frontier", "mid", "small"}.issubset(ids)
+
+    def test_implementer_id_collision_resolved(self, tmp_path: Path) -> None:
+        """Discovered ``backend`` implementer doesn't collide with stack ``backend``."""
+        (tmp_path / ".specify").mkdir()
+        (tmp_path / "pyproject.toml").write_text("[build-system]\n", encoding="utf-8")
+        agents_dir = tmp_path / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "backend.md").write_text(
+            "---\ndescription: Backend implementer.\n---\n", encoding="utf-8"
+        )
+        result = detect_portfolio(tmp_path, integration_key="claude")
+        ids = _agent_ids(result)
+        # Stack-derived ``backend`` stays; discovered one renamed to ``backend-2``
+        assert "backend" in ids
+        assert "backend-2" in ids
+
+
 class TestInteractiveRefine:
     def test_interactive_refine_accepts_defaults(self, tmp_path: Path, monkeypatch) -> None:
         """_interactive_refine with all-empty input keeps original values."""

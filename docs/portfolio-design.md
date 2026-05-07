@@ -1,14 +1,52 @@
 # Portfolio Design Guide
 
 This guide explains how to map your available LLM access points to a
-spec-kit-schedule portfolio config (`config.yml`). The end product is a
-realistic agent portfolio that the solver can route work across based on
-skills, capacity, and (optionally) cost.
+spec-kit-schedule portfolio config
+(`.specify/schedule/schedule-config.yml`, v0.6.0+ encapsulated path).
+The end product is a realistic agent portfolio that the solver can
+route work across based on skills, capacity, and (optionally) cost.
 
 If you want to skip ahead and copy a working portfolio, see
 [`examples/04-multi-provider/`](../examples/04-multi-provider/) for a
 five-agent hybrid (Anthropic + OpenAI + Google) running with
 `objective: cost_aware`.
+
+## v0.6.0+ AI-aware autodetect
+
+Most users do not write the portfolio by hand. The first invocation
+of `/speckit.schedule.run` (or `/speckit.schedule.portfolio` when run
+explicitly) **discovers the user's on-disk AI fleet** and combines it
+with stack-derived agents and a generic base portfolio.
+
+Detection layout per AI assistant:
+
+| Integration key | Discovery location                                                  |
+|-----------------|---------------------------------------------------------------------|
+| `claude`        | `.claude/agents/*.md`, `.claude/skills/*/SKILL.md`                  |
+| `copilot`       | `.github/agents/*.agent.md`                                         |
+| `cursor-agent`  | `.cursor/skills/*/SKILL.md`, `.cursor/commands/*.md`                |
+| `gemini`        | `.gemini/commands/*.md`                                             |
+| (other)         | `.{key}/{skills,commands,workflows,agents}/*.md` (best-effort)      |
+
+Each discovered file's YAML frontmatter is parsed for `description`,
+`model`, and `tools`, then classified IMPLEMENTER / REVIEWER / HYBRID
+via a conservative keyword heuristic. **Reviewers are NOT auto-routed
+to scheduler agents** — they go to a `discovered_reviewers` block in
+the YAML and the user is asked whether to promote them to
+`review`-skill scheduler agents.
+
+The combined output is the **union** of:
+
+1. Stack-derived agents from project files (`pyproject.toml`,
+   `package.json`, `tests/`, `docs/`, …).
+2. Discovered IMPLEMENTERs from the AI fleet, with their on-disk
+   `model:` (or `REPLACE_ME` when frontmatter is missing).
+3. Generic `frontier` / `mid` / `small` slots from
+   `templates/base-portfolio.yml` for any role coverage gaps.
+
+The `REPLACE_ME` placeholders are intentional — we never fabricate
+model strings. The user must replace them with models they can
+actually invoke from their AI assistant. Steps below help you choose.
 
 ## Core principle: agents are slots, not models
 

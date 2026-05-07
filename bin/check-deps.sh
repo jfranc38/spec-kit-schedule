@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 # Preflight check for the Python solver dependencies.
 # Used by /speckit.schedule.* command files BEFORE invoking the solver.
-# Probes the SAME Python the slash commands invoke (uv venv when present),
-# avoiding false positives from system-Python deps that aren't in the
-# project venv.
+#
+# v0.6.0 probe order (matches the encapsulated-state layout):
+#   1. .specify/extensions/schedule/.venv/bin/python  (encapsulated venv,
+#      created by `bin/install.sh --target ./.venv` from inside the
+#      extension code dir).
+#   2. uv run --no-sync python                         (legacy contributor
+#      checkout where the venv lives at the repo root).
+#   3. python3                                         (last-resort fallback
+#      for pip-only environments).
 #
 # Usage:
 #   bin/check-deps.sh           # core solver only
@@ -32,16 +38,36 @@ case "$mode" in
     ;;
 esac
 
-# Pick the right Python:
-# - If uv is available AND we have a uv.lock, use 'uv run --no-sync python'
-#   (matches how slash commands invoke the solver via 'uv run python -m
-#   solver.scheduler'). --no-sync is critical: without it, uv would auto-
-#   install missing deps and the preflight would be meaningless.
-# - Otherwise fall back to system python3 (allows non-uv install paths,
-#   e.g. user installed via pip into their own venv).
-if command -v uv >/dev/null 2>&1 && [ -f "$repo_root/uv.lock" ]; then
-  probe_cmd=(uv run --no-sync --project "$repo_root" python -c)
-else
+# Walk up from cwd to find an ancestor that contains .specify/.
+project_root=""
+search_dir="$(pwd)"
+while [[ "$search_dir" != "/" ]]; do
+  if [[ -d "$search_dir/.specify" ]]; then
+    project_root="$search_dir"
+    break
+  fi
+  search_dir="$(dirname "$search_dir")"
+done
+
+probe_cmd=()
+
+# 1. Encapsulated venv (v0.6.0+).
+if [[ -n "$project_root" ]]; then
+  encapsulated_python="$project_root/.specify/extensions/schedule/.venv/bin/python"
+  if [[ -x "$encapsulated_python" ]]; then
+    probe_cmd=("$encapsulated_python" -c)
+  fi
+fi
+
+# 2. uv-managed venv at repo root (legacy contributor layout).
+if [[ ${#probe_cmd[@]} -eq 0 ]]; then
+  if command -v uv >/dev/null 2>&1 && [ -f "$repo_root/uv.lock" ]; then
+    probe_cmd=(uv run --no-sync --project "$repo_root" python -c)
+  fi
+fi
+
+# 3. System python3 (last resort — pip-only / corporate env).
+if [[ ${#probe_cmd[@]} -eq 0 ]]; then
   probe_cmd=(python3 -c)
 fi
 
@@ -50,10 +76,15 @@ if ! "${probe_cmd[@]}" "import $modules" >/dev/null 2>&1; then
 ERROR: Python solver dependencies are not installed.
 
 This extension's solver is a Python package separate from the spec-kit
-command registration. Install it once with:
+command registration. Bootstrap it once via the encapsulated layout
+(v0.6.0+ default — keeps state inside .specify/):
 
   cd $repo_root
-  ./bin/install.sh        # bootstraps uv + venv + deps + smoke test
+  bash bin/install.sh --target .specify/extensions/schedule/.venv
+
+Or, for a contributor checkout:
+
+  ./bin/install.sh        # bootstraps uv + repo-root venv + smoke test
   # OR
   uv sync $extras_hint    # if you already have uv
 

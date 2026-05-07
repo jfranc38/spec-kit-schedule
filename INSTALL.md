@@ -1,4 +1,4 @@
-# Installation — v0.5.5
+# Installation — v0.6.0
 
 `spec-kit-schedule` is distributed as a spec-kit extension. The
 canonical install paths use the `specify` CLI; PyPI distribution is on
@@ -21,26 +21,34 @@ target.
 ## 1. Install from a tagged release (recommended)
 
 ```bash
-specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.5.5.zip
+specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.6.0.zip
 ```
 
 `specify extension add <id> --from` accepts any HTTPS URL pointing at a zip
 of the extension. The URL above is GitHub's auto-generated source
-archive for the `v0.5.5` tag.
+archive for the `v0.6.0` tag.
 
-The `specify` CLI does not install Python packages. Once the extension
-is registered, bootstrap the solver dependencies once:
+The `specify` CLI does not install Python packages. **v0.6.0+ users
+do not need to bootstrap manually** — the first invocation of
+`/speckit.schedule.run` auto-bootstraps the encapsulated Python venv
+at `.specify/extensions/schedule/.venv/` (and the portfolio config
+at `.specify/schedule/schedule-config.yml`) inline.
+
+If you'd prefer to bootstrap the venv ahead of time:
+
+```bash
+cd <your-project>
+bash .specify/extensions/schedule/bin/install.sh \
+    --target .specify/extensions/schedule/.venv
+```
+
+Or, for a contributor checkout, the legacy repo-root layout still works:
 
 ```bash
 git clone https://github.com/jfranc38/spec-kit-schedule
 cd spec-kit-schedule
 uv sync --extra dev --extra viz
-```
-
-Or use the bundled bootstrap script which installs `uv` if absent and
-runs an end-to-end smoke test:
-
-```bash
+# OR
 ./bin/install.sh
 ```
 

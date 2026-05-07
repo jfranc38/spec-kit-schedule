@@ -104,7 +104,7 @@ The solver output includes `total_cost` (in the same unit as `price_per_1k_token
 ### From a tagged release (recommended)
 
 ```bash
-specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.5.5.zip
+specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.6.0.zip
 ```
 
 ### Local development install
@@ -136,21 +136,23 @@ Install the **Explicit Task Dependencies** preset for machine-readable dependenc
 ## Quick Start
 
 ```bash
-# 1. Define your agent portfolio
-/speckit.schedule.portfolio
-
-# 2. After running /speckit.tasks, generate the optimal schedule
+# 1. After running /speckit.tasks, generate the optimal schedule.
+#    First-run auto-bootstraps the venv and portfolio — no separate setup.
 /speckit.schedule.run
 
-# 3. (Optional) Visualize the result
+# 2. (Optional) Visualize the result
 /speckit.schedule.visualize
 
-# 4. Execute using the wave plan
+# 3. Execute using the wave plan
 /speckit.implement
 ```
 
 After `/speckit.tasks` finishes, accept the auto-prompt to schedule.
-Or invoke `/speckit.schedule.run` manually any time.
+Or invoke `/speckit.schedule.run` manually any time. The first
+invocation **bootstraps the encapsulated Python venv and the
+portfolio config inline** — you no longer need to run
+`/speckit.schedule.portfolio` separately. Re-run that command only
+when you want to explicitly re-scaffold the portfolio.
 
 Inside the repository the solver stages are regular Python modules and can be chained directly:
 
@@ -175,9 +177,51 @@ Example output is committed under `docs/example-schedule.md` plus
 `docs/images/example-{dag,gantt}.png` and `docs/example-schedule.html`;
 regenerate all artifacts with `make schedule-all`.
 
+## Encapsulated layout (v0.6.0+)
+
+The extension keeps everything under `.specify/` so no state leaks
+into the repo root:
+
+| Resource          | Path                                                |
+|-------------------|-----------------------------------------------------|
+| Extension code    | `.specify/extensions/schedule/`                     |
+| Encapsulated venv | `.specify/extensions/schedule/.venv/`               |
+| Portfolio config  | `.specify/schedule/schedule-config.yml`             |
+
+**Breaking change vs v0.5.x:** the portfolio config moved from
+`./schedule-config.yml` to `.specify/schedule/schedule-config.yml`.
+Pre-0.6.0 configs at the repo root are migrated automatically the
+first time `/speckit.schedule.run` is invoked. The migration is
+conservative — if both paths exist, the existing encapsulated file
+is left alone and the legacy one stays in place for the user to
+reconcile manually.
+
+## AI-aware portfolio scaffolding (v0.6.0+)
+
+`/speckit.schedule.portfolio` (and the auto-bootstrap path inside
+`/speckit.schedule.run`) reads `.specify/integration.json` to
+identify the AI assistant the user installed spec-kit for, then
+discovers the on-disk fleet for that assistant:
+
+- `claude` → `.claude/agents/*.md` and `.claude/skills/*/SKILL.md`
+- `copilot` → `.github/agents/*.agent.md`
+- `cursor-agent` → `.cursor/skills/*/SKILL.md`
+- `gemini` → `.gemini/commands/*.md`
+- 26 other known integrations → generic `.{key}/{skills,commands,workflows,agents}/*.md`
+
+Each markdown file's YAML frontmatter is parsed for `description` /
+`model` / `tools`, and the agent is classified as IMPLEMENTER /
+REVIEWER / HYBRID via a conservative keyword heuristic. Discovered
+implementers become scheduler agents; reviewers are surfaced under
+`discovered_reviewers` and offered to the user as an opt-in addition
+(routed only to test/review tasks). Generic `frontier`/`mid`/`small`
+slots from `templates/base-portfolio.yml` fill any role-coverage
+gaps with `REPLACE_ME` placeholders the user must override with
+models they can actually invoke from their AI assistant.
+
 ## Agent Portfolio
 
-Configure your agents in `schedule-config.yml`. See `config-template.yml` for a fully annotated example, or `docs/example-config-mixed.yml` for a multi-provider portfolio.
+Configure your agents in `.specify/schedule/schedule-config.yml`. See `config-template.yml` for a fully annotated example, or `docs/example-config-mixed.yml` for a multi-provider portfolio.
 
 ```yaml
 agents:

@@ -7,12 +7,22 @@ Usage (module):
 Usage (CLI):
     python -m solver.autodetect [--project-dir .] [--output schedule-config.yml]
                                 [--force] [--dry-run] [--interactive]
-                                [--provider anthropic]
+                                [--provider anthropic] [--detect-ai]
+
+v0.6.0 adds AI-fleet awareness: when ``--detect-ai`` is set (or the
+library caller passes ``integration_key``), the autodetect step reads
+``.specify/integration.json`` to identify the user's AI assistant,
+discovers the on-disk agent fleet (e.g. ``.claude/agents/*.md``), and
+combines stack-derived agents with discovered implementers plus
+generic ``frontier`` / ``mid`` / ``small`` slots from
+``templates/base-portfolio.yml`` for any uncovered roles. Reviewer-
+shaped agents are surfaced in ``discovered_reviewers`` rather than
+auto-routed as scheduler agents — see ``commands/portfolio.md``.
 """
 
 from __future__ import annotations
 
-__all__ = ["detect_portfolio"]
+__all__ = ["base_portfolio_path", "detect_portfolio", "load_base_portfolio_agents"]
 
 import argparse
 import contextlib
@@ -42,10 +52,40 @@ from .defaults import (
     TOKEN_ESTIMATES,
     TOKEN_UNIT,
 )
+from .fleet_discover import DiscoveredAgent, discover_fleet
 from .i18n import t
+from .integration_detect import detect_integration, display_name
 from .validation import ScheduleInputError
 
 log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Base portfolio template loading
+# ---------------------------------------------------------------------------
+
+
+def base_portfolio_path() -> Path:
+    """Return path to the bundled ``templates/base-portfolio.yml`` skeleton."""
+    return Path(__file__).resolve().parent.parent / "templates" / "base-portfolio.yml"
+
+
+def load_base_portfolio_agents() -> list[dict[str, Any]]:
+    """Read the base-portfolio template and return its ``agents:`` list.
+
+    Returns ``[]`` if the file is missing or unparseable — callers
+    should fall back to inline defaults.
+    """
+    path = base_portfolio_path()
+    try:
+        body = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        log.debug("base-portfolio.yml unavailable at %s", path)
+        return []
+    raw_agents = body.get("agents", [])
+    if not isinstance(raw_agents, list):
+        return []
+    return [a for a in raw_agents if isinstance(a, dict)]
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +220,16 @@ def _build_backend_skills(stacks: dict[str, Any]) -> list[str]:
     return skills
 
 
+def _unique_agent_id(base: str, existing: set[str]) -> str:
+    """Return ``base`` if free, else ``base-2``, ``base-3``, … until unique."""
+    if base not in existing:
+        return base
+    suffix = 2
+    while f"{base}-{suffix}" in existing:
+        suffix += 1
+    return f"{base}-{suffix}"
+
+
 def _build_skill_rules(stacks: dict[str, Any]) -> list[dict[str, str]]:
     """Build skill_rules list based on detected project layout."""
     dirs: set[str] = stacks.get("dirs", set())
@@ -240,6 +290,9 @@ def detect_portfolio(
     project_dir: Path,
     *,
     default_provider: str = "anthropic",
+    integration_key: str | None = None,
+    auto_detect_integration: bool = False,
+    use_base_portfolio: bool = False,
 ) -> dict[str, Any]:
     """Inspect files under project_dir and return a schedule-config.yml dict.
 
@@ -253,11 +306,28 @@ def detect_portfolio(
         Directory to scan. Non-recursive for manifests; shallow scan for layout.
     default_provider:
         Provider string written into every agent's ``provider`` field.
+    integration_key:
+        Explicit AI integration key (e.g. ``"claude"``, ``"copilot"``).
+        ``None`` (default) skips fleet discovery — preserves the v0.5.x
+        behaviour for callers that don't opt in. Pass with
+        ``auto_detect_integration=False`` to override the marker without
+        reading it.
+    auto_detect_integration:
+        When True, read ``.specify/integration.json`` for the AI key
+        when ``integration_key`` is None. Caller-driven so library users
+        can opt out.
+    use_base_portfolio:
+        When True, append generic ``frontier``/``mid``/``small`` slots from
+        the base-portfolio template for any role coverage gaps. Auto-set
+        whenever fleet discovery returns implementers (so the fleet's
+        ``REPLACE_ME`` placeholders are visible to the user).
 
     Returns
     -------
     dict
         A fully-formed, Config-validated schedule-config.yml dictionary.
+        Includes the extra top-level key ``discovered_reviewers`` when
+        the AI fleet had reviewer-shaped agents.
     """
     project_dir = Path(project_dir).resolve()
     if not project_dir.is_dir():
@@ -334,6 +404,51 @@ def detect_portfolio(
             "price_per_1k_tokens": 0.0,
         })
 
+    # ── AI fleet discovery (v0.6.0+, opt-in) ──────────────────────────
+    resolved_key: str | None = integration_key
+    if resolved_key is None and auto_detect_integration:
+        resolved_key = detect_integration(project_dir)
+
+    discovered_implementers: list[DiscoveredAgent] = []
+    discovered_reviewers: list[DiscoveredAgent] = []
+    if resolved_key:
+        fleet = discover_fleet(resolved_key, project_dir)
+        for ag in fleet:
+            if ag.role == "implementer":
+                discovered_implementers.append(ag)
+            elif ag.role == "reviewer":
+                discovered_reviewers.append(ag)
+            # hybrid agents are listed under reviewers (see commands/portfolio.md)
+            else:
+                discovered_reviewers.append(ag)
+
+    # Add discovered IMPLEMENTERs as scheduler agents.
+    existing_ids = {a["id"] for a in agents}
+    for ag in discovered_implementers:
+        agent_id = _unique_agent_id(ag.name, existing_ids)
+        existing_ids.add(agent_id)
+        agents.append({
+            "id": agent_id,
+            "provider": default_provider,
+            "model": ag.model or "REPLACE_ME",
+            "skills": ["impl", "backend", "frontend", "python", "test"],
+            "kappa": KAPPA_DEFAULT,
+            "context_budget": CONTEXT_BUDGET_KTOKENS_DEFAULT,
+            "speed_factor": SPEED_FACTOR_DEFAULT,
+            "price_per_1k_tokens": 0.0,
+        })
+
+    # When fleet returned implementers OR caller explicitly asked, also
+    # surface the generic frontier/mid/small slots so the user has a
+    # known-good starting point. Distinct ids prevent collision with
+    # stack-derived agents.
+    add_base = use_base_portfolio or bool(discovered_implementers)
+    if add_base:
+        for base in load_base_portfolio_agents():
+            base_id = _unique_agent_id(str(base.get("id", "agent")), existing_ids)
+            existing_ids.add(base_id)
+            agents.append({**base, "id": base_id})
+
     # default_skill
     default_skill = "backend" if stacks["backend"] else "docs"
 
@@ -342,7 +457,7 @@ def detect_portfolio(
     # Give medium a meaningful std_dev
     token_estimates["medium"] = {"mean": TOKEN_ESTIMATES["medium"], "std_dev": 500}
 
-    config_dict = {
+    config_dict: dict[str, Any] = {
         "agents": agents,
         "skill_rules": _build_skill_rules(stacks),
         "default_skill": default_skill,
@@ -367,6 +482,27 @@ def detect_portfolio(
             "anytime": ANYTIME_DEFAULT,
         },
     }
+
+    # Surface reviewers as metadata only — they are NOT scheduler agents.
+    # ``Config.model_validate`` accepts unknown top-level keys (extra="allow"),
+    # so /speckit.schedule.portfolio can show them to the user without
+    # routing impl tasks to them.
+    if discovered_reviewers:
+        config_dict["discovered_reviewers"] = [
+            {
+                "name": ag.name,
+                "file": str(ag.file),
+                "description": ag.description,
+                "role": ag.role,
+            }
+            for ag in discovered_reviewers
+        ]
+    # Always record the resolved integration when the caller opted in,
+    # even when discovery returned only implementers — downstream UI
+    # uses ``integration_display_name`` for "from {AI display name}".
+    if resolved_key:
+        config_dict["integration_key"] = resolved_key
+        config_dict["integration_display_name"] = display_name(resolved_key)
 
     # Validate before returning
     try:
@@ -470,6 +606,33 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="anthropic",
         help="Default provider tag written into each agent (default: anthropic).",
     )
+    parser.add_argument(
+        "--detect-ai",
+        action="store_true",
+        help=(
+            "Read .specify/integration.json and discover the user's AI fleet "
+            "(.claude/agents/*.md, .github/agents/*.agent.md, etc.). Adds "
+            "discovered implementers as scheduler agents and surfaces "
+            "reviewer-shaped agents under discovered_reviewers."
+        ),
+    )
+    parser.add_argument(
+        "--integration-key",
+        default=None,
+        help=(
+            "Override the integration key (e.g. claude, copilot, gemini, "
+            "cursor-agent). Implies --detect-ai."
+        ),
+    )
+    parser.add_argument(
+        "--with-base-portfolio",
+        action="store_true",
+        help=(
+            "Always append the generic frontier/mid/small slots from "
+            "templates/base-portfolio.yml. Auto-enabled when --detect-ai "
+            "discovers implementer agents."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -481,6 +644,9 @@ def main(argv: list[str] | None = None) -> None:
         config_dict = detect_portfolio(
             args.project_dir,
             default_provider=args.provider,
+            integration_key=args.integration_key,
+            auto_detect_integration=bool(args.detect_ai or args.integration_key),
+            use_base_portfolio=bool(args.with_base_portfolio),
         )
 
         if args.interactive:

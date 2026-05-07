@@ -2,18 +2,25 @@
 
 Validates agent portfolios and solver options at load time, converting raw
 YAML dictionaries into typed models with actionable error messages.
+
+v0.6.0+: ``default_config_path()`` returns the encapsulated path
+(``.specify/schedule/schedule-config.yml``). ``resolve_config_path()``
+adds a one-shot migration of any pre-0.6.0 ``./schedule-config.yml`` at
+the project root.
 """
 
 from __future__ import annotations
 
 __all__ = [
-    "TokenEstimate",
-    "TokenEstimateLike",
     "AgentConfig",
+    "Config",
     "SkillRule",
     "SolverOptions",
-    "Config",
+    "TokenEstimate",
+    "TokenEstimateLike",
+    "default_config_path",
     "load_config",
+    "resolve_config_path",
 ]
 
 import logging
@@ -23,6 +30,7 @@ from typing import Annotated
 import yaml  # type: ignore[import-untyped]  # PyYAML ships no type stubs by default
 from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, PositiveInt, field_validator
 
+from ._paths import migrate_legacy_config, schedule_config_path
 from .defaults import (
     COST_WEIGHT_DEFAULT,
     DEFAULT_SKILL,
@@ -159,13 +167,51 @@ class Config(BaseModel):
         return out
 
 
-def load_config(path: str | Path) -> Config:
+def default_config_path(project: Path | None = None) -> Path:
+    """Return the v0.6.0+ encapsulated schedule-config path.
+
+    ``<project_root>/.specify/schedule/schedule-config.yml``. The
+    file may not exist yet — callers checking presence should still
+    do their own ``Path.is_file()`` check after this.
+    """
+    return schedule_config_path(project)
+
+
+def resolve_config_path(
+    path: str | Path | None = None,
+    project: Path | None = None,
+) -> Path:
+    """Resolve a user-supplied config path with v0.5.x → v0.6.0 migration.
+
+    Behaviour:
+
+    * If ``path`` is provided AND exists → return it.
+    * Otherwise migrate any legacy ``./schedule-config.yml`` to the
+      encapsulated location (one-shot, see
+      :func:`solver._paths.migrate_legacy_config`) and return the
+      encapsulated path. The caller decides whether to error on
+      ``not is_file()``.
+    """
+    if path is not None:
+        candidate = Path(path)
+        if candidate.is_file():
+            return candidate
+    migrate_legacy_config(project)
+    return default_config_path(project)
+
+
+def load_config(path: str | Path | None = None, *, project: Path | None = None) -> Config:
     """Load and validate a schedule-config.yml file.
 
     Parameters
     ----------
     path:
-        Filesystem path to the YAML configuration file.
+        Filesystem path to the YAML configuration file. ``None`` (the
+        v0.6.0+ default) resolves to the encapsulated path
+        ``<project_root>/.specify/schedule/schedule-config.yml`` after
+        a one-shot legacy-config migration.
+    project:
+        Project root override forwarded to ``solver._paths``.
 
     Returns
     -------
@@ -179,7 +225,8 @@ def load_config(path: str | Path) -> Config:
     FileNotFoundError
         If the file does not exist (propagated as-is).
     """
-    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    resolved = resolve_config_path(path, project=project)
+    raw = yaml.safe_load(Path(resolved).read_text(encoding="utf-8")) or {}
     try:
         config = Config.model_validate(raw)
     except Exception as exc:  # pydantic.ValidationError
@@ -194,5 +241,5 @@ def load_config(path: str | Path) -> Config:
             raise ScheduleInputError("; ".join(parts)) from exc
         raise ScheduleInputError(f"config error: {exc}") from exc
 
-    log.debug("loaded config from %s: %d agents", path, len(config.agents))
+    log.debug("loaded config from %s: %d agents", resolved, len(config.agents))
     return config

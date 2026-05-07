@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spec-kit-schedule"
-version = "0.5.5"
+version = "0.6.0"
 description = "Optimal multi-agent task scheduling via CP-SAT (spec-kit extension)"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
@@ -93,6 +93,7 @@ exclude = ["tests*", "docs*"]
 ]
 "share/spec-kit-schedule/templates" = [
     "templates/schedule-template.md",
+    "templates/base-portfolio.yml",
 ]
 
 [tool.ruff]

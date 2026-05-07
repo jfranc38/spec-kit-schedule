@@ -1,5 +1,94 @@
 # Changelog
 
+## [0.6.0] - 2026-05-07
+
+### Breaking changes
+- **Config path moved** to `.specify/schedule/schedule-config.yml`
+  (was `./schedule-config.yml`). Pre-0.6.0 configs at the repo root
+  are migrated automatically on first invocation of
+  `/speckit.schedule.run`; the helper
+  `solver._paths.migrate_legacy_config()` is the single source of
+  truth and is conservative (refuses to overwrite if both paths
+  exist).
+- **Encapsulated venv** at `.specify/extensions/schedule/.venv/`
+  (was `./.venv/`). The bootstrap is opt-in via
+  `bin/install.sh --target ./.venv` from inside the extension code
+  dir, and `bin/check-deps.sh` probes the new location first
+  before falling back to the legacy uv-managed venv at the repo
+  root.
+- **Layout convention codified**: `.specify/extensions/<id>/` is
+  for extension code shipped by the installer;
+  `.specify/<id>/` is for runtime state the extension writes.
+  See `solver/_paths.py` for the path constructors.
+
+### Added
+- **`solver/_paths.py`** (NEW): central path constants —
+  `project_root`, `extension_code_dir`, `extension_state_dir`,
+  `schedule_config_path`, `encapsulated_venv_python` — plus the
+  `migrate_legacy_config` migration helper.
+- **`solver/integration_detect.py`** (NEW): reads
+  `.specify/integration.json` (and `.specify/init-options.json`
+  fallback) to identify which AI assistant the user installed
+  spec-kit for. Returns a canonical key (`claude`, `copilot`,
+  `cursor-agent`, `gemini`, …) plus a `display_name` helper for
+  user-facing prompts.
+- **`solver/fleet_discover.py`** (NEW): per-AI on-disk fleet
+  discovery — scans `.claude/agents/*.md`, `.claude/skills/*/SKILL.md`,
+  `.github/agents/*.agent.md`, `.cursor/skills/*/SKILL.md`,
+  `.gemini/commands/*.md`, and a generic
+  `.{key}/{skills,commands,workflows,agents}/*.md` fallback for
+  the long tail of integrations. Parses YAML frontmatter and
+  classifies each agent as IMPLEMENTER / REVIEWER / HYBRID with a
+  conservative keyword heuristic.
+- **`templates/base-portfolio.yml`** (NEW): generic
+  `frontier`/`mid`/`small` slots with `REPLACE_ME` placeholder
+  models and tier-correct κ / context_budget defaults from
+  `docs/formulation.md`. Used as the fallback skeleton when the
+  user's AI fleet is review-heavy or missing.
+- **`solver.autodetect.detect_portfolio`** gains
+  `integration_key`, `auto_detect_integration`, and
+  `use_base_portfolio` keyword arguments. When opted in, the
+  combined output now includes:
+  - discovered IMPLEMENTERs as scheduler agents,
+  - generic base slots (`frontier`/`mid`/`small`) for role coverage gaps,
+  - reviewer-shaped agents under `discovered_reviewers:` (NOT
+    auto-routed; offered to the user as a separate prompt),
+  - `integration_key` and `integration_display_name` metadata for
+    user-facing strings.
+- **`--detect-ai`**, **`--integration-key`**, **`--with-base-portfolio`**
+  CLI flags on `python -m solver.autodetect`.
+- **`solver.config_schema.default_config_path()`** and
+  **`resolve_config_path()`**: new helpers; `load_config()` now
+  defaults to the encapsulated path when no explicit path is given,
+  with a one-shot legacy migration baked in.
+- **Idempotent first-run** for `/speckit.schedule.run`: Steps 0–1
+  auto-bootstrap the encapsulated venv and the portfolio config so
+  users no longer need to remember `/speckit.schedule.portfolio`
+  before their first solve. Subsequent runs are no-ops past the
+  preflight check.
+- **15 new tests** across `tests/test_paths.py` (13),
+  `tests/test_integration_detect.py` (13),
+  `tests/test_fleet_discover.py` (24), plus 6 new fleet-aware tests
+  in `tests/test_autodetect.py`.
+
+### Changed
+- `bin/install.sh` accepts `--target <dir>` so the encapsulated venv
+  can be created at `.specify/extensions/schedule/.venv/`. Without
+  the flag the legacy repo-root behaviour is preserved.
+- `bin/check-deps.sh` probe order is now: encapsulated venv → uv +
+  uv.lock at repo root → system `python3`. The error message points
+  at the new bootstrap command first.
+- `commands/schedule.md` rewritten as a three-step workflow
+  (bootstrap venv, bootstrap portfolio, solve) instead of the
+  previous single-step assume-everything-is-ready flow.
+- `commands/portfolio.md` rewritten around AI-aware fleet
+  discovery — Steps 1–7 cover detect-AI → discover-fleet →
+  combine+enrich → confirm-models → mismatch-report → validate →
+  optional pre-flight solve.
+- `commands/visualize.md` uses the encapsulated Python interpreter
+  by default.
+- All version strings bumped to `0.6.0`.
+
 ## [0.5.5] - 2026-05-07
 
 ### Added

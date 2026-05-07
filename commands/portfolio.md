@@ -1,127 +1,163 @@
 ---
-description: "Interactively create or edit schedule-config.yml — the agent portfolio, skill inference rules, and solver parameters consumed by /speckit.schedule.run. Auto-scaffolds from the project's tech stack via solver.autodetect, then refines per-runtime."
+description: "Interactively create or edit the encapsulated schedule-config.yml — the agent portfolio, skill inference rules, and solver parameters consumed by /speckit.schedule.run. Auto-scaffolds from the project's tech stack AND the AI assistant's on-disk fleet via solver.autodetect."
 ---
 
-# /speckit.schedule.portfolio — Define Agent Portfolio
+# /speckit.schedule.portfolio — Define Agent Portfolio (AI-aware)
 
 ## Purpose
 
-Create or edit the `schedule-config.yml` file that defines your heterogeneous
-agent portfolio, skill inference rules, and solver parameters. The workflow
-is **autodetect-first**: scaffold a starter config from the project's actual
-tech stack, then refine it against the IDE/CLI you will use to run the
-agents.
+Create or edit `.specify/schedule/schedule-config.yml` (v0.6.0+
+encapsulated location) — the file that defines your heterogeneous
+agent portfolio, skill inference rules, and solver parameters. The
+workflow is **autodetect-first AND AI-aware**: read which AI
+assistant the user installed spec-kit for, discover the on-disk
+agent fleet for that assistant, combine those agents with stack-
+derived slots and a generic base portfolio, then refine with the
+user.
+
+> **Single-entry-point note (v0.6.0+):** in most cases users run
+> `/speckit.schedule.run` directly — it auto-bootstraps the portfolio
+> on first invocation by following these steps inline. This command
+> is for **explicit re-scaffolding** or editing.
 
 ## Workflow
 
-### Step 1 — Detect the runtime environment
+### Step 1 — Detect the AI assistant
 
-Identify which IDE/CLI is invoking the workflow (Claude Code, Cursor,
-GitHub Copilot Workspace, plain terminal, etc.) by reading available
-environment cues. If detection is unreliable, ask the user directly:
-
-> *Which environment will run these agents?*
-> *(Cursor / GitHub Copilot / Claude Code / Hybrid / Other)*
-
-The chosen runtime drives which provider-specific recipe in
-[`docs/portfolio-design.md`](../docs/portfolio-design.md) the user should
-follow when overriding the auto-detected models. The solver itself is
-provider-agnostic — `provider` and `model` strings are pure metadata
-threaded through to `schedule.md` for the downstream executor.
-
-### Step 2 — Auto-scaffold from project context
-
-If `schedule-config.yml` does **NOT** exist, generate a starter config
-from the project's tech stack:
+Read `.specify/integration.json` (and the legacy
+`.specify/init-options.json` fallback) to identify the AI the user
+installed spec-kit for:
 
 ```bash
-uv run python -m solver.autodetect --project-dir . --output schedule-config.yml
+PY=".specify/extensions/schedule/.venv/bin/python"
+"$PY" -c "from solver.integration_detect import detect_integration, display_name; \
+    k = detect_integration(); print(f'{k}|{display_name(k)}')"
 ```
 
-`solver.autodetect` inspects the project root for stack signals
-(`pyproject.toml`, `package.json`, `Cargo.toml`, `go.mod`, `pom.xml`,
-`build.gradle*`, `Dockerfile`, `migrations/`, `tests/`, `docs/`, …) and
-emits a Pydantic-validated YAML config with:
+Resolution order: `integration_key` → `installed_integrations[0]` →
+`init-options.json:integration` → `init-options.json:ai` (legacy)
+→ `None`.
 
-- An `architect` agent (always emitted) — design / review / schema /
-  architecture skills, κ=5, C=32K, speed_factor=0.8.
-- A `backend` agent if any backend stack is detected — skills include
-  `backend`, `api`, `database` plus the detected language tag
-  (`python`, `javascript`, `rust`, `go`, `java`).
-- A `frontend` agent if a frontend framework dependency is detected —
-  skills include `frontend`, the framework (`react`/`vue`/`svelte`),
-  `css`, `html`, `javascript`.
-- A `tester` agent if a `tests/`, `test/`, or `spec/` directory (or
-  `*.test.*` files) exist — κ=15, C=8K, speed_factor=1.5.
-- A `docs` agent if a `docs/` or `doc/` directory exists.
-- `skill_rules` derived from the canonical template plus any
-  project-specific top-level directories discovered.
+Known canonical keys: `claude`, `cursor-agent`, `copilot`, `gemini`,
+`codex`, `opencode`, `windsurf`, `aider`, `q`, `qwen`, `zed`, …
+(see `solver/integration_detect.py:KNOWN_INTEGRATIONS`).
 
-Useful CLI flags:
+If the marker is missing, **ask the user directly**:
+
+> *Which AI assistant will run these agents?*
+> *(Claude Code / Cursor / Copilot / Gemini / Other — type the key)*
+
+### Step 2 — Discover the user's fleet for that assistant
+
+Per AI, scan the canonical on-disk locations:
+
+| Integration key | Discovery layout                                                     |
+|-----------------|----------------------------------------------------------------------|
+| `claude`        | `.claude/agents/*.md`, `.claude/skills/*/SKILL.md`                   |
+| `copilot`       | `.github/agents/*.agent.md`, `.github/agents/*.md`                   |
+| `cursor-agent`  | `.cursor/skills/*/SKILL.md`, `.cursor/commands/*.md`                 |
+| `gemini`        | `.gemini/commands/*.md`                                              |
+| (other)         | `.{key}/{skills,commands,workflows,agents}/*.md` (best effort)       |
+
+For each markdown file found, parse YAML frontmatter (`description`,
+`tools`, `model` if present) and classify with a **conservative**
+heuristic:
+
+- **REVIEWER** — name/description contains `review`, `audit`,
+  `verify`, `test`, `qa`, `quality`, `security`, `lint`.
+- **IMPLEMENTER** — name/description contains `implement`, `build`,
+  `develop`, `engineer`, `code`, `dev`.
+- **HYBRID** — matches both lists, or matches neither.
+
+This is the autodetect step's input; the actual call combines stack
+detection with fleet discovery in one shot:
 
 ```bash
-uv run python -m solver.autodetect --help
-# --project-dir DIR     directory to scan (default: .)
-# --output PATH         write YAML to PATH (omit for stdout)
-# --force               overwrite --output if it exists
-# --dry-run             print to stdout, don't write
-# --interactive         prompt for each agent's id, model, and kappa
-# --provider TAG        default provider tag (default: anthropic)
+"$PY" -m solver.autodetect \
+    --project-dir . \
+    --detect-ai \
+    --output .specify/schedule/schedule-config.yml
 ```
 
-If `schedule-config.yml` already exists, **read it** and skip directly
-to Step 3 — never overwrite an existing config without explicit user
-confirmation.
+### Step 3 — Combine + enrich (autodetect output)
 
-### Step 3 — Refine interactively
+The output portfolio is the **union** of:
 
-Show the auto-detected portfolio to the user as a summary table:
+1. **Stack-derived agents** from project files (`pyproject.toml`,
+   `package.json`, `tests/`, `docs/`, …) — `architect`, `backend`,
+   `frontend`, `tester`, `docs` slots as applicable.
+2. **Discovered IMPLEMENTERs** from the AI fleet — added as scheduler
+   agents with their on-disk `model:` (or `REPLACE_ME` when
+   frontmatter is missing).
+3. **Generic base slots** (`frontier`, `mid`, `small`) from
+   `templates/base-portfolio.yml` — appended for any role coverage
+   gaps. Always emitted when implementers were discovered, so the
+   user has a known-good fallback skeleton.
 
-| id | provider | model | skills | κ | C (K) | speed |
-|----|----------|-------|--------|---|-------|-------|
-| architect | anthropic | claude-opus-4 | design, review, … | 5 | 32 | 0.8 |
-| backend | anthropic | claude-sonnet-4 | backend, api, … | 10 | 16 | 1.0 |
+REVIEWERs are **NOT** auto-added as scheduler agents. They show up
+under `discovered_reviewers:` in the YAML output, with this prompt:
 
-Then iterate, anchored on the runtime detected in Step 1:
+> *Detected reviewer-shaped agents — add as `review`-skill scheduler
+> agents? They'll only be matched to test/review tasks.*
 
-- *"These are the auto-detected agents based on your project stack.
-  Replace placeholder models with the actual ones you can invoke from
-  {detected-IDE} — see the {Cursor/Copilot/Claude Code/Hybrid} recipe in
-  `docs/portfolio-design.md`."*
-- For each agent, ask the user to confirm or override:
-  `id`, `provider`, `model`, `skills`, `kappa`, `context_budget`,
-  `speed_factor`, and `price_per_1k_tokens` (only if `objective:
-  cost_aware` is desired).
-- Cross-reference [`docs/portfolio-design.md`](../docs/portfolio-design.md)
-  for the κ / C / price tier table and provider-specific recipes.
+Only on user confirmation are reviewer-shaped agents promoted to
+scheduler agents (with `skills: [review, test]`, `kappa: 8`,
+`context_budget: 16`).
 
-Common edits beyond agent fields:
+### Step 4 — Confirm models with the user
 
-- **Add or remove an agent** — duplicate an existing block and adjust.
-- **Modify `skill_rules`** — add patterns specific to your repo
-  layout (e.g. `apps/api/`).
-- **Switch `solver.objective`** — `lexicographic` (default) vs
-  `weighted` vs `cost_aware`.
+The autodetect output may contain `REPLACE_ME` placeholders in the
+generic base slots, and the discovered fleet's `model:` field may be
+absent or aspirational. We **cannot** determine reliably from disk
+which model strings the user can actually invoke — they may have
+disabled access to specific models in their AI assistant.
 
-### Step 4 — Validate and save
+ALWAYS prompt the user explicitly:
 
-Before writing, validate the edited config through `solver.config_schema`:
+> *Reviewing your portfolio for {AI display name}. Confirm or
+> override each agent's `model:` field — type the exact model string
+> you can invoke from {AI display name}.*
+
+For each agent, ask: `id` (default OK), `provider`, **`model`
+(REQUIRED — replace any REPLACE_ME)**, `skills`, `kappa`,
+`context_budget`, `speed_factor`, `price_per_1k_tokens` (only when
+`objective: cost_aware`).
+
+Cross-reference [`docs/portfolio-design.md`](../docs/portfolio-design.md)
+for the κ / C / price tier table and provider-specific recipes.
+
+### Step 5 — Honest mismatch report
+
+When the user's fleet is review-heavy and `tasks.md` is
+implementation-heavy, surface this **explicitly**:
+
+> *X review agents found, Y implementation tasks. Adding 3 base
+> implementer slots (frontier / mid / small). You'll need to fill in
+> model names you can invoke from {AI display name}.*
+
+Do NOT silently fabricate model strings. The placeholder approach
+(`REPLACE_ME`) is intentional — users see exactly which fields they
+must override.
+
+### Step 6 — Validate and save
+
+Validate the edited config through `solver.config_schema`:
 
 ```bash
-uv run python -c "from solver.config_schema import load_config; load_config('schedule-config.yml')"
+"$PY" -c "from solver.config_schema import load_config; load_config()"
 ```
 
-If it raises, surface the error message verbatim and let the user fix
-the offending field. The autodetect output is already validated, so
-errors at this step come from interactive overrides.
+`load_config()` with no args reads the encapsulated default path. If
+it raises, surface the error verbatim and let the user fix the
+offending field.
 
-### Step 5 — Optional pre-flight test solve
+### Step 7 — Optional pre-flight test solve
 
 If a `tasks.md` already exists in a feature spec directory, offer to
 run `/speckit.schedule.run` immediately to confirm the new portfolio
-solves end-to-end. This catches infeasibility early (no agent provides
-a required skill, aggregate κ too low, etc.) before the user commits
-the config.
+solves end-to-end. This catches infeasibility early (no agent
+provides a required skill, aggregate κ too low, etc.) before the user
+commits the config.
 
 ## Recommended Portfolios
 
@@ -143,9 +179,16 @@ these are sensible starter shapes when scaffolding by hand:
 
 For provider-specific recipes (Cursor, Copilot Workspace, Claude Code
 single-provider, Hybrid + local), see
-[`docs/portfolio-design.md`](../docs/portfolio-design.md), which also
-covers the κ / C tier framework, the `context_budget` kilotoken unit,
-and `cost_aware` price tuning.
+[`docs/portfolio-design.md`](../docs/portfolio-design.md).
+
+## Encapsulated paths (v0.6.0+)
+
+| Resource          | Path                                                |
+|-------------------|-----------------------------------------------------|
+| Extension code    | `.specify/extensions/schedule/`                     |
+| Encapsulated venv | `.specify/extensions/schedule/.venv/`               |
+| Portfolio config  | `.specify/schedule/schedule-config.yml`             |
+| Legacy (auto-migrated) | `./schedule-config.yml`                        |
 
 ## Usage
 

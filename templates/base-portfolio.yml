@@ -1,0 +1,62 @@
+# =============================================================================
+# spec-kit-schedule — Generic Base Portfolio (v0.6.0+)
+# =============================================================================
+# Used as a starting point when:
+#   - the user's AI-specific fleet is empty,
+#   - fleet discovery returns shape-mismatched roles for the task graph
+#     (e.g. all-reviewer fleet vs. an implementation-heavy tasks.md), or
+#   - the user runs `solver.autodetect` with no integration marker present.
+#
+# All `model:` and `provider:` fields are PLACEHOLDERS. Replace each
+# `REPLACE_ME` with a model name your AI assistant can actually invoke
+# from your chosen runtime — see `docs/portfolio-design.md` for
+# provider-specific recipes.
+#
+# κ / context_budget defaults follow the tier table in
+# `docs/formulation.md` ("Hallucination Calibration"):
+#
+#   Frontier κ=6,  C=32K  — Claude Opus 4, GPT-4o, Gemini 2.0 Pro tier
+#   Mid      κ=10, C=16K  — Claude Sonnet 4, GPT-4o-mini, Gemini Flash
+#   Small    κ=15, C=8K   — Claude Haiku, OSS mid-tier coders
+#
+# These are conservative envelopes. Override with calibration data once
+# you have real run logs (`solver.calibrate`).
+# =============================================================================
+
+agents:
+  - id: frontier
+    provider: REPLACE_ME    # e.g. anthropic, openai, google, github, ollama
+    model: REPLACE_ME       # e.g. claude-opus-4, gpt-4o, gemini-2.0-pro
+    skills: [design, architecture, review, schema]
+    kappa: 6                # Frontier tier, see formulation.md
+    context_budget: 32      # = 32 000 tokens (kilotokens; ×1000 at runtime)
+    speed_factor: 1.0
+    price_per_1k_tokens: 0.0
+
+  - id: mid
+    provider: REPLACE_ME
+    model: REPLACE_ME       # e.g. claude-sonnet-4, gpt-4o-mini, gemini-flash
+    skills: [python, backend, frontend, impl, test, api]
+    kappa: 10
+    context_budget: 16
+    speed_factor: 1.5
+    price_per_1k_tokens: 0.0
+
+  - id: small
+    provider: REPLACE_ME
+    model: REPLACE_ME       # e.g. claude-haiku, qwen2.5-coder, gpt-4o-mini
+    skills: [test, docs, lint, review]
+    kappa: 15
+    context_budget: 8
+    speed_factor: 2.0
+    price_per_1k_tokens: 0.0
+
+# Skill rules and token estimates: solver.autodetect fills in
+# project-specific entries when this template is consumed
+# programmatically. When loaded directly as schedule-config.yml, the
+# canonical defaults from solver.defaults are used.
+
+solver:
+  objective: lexicographic
+  time_limit: 60
+  num_workers: 4

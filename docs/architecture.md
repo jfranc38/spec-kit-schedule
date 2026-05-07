@@ -13,6 +13,7 @@ so claims here can be checked at HEAD with one `Read`.
 ```
 solver/
 ├── __init__.py              # Public API surface (curated, see __all__)
+├── _paths.py                # Encapsulated path constants + legacy-config migration (v0.6.0+)
 ├── scheduler.py             # Top-level entry: solve, solve_from_json, solve_with_fixed, CLI
 ├── model/                   # Pure model construction (no solver loops)
 │   ├── __init__.py
@@ -39,11 +40,48 @@ solver/
 ├── warnings_collector.py    # WarningCollector logging Handler
 ├── wave_executor.py         # Schedule → execution waves
 ├── anytime.py               # Anytime mode helper(s)
-├── autodetect.py            # Auto-detect portfolio from a project
+├── autodetect.py            # Auto-detect portfolio from a project (+ AI fleet enrichment, v0.6.0+)
+├── integration_detect.py    # Detect AI assistant from .specify/integration.json (v0.6.0+)
+├── fleet_discover.py        # Per-AI on-disk fleet discovery (v0.6.0+)
 ├── defaults.py              # Single source of default constants
 ├── i18n.py + i18n_catalog.py # i18n with EN+ES translations
-└── config_schema.py         # Pydantic config validation
+└── config_schema.py         # Pydantic config validation (default path → encapsulated, v0.6.0+)
 ```
+
+## Encapsulated state layout (v0.6.0+)
+
+The extension keeps everything under `.specify/` so no state leaks
+into the repo root:
+
+```
+<project_root>/
+├── .specify/
+│   ├── extensions/
+│   │   └── schedule/                    # ← Extension code (managed by `specify`)
+│   │       ├── bin/, commands/, solver/, templates/, ...
+│   │       └── .venv/                   # ← Encapsulated Python venv
+│   ├── schedule/                        # ← Extension RUNTIME state (managed by us)
+│   │   └── schedule-config.yml          # ← User portfolio
+│   ├── integration.json                 # (read-only, written by `specify init`)
+│   └── ...
+└── tasks.md, package.json, ...
+```
+
+The convention is: **`.specify/extensions/<id>/` is for extension
+code, `.specify/<id>/` is for runtime state**. The two trees are
+separate so users can wipe state without re-installing the extension
+(and vice-versa).
+
+`solver/_paths.py` exposes the canonical accessors:
+
+- `project_root(start)` — walks up to the nearest `.specify/`
+- `extension_code_dir(start)` — `<root>/.specify/extensions/schedule`
+- `extension_state_dir(start)` — `<root>/.specify/schedule`
+- `schedule_config_path(start)` — `<state>/schedule-config.yml`
+- `encapsulated_venv_python(start)` — `<code>/.venv/bin/python`
+- `migrate_legacy_config(project)` — one-shot migration from
+  pre-0.6.0 `./schedule-config.yml`. Conservative: refuses to
+  overwrite an existing encapsulated file.
 
 The directories `model/`, `orchestration/`, and `result/` mirror the
 three responsibilities of a solver-driven application: build, drive,

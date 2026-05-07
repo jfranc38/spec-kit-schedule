@@ -10,30 +10,73 @@ Solve a constrained optimization model (CP-SAT) over the current feature's `task
 
 This command sits between `/speckit.tasks` and `/speckit.implement` in the SDD pipeline.
 
-## Pre-flight: verify Python solver dependencies
+## Idempotent first-run
+
+`/speckit.schedule.run` is **safe to invoke at any time** — first
+run, every run. Steps 0 and 1 below auto-bootstrap missing
+prerequisites (Python venv, portfolio config) so the user never has
+to run a separate `/speckit.schedule.portfolio` to make the
+scheduler work. After the first successful invocation, Steps 0 and 1
+become no-ops and only Step 2 (the actual solve) does work.
+
+### Step 0 — Encapsulated Python venv (auto-bootstrap if missing)
 
 The solver is a Python package distinct from the spec-kit command
-registration, so it must be installed in a uv-managed venv before any
-of the steps below will work. Run the shared preflight script from the
-repository root — it probes the importable modules and prints an
-actionable install hint if any are missing:
+registration. v0.6.0+ keeps the venv inside the extension code dir
+(`.specify/extensions/schedule/.venv/`) so it ships and is removed
+together with the extension itself.
 
 ```bash
-./bin/check-deps.sh solver
+EXT_DIR=".specify/extensions/schedule"
+if [ ! -x "$EXT_DIR/.venv/bin/python" ]; then
+  echo "First-run: bootstrapping encapsulated Python solver venv at $EXT_DIR/.venv ..."
+  if ! ( cd "$EXT_DIR" && bash bin/install.sh --target ./.venv --skip-smoke ); then
+    echo "ERROR: solver venv bootstrap failed. Run manually:" >&2
+    echo "  cd $EXT_DIR && bash bin/install.sh --target ./.venv" >&2
+    exit 1
+  fi
+fi
+"$EXT_DIR/bin/check-deps.sh" solver
 ```
 
-If the script exits non-zero, surface its stderr message to the user
-verbatim and STOP — do not attempt the solver invocations below. If
-the check succeeds, proceed with the workflow.
+If the dep check exits non-zero after the auto-bootstrap, surface its
+stderr message verbatim and STOP — do not attempt the solver
+invocations below. If the check succeeds, proceed.
 
-## Prerequisites
+### Step 1 — Encapsulated portfolio config (auto-portfolio if missing)
 
-Before running this command, verify:
+```bash
+CFG=".specify/schedule/schedule-config.yml"
+LEGACY="./schedule-config.yml"
+
+# Legacy migration (one-shot): pre-0.6.0 left the config at the repo root.
+if [ -f "$LEGACY" ] && [ ! -f "$CFG" ]; then
+  mkdir -p "$(dirname "$CFG")"
+  mv "$LEGACY" "$CFG"
+  echo "Migrated $LEGACY -> $CFG (v0.6.0 layout)."
+fi
+
+if [ ! -f "$CFG" ]; then
+  echo "First-run: no portfolio yet. Launching portfolio scaffolder ..."
+  # The agent reads commands/portfolio.md and executes the AI-aware
+  # workflow inline (detect_integration → discover_fleet → confirm
+  # models with the user → write $CFG).
+fi
+```
+
+When `$CFG` does not exist, **the agent SHOULD invoke the portfolio
+scaffolder workflow inline** (read `commands/portfolio.md` and follow
+its steps) rather than telling the user to run a second command. The
+v0.6.0 design is single-entry-point: only `/speckit.schedule.run`.
+
+### Prerequisites for Step 2
+
+After Steps 0 and 1 succeed:
 
 1. **tasks.md exists** in the current feature spec directory (`.specify/specs/<feature>/tasks.md`)
 2. **plan.md exists** (used for file-path cross-referencing)
-3. **schedule-config.yml exists** in the project root (run `/speckit.schedule.portfolio` to generate one if missing)
-4. **Python 3.10+** with `ortools` installed (`pip install ortools>=9.9`)
+3. **`.specify/schedule/schedule-config.yml` exists** (created by Step 1's auto-portfolio path)
+4. **Python 3.10+** with `ortools` installed (handled by Step 0's venv bootstrap)
 5. **Recommended**: The *Explicit Task Dependencies* preset is installed for machine-readable `(depends on T###)` annotations
 
 ## Workflow
@@ -63,25 +106,28 @@ Read the current feature's `tasks.md` and extract:
 
 ### Phase 2 — Build and Solve CP-SAT Model
 
-Run the solver at `.specify/extensions/spec-kit-schedule/solver/scheduler.py` (or invoke the module form `python -m solver.scheduler`) with the parsed task graph and agent portfolio as JSON input. End-to-end pipeline:
+Use the encapsulated Python interpreter from Step 0 so dependencies
+are sourced from the extension's own venv:
 
 ```bash
-# 1. Parse + solve.
-python -m solver.parse_tasks tasks.md schedule-config.yml > in.json
-python -m solver.scheduler < in.json > out.json
+PY="$EXT_DIR/.venv/bin/python"
+
+# 1. Parse + solve, reading the encapsulated portfolio config.
+"$PY" -m solver.parse_tasks tasks.md "$CFG" > in.json
+"$PY" -m solver.scheduler < in.json > out.json
 
 # 2. (optional) Static images — requires the `viz` extra
-#    (uv sync --extra viz) and places <feature>-dag.png / <feature>-gantt.png
-#    in <outdir>.
-python -m solver.visualize out.json images/ --feature <feature>
+#    (auto-installed by bin/install.sh) and places <feature>-dag.png /
+#    <feature>-gantt.png in <outdir>.
+"$PY" -m solver.visualize out.json images/ --feature <feature>
 
 # 3. Render markdown; with --image-prefix the PNGs are embedded next to
 #    the Mermaid blocks so consumers without Mermaid still see the charts.
-python -m solver.render_schedule out.json <feature> \
+"$PY" -m solver.render_schedule out.json <feature> \
     --image-prefix images/<feature> > schedule.md
 
 # 4. (optional) Interactive HTML — requires plotly (included in `viz` extra).
-python -m solver.render_html out.json <feature> \
+"$PY" -m solver.render_html out.json <feature> \
     --image-prefix images/<feature> > schedule.html
 ```
 
@@ -210,8 +256,10 @@ If the MAQA extension is installed, the wave plan can be consumed directly by `/
 
 ## Error Handling
 
-- **No schedule-config.yml**: Prompt user to run `/speckit.schedule.portfolio` first
-- **Missing ortools**: Provide installation command `pip install ortools`
+- **No `.specify/schedule/schedule-config.yml`**: Step 1 auto-bootstraps it.
+  Only surface an error if the auto-bootstrap itself fails.
+- **Missing ortools**: Step 0 auto-installs the venv. If the bootstrap
+  fails, surface the install.sh stderr verbatim.
 - **Infeasible model**: Report which constraints are binding. Common causes:
   - Agent portfolio lacks skills required by tasks → suggest adding an agent or broadening skills
   - Context budget too tight for the number of tasks → suggest splitting into sub-features
@@ -224,11 +272,15 @@ If the MAQA extension is installed, the wave plan can be consumed directly by `/
 /speckit.schedule.run
 ```
 
-Or with explicit configuration path:
+Or with explicit configuration path (overrides the encapsulated default):
 
 ```
 /speckit.schedule.run --config path/to/schedule-config.yml
 ```
+
+The default config path is `.specify/schedule/schedule-config.yml`
+(v0.6.0+). Pre-0.6.0 configs at `./schedule-config.yml` are migrated
+automatically on first run.
 
 ## Executing Waves via /speckit.implement
 
