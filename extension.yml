@@ -3,7 +3,7 @@ schema_version: "1.0"
 extension:
   id: "schedule"
   name: "Spec Kit Schedule — CP-SAT Agent Orchestrator"
-  version: "0.5.3"
+  version: "0.5.4"
   description: "Optimal multi-agent task scheduling via CP-SAT solver with DAG precedence, hallucination-aware caps, file-conflict avoidance, stochastic durations, replanning, and interactive HTML output"
   author: "Julio César Franco Ardila"
   repository: "https://github.com/jfranc38/spec-kit-schedule"
@@ -38,6 +38,17 @@ provides:
     - name: "speckit.schedule.visualize"
       file: "commands/visualize.md"
       description: "Render the solved schedule as a Gantt chart and DAG diagram"
+
+# Optional opt-in hook fired by spec-kit immediately after `/speckit.tasks`.
+# Because `optional: true`, the agent surfaces the prompt and the user
+# decides whether to proceed — no auto-execution. Mirrors the canonical
+# pattern used by the bundled `git` extension.
+hooks:
+  after_tasks:
+    command: speckit.schedule.run
+    optional: true
+    prompt: "Generate an optimal CP-SAT schedule from the new tasks?"
+    description: "Suggest running the scheduler after task generation"
 
 tags:
   - "scheduling"

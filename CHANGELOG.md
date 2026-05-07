@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.4] - 2026-05-07
+
+### Added
+- **`after_tasks` opt-in hook**: spec-kit can now surface a prompt
+  (`Generate an optimal CP-SAT schedule from the new tasks?`)
+  immediately after `/speckit.tasks` finishes, letting the user
+  trigger `/speckit.schedule.run` without remembering the command
+  by hand. Hook is `optional: true` — the agent asks first; user
+  declines → nothing runs. Mirrors the canonical pattern used by
+  the bundled `git` extension.
+
 ## [0.5.3] - 2026-05-06
 
 ### Fixed
