@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.6.1] - 2026-05-07
 
 ### Fixed
 - **CRITICAL: per-AI template prices were 1000× inflated.** The four
@@ -23,9 +23,10 @@
   `claude-opus-4-7` / `claude-sonnet-4-6` / `claude-haiku-4-5`
   (the prior 4.0/4.1 generations retire 2026-06-15, and
   `claude-haiku-4` was never a real id). OpenAI templates now
-  reference `gpt-5.4` / `gpt-5.4-mini` / `o4-mini` (replacing the
-  superseded `gpt-4o` / `gpt-4o-mini` / `o3-mini`). Google templates
-  now reference `gemini-2.5-flash` / `gemini-2.5-flash-lite` for the
+  reference `gpt-5.5` (current GA flagship, released 2026-04-24,
+  $5/MTok) / `gpt-5.4-mini` / `o4-mini` (replacing the superseded
+  `gpt-4o` / `gpt-4o-mini` / `o3-mini`). Google templates now
+  reference `gemini-2.5-flash` / `gemini-2.5-flash-lite` for the
   speed tiers (the 2.0-flash family is being shut down). The Gemini
   Pro slot carries a comment about its tiered context-length
   pricing cliff at 200k input tokens.

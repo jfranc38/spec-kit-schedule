@@ -24,12 +24,12 @@
 agents:
   - id: gpt5
     provider: openai
-    model: gpt-5.4
+    model: gpt-5.5                  # latest GA flagship (2026-04-24)
     skills: [design, schema, review, architecture]
     kappa: 8                 # Frontier-ish (slightly above Opus floor)
     context_budget: 24
     speed_factor: 1.2
-    price_per_1k_tokens: 0.0025    # $2.50/MTok — notional (bundled in Copilot)
+    price_per_1k_tokens: 0.005     # $5/MTok — notional (bundled in Copilot)
 
   - id: gpt5-mini
     provider: openai

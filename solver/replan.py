@@ -24,7 +24,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = "solver"  # noqa: A001
 
-import yaml  # type: ignore[import-untyped]  # PyYAML ships no type stubs by default
+import yaml  # type: ignore[import-untyped, unused-ignore]
 
 from .i18n import t
 from .model.fixed import resolve_fixed_duration

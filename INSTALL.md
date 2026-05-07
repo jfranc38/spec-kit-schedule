@@ -1,4 +1,4 @@
-# Installation — v0.6.0
+# Installation — v0.6.1
 
 `spec-kit-schedule` is distributed as a spec-kit extension. The
 canonical install paths use the `specify` CLI; PyPI distribution is on
@@ -21,12 +21,12 @@ target.
 ## 1. Install from a tagged release (recommended)
 
 ```bash
-specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.6.0.zip
+specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.6.1.zip
 ```
 
 `specify extension add <id> --from` accepts any HTTPS URL pointing at a zip
 of the extension. The URL above is GitHub's auto-generated source
-archive for the `v0.6.0` tag.
+archive for the `v0.6.1` tag.
 
 The `specify` CLI does not install Python packages. **v0.6.0+ users
 do not need to bootstrap manually** — the first invocation of

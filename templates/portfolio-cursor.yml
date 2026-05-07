@@ -39,12 +39,12 @@ agents:
 
   - id: gpt5
     provider: openai
-    model: gpt-5.4
+    model: gpt-5.5                  # latest GA flagship (2026-04-24)
     skills: [frontend, impl, api]
     kappa: 10                # Mid tier
     context_budget: 16
     speed_factor: 1.4
-    price_per_1k_tokens: 0.0025
+    price_per_1k_tokens: 0.005      # $5/MTok
 
   - id: gpt5-mini
     provider: openai
