@@ -16,8 +16,10 @@ discovers the on-disk agent fleet (e.g. ``.claude/agents/*.md``), and
 combines stack-derived agents with discovered implementers plus
 generic ``frontier`` / ``mid`` / ``small`` slots from
 ``templates/base-portfolio.yml`` for any uncovered roles. Reviewer-
-shaped agents are surfaced in ``discovered_reviewers`` rather than
-auto-routed as scheduler agents — see ``commands/portfolio.md``.
+shaped agents are surfaced in ``discovered_reviewers`` and hybrid
+agents (matched neither / both keyword sets) in ``discovered_hybrid``
+rather than auto-routed as scheduler agents — see
+``commands/portfolio.md``.
 """
 
 from __future__ import annotations
@@ -283,6 +285,90 @@ def _build_skill_rules(stacks: dict[str, Any]) -> list[dict[str, str]]:
 
 
 # ---------------------------------------------------------------------------
+# Skill inference for discovered implementer agents
+# ---------------------------------------------------------------------------
+
+# Default skills assigned when frontmatter ``tools:`` and ``description:``
+# yield no recognised hints. Wide enough that the discovered implementer
+# can plausibly run any task in a typical mixed feature graph.
+_DEFAULT_IMPLEMENTER_SKILLS: list[str] = ["impl", "backend", "frontend", "python", "test"]
+
+# Keyword → skill hits used by ``_skills_from_frontmatter``. Each entry
+# matches against lowercase ``tools`` items and ``description`` words.
+_SKILL_KEYWORDS: dict[str, str] = {
+    # Test runners / frameworks
+    "pytest": "test",
+    "jest": "test",
+    "vitest": "test",
+    "mocha": "test",
+    "rspec": "test",
+    "test": "test",
+    # Infra / deploy
+    "docker": "infra",
+    "kubectl": "infra",
+    "kubernetes": "infra",
+    "terraform": "infra",
+    "infra": "infra",
+    "deploy": "infra",
+    # Languages / stacks
+    "python": "python",
+    "javascript": "javascript",
+    "typescript": "javascript",
+    "rust": "rust",
+    "go": "go",
+    "java": "java",
+    # Roles
+    "backend": "backend",
+    "frontend": "frontend",
+    "api": "api",
+    "database": "database",
+    "schema": "schema",
+    "design": "design",
+    "review": "review",
+    "docs": "docs",
+}
+
+
+def _skills_from_frontmatter(agent: DiscoveredAgent) -> list[str]:
+    """Derive a skills list from the agent's parsed frontmatter.
+
+    Falls back to ``_DEFAULT_IMPLEMENTER_SKILLS`` when neither
+    ``tools`` nor ``description`` yields any recognised keyword. The
+    returned list preserves discovery order and contains no duplicates.
+    """
+    found: list[str] = []
+    seen: set[str] = set()
+
+    def _record(skill: str) -> None:
+        if skill not in seen:
+            seen.add(skill)
+            found.append(skill)
+
+    # 1) tools entries are normally compact tokens — exact-match each one.
+    for raw in agent.tools:
+        token = raw.strip().lower()
+        skill = _SKILL_KEYWORDS.get(token)
+        if skill is not None:
+            _record(skill)
+
+    # 2) description text is fuzzier — substring-match each keyword.
+    description = (agent.description or "").lower()
+    if description:
+        for keyword, skill in _SKILL_KEYWORDS.items():
+            if keyword in description:
+                _record(skill)
+
+    if not found:
+        return list(_DEFAULT_IMPLEMENTER_SKILLS)
+    # Always include the generic ``impl`` marker so the scheduler can
+    # match implementer agents to bare implementation tasks even when
+    # frontmatter only mentioned a specific stack.
+    if "impl" not in seen:
+        found.append("impl")
+    return found
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -322,12 +408,27 @@ def detect_portfolio(
         whenever fleet discovery returns implementers (so the fleet's
         ``REPLACE_ME`` placeholders are visible to the user).
 
+    .. note::
+        The three integration-related flags
+        (``integration_key``, ``auto_detect_integration``,
+        ``use_base_portfolio``) may be consolidated into a single
+        ``FleetOptions`` dataclass in v0.7. Until then, callers should
+        pass them as keyword arguments explicitly.
+
     Returns
     -------
     dict
         A fully-formed, Config-validated schedule-config.yml dictionary.
-        Includes the extra top-level key ``discovered_reviewers`` when
-        the AI fleet had reviewer-shaped agents.
+        Includes the extra top-level keys:
+
+        * ``discovered_reviewers`` — only ``role == "reviewer"`` agents
+          (description matches the reviewer keyword set and not the
+          implementer set).
+        * ``discovered_hybrid`` — agents that matched both keyword
+          sets, neither, or otherwise could not be classified
+          confidently. Surfaced separately so the portfolio command
+          can prompt the user honestly rather than misfiling them
+          under reviewers.
     """
     project_dir = Path(project_dir).resolve()
     if not project_dir.is_dir():
@@ -411,6 +512,7 @@ def detect_portfolio(
 
     discovered_implementers: list[DiscoveredAgent] = []
     discovered_reviewers: list[DiscoveredAgent] = []
+    discovered_hybrid: list[DiscoveredAgent] = []
     if resolved_key:
         fleet = discover_fleet(resolved_key, project_dir)
         for ag in fleet:
@@ -418,9 +520,10 @@ def detect_portfolio(
                 discovered_implementers.append(ag)
             elif ag.role == "reviewer":
                 discovered_reviewers.append(ag)
-            # hybrid agents are listed under reviewers (see commands/portfolio.md)
             else:
-                discovered_reviewers.append(ag)
+                # ``role == "hybrid"`` — surfaced separately so the
+                # portfolio command can disambiguate with the user.
+                discovered_hybrid.append(ag)
 
     # Add discovered IMPLEMENTERs as scheduler agents.
     existing_ids = {a["id"] for a in agents}
@@ -431,7 +534,7 @@ def detect_portfolio(
             "id": agent_id,
             "provider": default_provider,
             "model": ag.model or "REPLACE_ME",
-            "skills": ["impl", "backend", "frontend", "python", "test"],
+            "skills": _skills_from_frontmatter(ag),
             "kappa": KAPPA_DEFAULT,
             "context_budget": CONTEXT_BUDGET_KTOKENS_DEFAULT,
             "speed_factor": SPEED_FACTOR_DEFAULT,
@@ -483,19 +586,25 @@ def detect_portfolio(
         },
     }
 
-    # Surface reviewers as metadata only — they are NOT scheduler agents.
-    # ``Config.model_validate`` accepts unknown top-level keys (extra="allow"),
-    # so /speckit.schedule.portfolio can show them to the user without
-    # routing impl tasks to them.
+    # Surface reviewers and hybrid agents as metadata only — they are NOT
+    # scheduler agents. ``Config.model_validate`` accepts unknown top-level
+    # keys (extra="allow"), so /speckit.schedule.portfolio can show them to
+    # the user without routing impl tasks to them.
+    def _agent_summary(ag: DiscoveredAgent) -> dict[str, Any]:
+        return {
+            "name": ag.name,
+            "file": str(ag.file),
+            "description": ag.description,
+            "role": ag.role,
+        }
+
     if discovered_reviewers:
         config_dict["discovered_reviewers"] = [
-            {
-                "name": ag.name,
-                "file": str(ag.file),
-                "description": ag.description,
-                "role": ag.role,
-            }
-            for ag in discovered_reviewers
+            _agent_summary(ag) for ag in discovered_reviewers
+        ]
+    if discovered_hybrid:
+        config_dict["discovered_hybrid"] = [
+            _agent_summary(ag) for ag in discovered_hybrid
         ]
     # Always record the resolved integration when the caller opted in,
     # even when discovery returned only implementers — downstream UI
@@ -613,7 +722,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Read .specify/integration.json and discover the user's AI fleet "
             "(.claude/agents/*.md, .github/agents/*.agent.md, etc.). Adds "
             "discovered implementers as scheduler agents and surfaces "
-            "reviewer-shaped agents under discovered_reviewers."
+            "reviewer-shaped agents under discovered_reviewers and "
+            "ambiguous (hybrid) agents under discovered_hybrid."
         ),
     )
     parser.add_argument(

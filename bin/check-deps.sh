@@ -11,6 +11,14 @@
 #   3. python3                                         (last-resort fallback
 #      for pip-only environments).
 #
+# Caching:
+#   On a successful encapsulated-venv probe we touch a per-mode
+#   sentinel (`.venv/.deps-ok-<mode>`). On the next call we skip the
+#   import probe when the sentinel is newer than `pyvenv.cfg` — the
+#   sentinel is invalidated automatically whenever the venv is
+#   recreated by `bin/install.sh`. The system-python tier has no
+#   reliable invalidation key, so it always reruns the probe.
+#
 # Usage:
 #   bin/check-deps.sh           # core solver only
 #   bin/check-deps.sh viz       # core + viz extras (matplotlib + plotly)
@@ -50,12 +58,17 @@ while [[ "$search_dir" != "/" ]]; do
 done
 
 probe_cmd=()
+# Path to the venv's pyvenv.cfg; populated when the encapsulated layout
+# is in use so we can short-circuit the import probe via a sentinel
+# file that invalidates whenever the venv is recreated.
+venv_dir=""
 
 # 1. Encapsulated venv (v0.6.0+).
 if [[ -n "$project_root" ]]; then
   encapsulated_python="$project_root/.specify/extensions/schedule/.venv/bin/python"
   if [[ -x "$encapsulated_python" ]]; then
     probe_cmd=("$encapsulated_python" -c)
+    venv_dir="$project_root/.specify/extensions/schedule/.venv"
   fi
 fi
 
@@ -69,6 +82,23 @@ fi
 # 3. System python3 (last resort — pip-only / corporate env).
 if [[ ${#probe_cmd[@]} -eq 0 ]]; then
   probe_cmd=(python3 -c)
+fi
+
+# Per-mode sentinel name: solver and viz each verify a different module
+# set, so they cannot share one sentinel.
+sentinel=""
+pyvenv_cfg=""
+if [[ -n "$venv_dir" ]]; then
+  pyvenv_cfg="$venv_dir/pyvenv.cfg"
+  # Only cache when pyvenv.cfg exists — system-python tier (no venv)
+  # has no reliable invalidation key and must stay on the slow path.
+  if [[ -f "$pyvenv_cfg" ]]; then
+    sentinel="$venv_dir/.deps-ok-$mode"
+    # Cached: deps verified after the last venv update.
+    if [[ -f "$sentinel" && "$sentinel" -nt "$pyvenv_cfg" ]]; then
+      exit 0
+    fi
+  fi
 fi
 
 if ! "${probe_cmd[@]}" "import $modules" >/dev/null 2>&1; then
@@ -91,4 +121,11 @@ Or, for a contributor checkout:
 After bootstrap, re-run the /speckit.schedule.* command.
 EOF
   exit 1
+fi
+
+# Probe succeeded — refresh the sentinel so the next /run skips the
+# import cost. Best-effort: a touch failure (read-only FS, race) just
+# means the next call repeats the probe.
+if [[ -n "$sentinel" ]]; then
+  touch "$sentinel" 2>/dev/null || true
 fi

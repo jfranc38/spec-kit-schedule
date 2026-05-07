@@ -96,6 +96,15 @@ def _read_json(path: Path) -> dict[str, Any] | None:
     return parsed
 
 
+def _str_or_none(value: object) -> str | None:
+    """Return the stripped string if ``value`` is a non-empty string, else None."""
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped:
+            return stripped
+    return None
+
+
 def detect_integration(project: Path | None = None) -> str | None:
     """Return the canonical integration key, or None if not detectable.
 
@@ -118,24 +127,24 @@ def detect_integration(project: Path | None = None) -> str | None:
     # Source 1+2: .specify/integration.json
     integration_json = _read_json(root / ".specify" / "integration.json")
     if integration_json is not None:
-        key = integration_json.get("integration_key")
-        if isinstance(key, str) and key.strip():
-            return key.strip()
+        key = _str_or_none(integration_json.get("integration_key"))
+        if key is not None:
+            return key
         installed = integration_json.get("installed_integrations")
         if isinstance(installed, list) and installed:
-            first = installed[0]
-            if isinstance(first, str) and first.strip():
-                return first.strip()
+            first = _str_or_none(installed[0])
+            if first is not None:
+                return first
 
     # Source 3+4: .specify/init-options.json
     init_options = _read_json(root / ".specify" / "init-options.json")
     if init_options is not None:
-        key = init_options.get("integration")
-        if isinstance(key, str) and key.strip():
-            return key.strip()
-        legacy = init_options.get("ai")
-        if isinstance(legacy, str) and legacy.strip():
-            return legacy.strip()
+        key = _str_or_none(init_options.get("integration"))
+        if key is not None:
+            return key
+        legacy = _str_or_none(init_options.get("ai"))
+        if legacy is not None:
+            return legacy
 
     return None
 

@@ -47,14 +47,10 @@ invocations below. If the check succeeds, proceed.
 
 ```bash
 CFG=".specify/schedule/schedule-config.yml"
-LEGACY="./schedule-config.yml"
 
-# Legacy migration (one-shot): pre-0.6.0 left the config at the repo root.
-if [ -f "$LEGACY" ] && [ ! -f "$CFG" ]; then
-  mkdir -p "$(dirname "$CFG")"
-  mv "$LEGACY" "$CFG"
-  echo "Migrated $LEGACY -> $CFG (v0.6.0 layout)."
-fi
+# Legacy config at repo root is migrated automatically by load_config();
+# see solver/_paths.py:migrate_legacy_config (conservative refusal-on-
+# conflict, logs the move). No shell mv needed here.
 
 if [ ! -f "$CFG" ]; then
   echo "First-run: no portfolio yet. Launching portfolio scaffolder ..."

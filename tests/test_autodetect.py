@@ -342,7 +342,14 @@ class TestAIFleetIntegration:
         assert "small" in ids
 
     def test_reviewer_only_fleet_does_not_pollute_agents(self, tmp_path: Path) -> None:
-        """Reviewers go to ``discovered_reviewers``, NOT the scheduler agents."""
+        """Reviewer/hybrid fleets do NOT add scheduler agents.
+
+        ``code-review.md`` matches both reviewer ("review", "security") and
+        implementer ("code") keyword sets, so ``classify_role`` returns
+        ``"hybrid"``. The agent must surface under ``discovered_hybrid``
+        (not the implementer ``agents:`` list) so the portfolio command
+        can disambiguate with the user.
+        """
         (tmp_path / ".specify").mkdir()
         agents_dir = tmp_path / ".claude" / "agents"
         agents_dir.mkdir(parents=True)
@@ -351,11 +358,87 @@ class TestAIFleetIntegration:
             encoding="utf-8",
         )
         result = detect_portfolio(tmp_path, integration_key="claude")
-        # Reviewer is NOT a scheduler agent
+        # Hybrid is NOT a scheduler agent
         assert "code-review" not in _agent_ids(result)
-        # But it IS surfaced in the metadata
+        # Hybrid never lands in discovered_reviewers (that bucket is now
+        # role == "reviewer" only)
+        assert "discovered_reviewers" not in result
+        # Surfaced under discovered_hybrid instead
+        assert "discovered_hybrid" in result
+        assert any(r["name"] == "code-review" for r in result["discovered_hybrid"])
+
+    def test_pure_reviewer_routed_to_discovered_reviewers(self, tmp_path: Path) -> None:
+        """Pure reviewer (matches reviewer kw, no impl kw) → discovered_reviewers."""
+        (tmp_path / ".specify").mkdir()
+        agents_dir = tmp_path / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        # "audit" is a reviewer keyword; description avoids any implementer
+        # keywords (no "code"/"dev"/"build"/...).
+        (agents_dir / "auditor.md").write_text(
+            "---\ndescription: Audits configuration files for security drift.\n---\n",
+            encoding="utf-8",
+        )
+        result = detect_portfolio(tmp_path, integration_key="claude")
+        assert "auditor" not in _agent_ids(result)
         assert "discovered_reviewers" in result
-        assert any(r["name"] == "code-review" for r in result["discovered_reviewers"])
+        assert any(r["name"] == "auditor" for r in result["discovered_reviewers"])
+        # Hybrid bucket should NOT contain a pure reviewer
+        assert "discovered_hybrid" not in result
+
+    def test_hybrid_only_fleet_uses_hybrid_bucket(self, tmp_path: Path) -> None:
+        """Agent matching neither keyword set → discovered_hybrid."""
+        (tmp_path / ".specify").mkdir()
+        agents_dir = tmp_path / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        # No keyword from either set ("research" is in neither).
+        (agents_dir / "researcher.md").write_text(
+            "---\ndescription: Performs background research on requirements.\n---\n",
+            encoding="utf-8",
+        )
+        result = detect_portfolio(tmp_path, integration_key="claude")
+        assert "researcher" not in _agent_ids(result)
+        assert "discovered_reviewers" not in result
+        assert "discovered_hybrid" in result
+        assert any(r["name"] == "researcher" for r in result["discovered_hybrid"])
+
+    def test_implementer_skills_inferred_from_description(self, tmp_path: Path) -> None:
+        """Discovered implementer with backend+python keywords → those skills.
+
+        Description avoids reviewer keywords (``test``, ``review`` etc.) so
+        ``classify_role`` returns ``"implementer"`` and the agent is added
+        to the scheduler portfolio.
+        """
+        (tmp_path / ".specify").mkdir()
+        agents_dir = tmp_path / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "py-builder.md").write_text(
+            "---\ndescription: Builds Python backend services and APIs.\n---\n",
+            encoding="utf-8",
+        )
+        result = detect_portfolio(tmp_path, integration_key="claude")
+        skills = _agent_skills(result, "py-builder")
+        assert "python" in skills
+        assert "backend" in skills
+        assert "api" in skills
+        # Generic ``impl`` marker is always present so bare implementation
+        # tasks still match the agent.
+        assert "impl" in skills
+
+    def test_implementer_skills_fallback_to_default(self, tmp_path: Path) -> None:
+        """No recognised hints → fall back to the wide default skills list."""
+        (tmp_path / ".specify").mkdir()
+        agents_dir = tmp_path / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        # description contains an implementer keyword ("dev") but no skill
+        # keyword from _SKILL_KEYWORDS.
+        (agents_dir / "general-dev.md").write_text(
+            "---\ndescription: Generic dev agent.\n---\n",
+            encoding="utf-8",
+        )
+        result = detect_portfolio(tmp_path, integration_key="claude")
+        skills = _agent_skills(result, "general-dev")
+        # Default list contains all five canonical hints.
+        assert {"impl", "backend", "frontend", "python", "test"}.issubset(skills)
 
     def test_integration_marker_picked_up_by_auto_detect(self, tmp_path: Path) -> None:
         """``auto_detect_integration=True`` reads .specify/integration.json."""

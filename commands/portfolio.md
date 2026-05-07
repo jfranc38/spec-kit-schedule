@@ -100,9 +100,17 @@ under `discovered_reviewers:` in the YAML output, with this prompt:
 > *Detected reviewer-shaped agents — add as `review`-skill scheduler
 > agents? They'll only be matched to test/review tasks.*
 
-Only on user confirmation are reviewer-shaped agents promoted to
-scheduler agents (with `skills: [review, test]`, `kappa: 8`,
-`context_budget: 16`).
+HYBRID-shaped agents (matched both keyword sets, or matched neither
+confidently) are surfaced separately under `discovered_hybrid:` so the
+scaffolder can prompt the user honestly rather than misfiling them
+under reviewers:
+
+> *Detected ambiguous (hybrid) agents — review each one and decide
+> whether to promote it to a scheduler agent.*
+
+Only on user confirmation are reviewer- or hybrid-shaped agents
+promoted to scheduler agents (with `skills: [review, test]`,
+`kappa: 8`, `context_budget: 16`).
 
 ### Step 4 — Confirm models with the user
 

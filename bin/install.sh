@@ -88,9 +88,9 @@ smoke_test() {
   # because it's part of the function body, not the trap itself, so the
   # tmpdir is still present when the line count is read.
   trap 'rm -rf "$tmp"' RETURN
-  "${RUNNER[@]}" python -m solver.parse_tasks docs/example-tasks.md docs/example-config.yml > "$tmp/in.json"
-  "${RUNNER[@]}" python -m solver.scheduler < "$tmp/in.json" > "$tmp/out.json"
-  "${RUNNER[@]}" python -m solver.render_schedule "$tmp/out.json" "example" > "$tmp/schedule.md"
+  "${RUNNER[@]}" -m solver.parse_tasks docs/example-tasks.md docs/example-config.yml > "$tmp/in.json"
+  "${RUNNER[@]}" -m solver.scheduler < "$tmp/in.json" > "$tmp/out.json"
+  "${RUNNER[@]}" -m solver.render_schedule "$tmp/out.json" "example" > "$tmp/schedule.md"
   grep -q "Status: \*\*OPTIMAL\*\*" "$tmp/schedule.md" \
     || die "smoke test failed: OPTIMAL status not found in rendered schedule.md"
   log "smoke test OK ($(wc -l <"$tmp/schedule.md") lines generated)"
@@ -105,18 +105,21 @@ if [[ "${SKIP_UV:-}" == "1" ]]; then
     RUNNER=("$target_venv/bin/python")
   else
     python3 -m pip install -e '.[dev]'
-    RUNNER=()
+    RUNNER=(python3)
   fi
 else
   ensure_uv
   if [[ -n "$target_venv" ]]; then
     log "syncing dependencies with uv into $target_venv (lockfile: uv.lock) ..."
     UV_PROJECT_ENVIRONMENT="$target_venv" uv sync --frozen --extra dev --extra viz
-    RUNNER=(uv run --project "$ROOT" --frozen --extra dev --extra viz --)
+    # Use the venv's python directly so the smoke test cannot pick up
+    # a different uv-managed env (UV_PROJECT_ENVIRONMENT does not
+    # auto-export, and `uv run --project` resolves its own venv).
+    RUNNER=("$target_venv/bin/python")
   else
     log "syncing dependencies with uv (lockfile: uv.lock) ..."
     uv sync --frozen --extra dev --extra viz
-    RUNNER=(uv run --)
+    RUNNER=(uv run -- python)
   fi
 fi
 

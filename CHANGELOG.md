@@ -1,5 +1,36 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `solver.autodetect.detect_portfolio` now surfaces hybrid-classified
+  fleet agents under a new top-level `discovered_hybrid` key. Pure
+  `discovered_reviewers` only contains agents that match reviewer
+  keywords AND not implementer keywords — hybrids are no longer
+  silently misfiled there.
+- Skills inferred from each discovered implementer's frontmatter
+  (`tools:` and `description:`) instead of the previous hard-coded
+  `["impl", "backend", "frontend", "python", "test"]`. Falls back to
+  that wide default when no recognised keyword is found.
+- `bin/check-deps.sh` caches a per-mode sentinel file
+  (`.venv/.deps-ok-<mode>`) inside the encapsulated venv. The next
+  call exits in <50 ms when the sentinel is newer than `pyvenv.cfg`,
+  cutting the import probe (300–500 ms) from the hot `/run` path.
+
+### Changed
+- `bin/install.sh` smoke test now invokes the venv's `python` binary
+  directly instead of `uv run --project ...` so it cannot accidentally
+  pick up a different uv-managed environment if `UV_PROJECT_ENVIRONMENT`
+  is not exported.
+- `commands/schedule.md` Step 1 no longer shells out to `mv` for the
+  legacy-config migration; that path is handled in Python by
+  `solver._paths.migrate_legacy_config` (conservative refusal-on-
+  conflict + logging) via `solver.config_schema.load_config`.
+
+### Internal
+- `solver.integration_detect` extracts a small `_str_or_none` helper
+  for the four near-identical "non-empty stripped string" probes.
+
 ## [0.6.0] - 2026-05-07
 
 ### Breaking changes
