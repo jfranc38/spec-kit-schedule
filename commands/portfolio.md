@@ -89,10 +89,23 @@ The output portfolio is the **union** of:
 2. **Discovered IMPLEMENTERs** from the AI fleet — added as scheduler
    agents with their on-disk `model:` (or `REPLACE_ME` when
    frontmatter is missing).
-3. **Generic base slots** (`frontier`, `mid`, `small`) from
-   `templates/base-portfolio.yml` — appended for any role coverage
-   gaps. Always emitted when implementers were discovered, so the
-   user has a known-good fallback skeleton.
+3. **Per-AI starter slots** — appended for any role coverage gaps.
+   Always emitted when implementers were discovered, so the user has
+   a known-good fallback skeleton. v0.6.x ships realistic starter
+   templates for the four most common AI assistants:
+
+   | Integration key | Template                        | Tier slots                          |
+   |-----------------|---------------------------------|-------------------------------------|
+   | `claude`        | `templates/portfolio-claude.yml`  | `opus` / `sonnet` / `haiku`         |
+   | `copilot`       | `templates/portfolio-copilot.yml` | `gpt4o` / `gpt4o-mini` / `o3-mini`  |
+   | `cursor-agent`  | `templates/portfolio-cursor.yml`  | 5-agent multi-provider mix          |
+   | `gemini`        | `templates/portfolio-gemini.yml`  | `pro` / `flash` / `flash-lite`      |
+   | (other / none)  | `templates/base-portfolio.yml`    | `frontier` / `mid` / `small` (REPLACE_ME) |
+
+   The per-AI templates ship realistic 2026 model identifiers and
+   list prices, so users do NOT have to look up valid model strings
+   manually. Only the generic `base-portfolio.yml` fallback retains
+   `REPLACE_ME` placeholders.
 
 REVIEWERs are **NOT** auto-added as scheduler agents. They show up
 under `discovered_reviewers:` in the YAML output, with this prompt:
@@ -114,11 +127,15 @@ promoted to scheduler agents (with `skills: [review, test]`,
 
 ### Step 4 — Confirm models with the user
 
-The autodetect output may contain `REPLACE_ME` placeholders in the
-generic base slots, and the discovered fleet's `model:` field may be
-absent or aspirational. We **cannot** determine reliably from disk
-which model strings the user can actually invoke — they may have
-disabled access to specific models in their AI assistant.
+When a per-AI template was used (Claude / Copilot / Cursor / Gemini)
+the slot models reflect each provider's 2026 list — but pricing and
+model availability change, and individual users may have disabled
+access to specific models in their AI assistant. The discovered
+fleet's `model:` field may also be absent or aspirational.
+
+When the generic `base-portfolio.yml` fallback was used (unknown AI
+key), the slots carry `REPLACE_ME` placeholders that the user MUST
+override before the schedule is realisable.
 
 ALWAYS prompt the user explicitly:
 
@@ -143,9 +160,12 @@ implementation-heavy, surface this **explicitly**:
 > implementer slots (frontier / mid / small). You'll need to fill in
 > model names you can invoke from {AI display name}.*
 
-Do NOT silently fabricate model strings. The placeholder approach
-(`REPLACE_ME`) is intentional — users see exactly which fields they
-must override.
+Do NOT silently fabricate model strings. The per-AI templates ship
+realistic defaults but only for the four assistants with bundled
+templates (Claude / Copilot / Cursor / Gemini); for other
+assistants the placeholder approach (`REPLACE_ME` in
+`base-portfolio.yml`) is intentional — users see exactly which
+fields they must override.
 
 ### Step 6 — Validate and save
 

@@ -57,6 +57,7 @@ from .defaults import (
 from .fleet_discover import DiscoveredAgent, discover_fleet
 from .i18n import t
 from .integration_detect import detect_integration, display_name
+from .portfolio_templates import template_for_integration
 from .validation import ScheduleInputError
 
 log = logging.getLogger(__name__)
@@ -68,21 +69,42 @@ log = logging.getLogger(__name__)
 
 
 def base_portfolio_path() -> Path:
-    """Return path to the bundled ``templates/base-portfolio.yml`` skeleton."""
+    """Return path to the bundled ``templates/base-portfolio.yml`` skeleton.
+
+    Always returns the generic ``base-portfolio.yml`` regardless of the
+    detected integration. For integration-aware lookups use
+    :func:`solver.portfolio_templates.template_for_integration`.
+    """
     return Path(__file__).resolve().parent.parent / "templates" / "base-portfolio.yml"
 
 
-def load_base_portfolio_agents() -> list[dict[str, Any]]:
-    """Read the base-portfolio template and return its ``agents:`` list.
+def load_base_portfolio_agents(
+    integration_key: str | None = None,
+) -> list[dict[str, Any]]:
+    """Read a portfolio template and return its ``agents:`` list.
 
-    Returns ``[]`` if the file is missing or unparseable — callers
-    should fall back to inline defaults.
+    Parameters
+    ----------
+    integration_key:
+        Canonical AI integration key (``"claude"``, ``"copilot"``,
+        ``"cursor-agent"``, ``"gemini"``). When the key matches a
+        per-AI template that ships realistic 2026 model identifiers
+        and prices, that template is loaded instead of the generic
+        ``base-portfolio.yml``. ``None`` (the default) preserves the
+        v0.5.x behaviour and reads ``base-portfolio.yml``.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        The template's ``agents:`` list, or ``[]`` if the file is
+        missing or unparseable — callers should fall back to inline
+        defaults.
     """
-    path = base_portfolio_path()
+    path = template_for_integration(integration_key)
     try:
         body = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError):
-        log.debug("base-portfolio.yml unavailable at %s", path)
+        log.debug("portfolio template unavailable at %s", path)
         return []
     raw_agents = body.get("agents", [])
     if not isinstance(raw_agents, list):
@@ -544,10 +566,13 @@ def detect_portfolio(
     # When fleet returned implementers OR caller explicitly asked, also
     # surface the generic frontier/mid/small slots so the user has a
     # known-good starting point. Distinct ids prevent collision with
-    # stack-derived agents.
+    # stack-derived agents. The per-AI template is preferred when the
+    # integration key matches one of the bundled portfolios (Claude,
+    # Copilot, Cursor, Gemini); otherwise we fall through to the
+    # generic ``REPLACE_ME`` placeholders.
     add_base = use_base_portfolio or bool(discovered_implementers)
     if add_base:
-        for base in load_base_portfolio_agents():
+        for base in load_base_portfolio_agents(resolved_key):
             base_id = _unique_agent_id(str(base.get("id", "agent")), existing_ids)
             existing_ids.add(base_id)
             agents.append({**base, "id": base_id})

@@ -1,0 +1,70 @@
+# =============================================================================
+# spec-kit-schedule — Cursor Portfolio (v0.6.x)
+# =============================================================================
+# Used as the starter portfolio when ``solver.autodetect`` resolves the
+# integration key to ``cursor-agent``. Cursor routes to multiple
+# providers under one bill, so this template is a multi-provider mix
+# similar to ``examples/04-multi-provider/`` but tuned for Cursor's
+# default model selection (Claude, GPT-4o, Gemini).
+#
+# Pricing reflects each underlying provider's 2026 list prices as of
+# May 2026 — Cursor's effective price varies by plan tier (Pro,
+# Business). Treat the ``price_per_1k_tokens`` values as a relative
+# ranking; Cursor users typically see costs aggregated under one
+# subscription, so ``cost_aware`` is set as the default objective to
+# nudge routine work toward the cheaper agents.
+#
+# Tier framework: see ``docs/formulation.md`` ("Hallucination
+# Calibration") for κ / context_budget envelopes.
+# =============================================================================
+
+agents:
+  - id: opus
+    provider: anthropic
+    model: claude-opus-4
+    skills: [design, architecture, schema]
+    kappa: 6                 # Frontier tier
+    context_budget: 32
+    speed_factor: 1.0
+    price_per_1k_tokens: 15.0
+
+  - id: sonnet
+    provider: anthropic
+    model: claude-sonnet-4
+    skills: [python, backend, review]
+    kappa: 10                # Mid tier
+    context_budget: 16
+    speed_factor: 1.5
+    price_per_1k_tokens: 3.0
+
+  - id: gpt4o
+    provider: openai
+    model: gpt-4o
+    skills: [frontend, impl, api]
+    kappa: 10                # Mid tier
+    context_budget: 16
+    speed_factor: 1.4
+    price_per_1k_tokens: 5.0
+
+  - id: gpt4o-mini
+    provider: openai
+    model: gpt-4o-mini
+    skills: [test, lint]
+    kappa: 12                # Mid tier
+    context_budget: 16
+    speed_factor: 1.8
+    price_per_1k_tokens: 0.15
+
+  - id: gemini-flash
+    provider: google
+    model: gemini-2.0-flash
+    skills: [docs, format]
+    kappa: 12                # Small/Mid tier
+    context_budget: 8
+    speed_factor: 2.0
+    price_per_1k_tokens: 0.075
+
+solver:
+  objective: cost_aware
+  time_limit: 60
+  num_workers: 4

@@ -325,7 +325,14 @@ class TestAIFleetIntegration:
         assert "discovered_reviewers" not in result
 
     def test_explicit_integration_key_with_implementer(self, tmp_path: Path) -> None:
-        """Explicit ``integration_key`` triggers fleet discovery + base slots."""
+        """Explicit ``integration_key`` triggers fleet discovery + base slots.
+
+        v0.6.x: when the integration key matches a per-AI template
+        (``claude`` → ``portfolio-claude.yml``), the appended base
+        slots come from that template (``opus``/``sonnet``/``haiku``)
+        rather than the generic ``frontier``/``mid``/``small``
+        placeholders.
+        """
         (tmp_path / ".specify").mkdir()
         agents_dir = tmp_path / ".claude" / "agents"
         agents_dir.mkdir(parents=True)
@@ -335,11 +342,11 @@ class TestAIFleetIntegration:
         )
         result = detect_portfolio(tmp_path, integration_key="claude")
         ids = _agent_ids(result)
-        # Discovered implementer + base portfolio's frontier/mid/small
+        # Discovered implementer + Claude-specific template
         assert "implementer" in ids
-        assert "frontier" in ids
-        assert "mid" in ids
-        assert "small" in ids
+        assert "opus" in ids
+        assert "sonnet" in ids
+        assert "haiku" in ids
 
     def test_reviewer_only_fleet_does_not_pollute_agents(self, tmp_path: Path) -> None:
         """Reviewer/hybrid fleets do NOT add scheduler agents.

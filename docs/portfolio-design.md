@@ -41,12 +41,23 @@ The combined output is the **union** of:
    `package.json`, `tests/`, `docs/`, …).
 2. Discovered IMPLEMENTERs from the AI fleet, with their on-disk
    `model:` (or `REPLACE_ME` when frontmatter is missing).
-3. Generic `frontier` / `mid` / `small` slots from
-   `templates/base-portfolio.yml` for any role coverage gaps.
+3. **Per-AI starter slots** — for the four most common AI assistants
+   spec-kit-schedule ships realistic 2026 portfolios with concrete
+   model identifiers and list prices, so the user does not have to
+   look anything up:
 
-The `REPLACE_ME` placeholders are intentional — we never fabricate
-model strings. The user must replace them with models they can
-actually invoke from their AI assistant. Steps below help you choose.
+   | Integration key | Template                                                               |
+   |-----------------|------------------------------------------------------------------------|
+   | `claude`        | [`templates/portfolio-claude.yml`](../templates/portfolio-claude.yml)     |
+   | `copilot`       | [`templates/portfolio-copilot.yml`](../templates/portfolio-copilot.yml)   |
+   | `cursor-agent`  | [`templates/portfolio-cursor.yml`](../templates/portfolio-cursor.yml)     |
+   | `gemini`        | [`templates/portfolio-gemini.yml`](../templates/portfolio-gemini.yml)     |
+   | (other / none)  | [`templates/base-portfolio.yml`](../templates/base-portfolio.yml) (REPLACE_ME) |
+
+The `REPLACE_ME` placeholders in the generic fallback are intentional
+— we never fabricate model strings. When no per-AI template applies
+the user must replace them with models they can actually invoke from
+their AI assistant. Steps below help you choose.
 
 ## Core principle: agents are slots, not models
 
@@ -202,6 +213,11 @@ Cursor routes through multiple providers under one bill. Define one
 agent per model you actually invoke from Composer, with notional
 pricing reflecting Cursor's premium/included tiers.
 
+The bundled starter portfolio for Cursor users lives at
+[`templates/portfolio-cursor.yml`](../templates/portfolio-cursor.yml)
+— a 5-agent multi-provider mix (Anthropic + OpenAI + Google) tuned
+for `objective: cost_aware`.
+
 ```yaml
 agents:
   - id: cursor-opus
@@ -238,6 +254,11 @@ Copilot Workspace uses a small set of underlying models. Use Copilot's
 own model identifiers in `model:` so the schedule.md output is
 unambiguous about which Copilot route to call.
 
+The bundled starter portfolio for Copilot users lives at
+[`templates/portfolio-copilot.yml`](../templates/portfolio-copilot.yml)
+— a 3-agent OpenAI-tier mix (`gpt-4o`, `gpt-4o-mini`, `o3-mini`) with
+notional pricing for `cost_aware` mode.
+
 ```yaml
 agents:
   - id: copilot-claude
@@ -263,6 +284,11 @@ agents:
 
 Pure Anthropic portfolio. Differentiate by tier — Opus for design and
 review, Sonnet for the bulk of impl, Haiku for tests and docs.
+
+The bundled starter portfolio for Claude Code users lives at
+[`templates/portfolio-claude.yml`](../templates/portfolio-claude.yml)
+— a 3-agent pure-Anthropic mix (`claude-opus-4`, `claude-sonnet-4`,
+`claude-haiku-4`) with 2026 list prices.
 
 ```yaml
 agents:
@@ -293,6 +319,17 @@ agents:
     speed_factor: 1.5
     price_per_1k_tokens: 0.25
 ```
+
+### Gemini CLI single-provider portfolio
+
+Pure Google portfolio. Gemini supports very large context (up to 1M+
+tokens for 2.5 Pro), but the bundled template uses conservative
+32K / 16K / 8K envelopes — raise them only after calibration.
+
+The bundled starter portfolio for Gemini CLI users lives at
+[`templates/portfolio-gemini.yml`](../templates/portfolio-gemini.yml)
+— a 3-agent pure-Google mix (`gemini-2.5-pro`, `gemini-2.0-flash`,
+`gemini-2.0-flash-lite`) with 2026 list prices.
 
 ### Hybrid (Anthropic + OpenAI + local)
 

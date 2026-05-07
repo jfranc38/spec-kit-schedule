@@ -94,6 +94,10 @@ exclude = ["tests*", "docs*"]
 "share/spec-kit-schedule/templates" = [
     "templates/schedule-template.md",
     "templates/base-portfolio.yml",
+    "templates/portfolio-claude.yml",
+    "templates/portfolio-copilot.yml",
+    "templates/portfolio-cursor.yml",
+    "templates/portfolio-gemini.yml",
 ]
 
 [tool.ruff]

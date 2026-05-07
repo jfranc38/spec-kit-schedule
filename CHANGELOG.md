@@ -3,6 +3,20 @@
 ## [Unreleased]
 
 ### Added
+- **Per-AI portfolio templates** with realistic 2026 model
+  identifiers and list prices: `templates/portfolio-claude.yml`
+  (Anthropic-only), `templates/portfolio-copilot.yml` (OpenAI-tier
+  via GitHub Copilot), `templates/portfolio-cursor.yml` (5-agent
+  multi-provider mix), `templates/portfolio-gemini.yml`
+  (Google-only). `solver.autodetect` now picks the matching
+  per-AI template when the integration key resolves to one of
+  `claude` / `copilot` / `cursor-agent` / `gemini`, falling back
+  to the generic `templates/base-portfolio.yml` (with `REPLACE_ME`
+  placeholders) for unknown / absent keys. New module
+  `solver.portfolio_templates` exposes `template_for_integration`
+  for callers that need the lookup directly. Eliminates the
+  friction of looking up valid model strings + prices manually
+  for the most common AI assistants.
 - `solver.autodetect.detect_portfolio` now surfaces hybrid-classified
   fleet agents under a new top-level `discovered_hybrid` key. Pure
   `discovered_reviewers` only contains agents that match reviewer

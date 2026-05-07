@@ -1,0 +1,56 @@
+# =============================================================================
+# spec-kit-schedule — Gemini CLI Portfolio (v0.6.x)
+# =============================================================================
+# Used as the starter portfolio when ``solver.autodetect`` resolves the
+# integration key to ``gemini``. Models and prices reflect Google's
+# published 2026 list pricing as of May 2026 — verify current rates
+# against https://ai.google.dev/gemini-api/docs/pricing if your usage
+# tier differs.
+#
+# Pricing units: ``price_per_1k_tokens`` is in USD per 1,000 input
+# tokens. Output tokens are typically billed separately by Google;
+# use the input rate as a conservative single-tier cost proxy or
+# weight by your own input/output ratio.
+#
+# Context window note: Gemini supports very large context (up to 1M+
+# tokens for 2.5 Pro). The ``context_budget`` defaults below are
+# intentionally conservative envelopes (32K / 16K / 8K) — raise them
+# only after you have calibrated how reliably the model retains
+# information at longer context for your specific task mix.
+#
+# Tier framework: see ``docs/formulation.md`` ("Hallucination
+# Calibration") for κ / context_budget envelopes.
+# =============================================================================
+
+agents:
+  - id: pro
+    provider: google
+    model: gemini-2.5-pro
+    skills: [design, architecture, review, schema]
+    kappa: 6                 # Frontier tier
+    context_budget: 32       # conservative; raise after calibration
+    speed_factor: 1.0
+    price_per_1k_tokens: 1.25
+
+  - id: flash
+    provider: google
+    model: gemini-2.0-flash
+    skills: [python, backend, frontend, impl, api, test]
+    kappa: 12                # Mid tier
+    context_budget: 16
+    speed_factor: 1.8
+    price_per_1k_tokens: 0.075
+
+  - id: flash-lite
+    provider: google
+    model: gemini-2.0-flash-lite
+    skills: [docs, lint, format]
+    kappa: 15                # Small tier
+    context_budget: 8
+    speed_factor: 2.0
+    price_per_1k_tokens: 0.0375
+
+solver:
+  objective: lexicographic
+  time_limit: 60
+  num_workers: 4

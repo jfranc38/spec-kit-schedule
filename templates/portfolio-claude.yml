@@ -1,0 +1,51 @@
+# =============================================================================
+# spec-kit-schedule — Claude Code Portfolio (v0.6.x)
+# =============================================================================
+# Used as the starter portfolio when ``solver.autodetect`` resolves the
+# integration key to ``claude`` (i.e. the user installed spec-kit for
+# Claude Code). Models and prices reflect Anthropic's published 2026
+# list pricing as of May 2026 — verify current rates against
+# https://www.anthropic.com/pricing if your contract differs.
+#
+# Tier framework: see ``docs/formulation.md`` ("Hallucination
+# Calibration") for the κ / context_budget envelope. Adjust each agent
+# once you have real run logs (``solver.calibrate``).
+#
+# Pricing units: ``price_per_1k_tokens`` is in USD per 1,000 input
+# tokens. Output tokens are typically billed separately by the
+# provider; use the input rate as a conservative single-tier cost
+# proxy or weight by your own input/output ratio.
+# =============================================================================
+
+agents:
+  - id: opus
+    provider: anthropic
+    model: claude-opus-4
+    skills: [design, architecture, review, schema, security]
+    kappa: 6                 # Frontier tier
+    context_budget: 32       # = 32,000 tokens
+    speed_factor: 1.0
+    price_per_1k_tokens: 15.0   # input; output cap separately
+
+  - id: sonnet
+    provider: anthropic
+    model: claude-sonnet-4
+    skills: [python, backend, frontend, impl, api, refactor]
+    kappa: 10                # Mid tier
+    context_budget: 16
+    speed_factor: 1.5
+    price_per_1k_tokens: 3.0
+
+  - id: haiku
+    provider: anthropic
+    model: claude-haiku-4
+    skills: [test, docs, lint, format]
+    kappa: 15                # Small tier
+    context_budget: 8
+    speed_factor: 2.0
+    price_per_1k_tokens: 0.8
+
+solver:
+  objective: lexicographic
+  time_limit: 60
+  num_workers: 4

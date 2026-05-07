@@ -1,0 +1,51 @@
+# =============================================================================
+# spec-kit-schedule — GitHub Copilot Portfolio (v0.6.x)
+# =============================================================================
+# Used as the starter portfolio when ``solver.autodetect`` resolves the
+# integration key to ``copilot``. Models reflect what GitHub Copilot
+# Pro / Enterprise exposes as of May 2026 (GPT-4o, GPT-4o-mini,
+# o3-mini). Verify the current model list at
+# https://docs.github.com/en/copilot/about-github-copilot/plans-for-github-copilot.
+#
+# Pricing note: GitHub Copilot is bundled (Pro $10/mo, Enterprise
+# $39/mo) — the ``price_per_1k_tokens`` fields below are NOTIONAL
+# relative weights so ``cost_aware`` mode can prefer cheaper tiers.
+# Set all to 0.0 if you only care about makespan / load balance and
+# stay on ``objective: lexicographic`` (the default below).
+#
+# Tier framework: see ``docs/formulation.md`` ("Hallucination
+# Calibration") for κ / context_budget envelopes.
+# =============================================================================
+
+agents:
+  - id: gpt4o
+    provider: openai
+    model: gpt-4o
+    skills: [design, schema, review, architecture]
+    kappa: 8                 # Frontier-ish (slightly above Opus floor)
+    context_budget: 24
+    speed_factor: 1.2
+    price_per_1k_tokens: 5.0    # notional (real cost: bundled in Copilot)
+
+  - id: gpt4o-mini
+    provider: openai
+    model: gpt-4o-mini
+    skills: [python, backend, frontend, impl, api, test]
+    kappa: 12                # Mid tier
+    context_budget: 16
+    speed_factor: 1.8
+    price_per_1k_tokens: 0.15
+
+  - id: o3-mini
+    provider: openai
+    model: o3-mini
+    skills: [refactor, optimize, debug]
+    kappa: 8                 # Reasoning model — careful, lower κ
+    context_budget: 12
+    speed_factor: 1.0
+    price_per_1k_tokens: 1.1
+
+solver:
+  objective: lexicographic
+  time_limit: 60
+  num_workers: 4
