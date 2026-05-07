@@ -104,7 +104,7 @@ The solver output includes `total_cost` (in the same unit as `price_per_1k_token
 ### From a tagged release (recommended)
 
 ```bash
-specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.6.1.zip
+specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.6.2.zip
 ```
 
 ### Local development install
@@ -153,6 +153,26 @@ invocation **bootstraps the encapsulated Python venv and the
 portfolio config inline** — you no longer need to run
 `/speckit.schedule.portfolio` separately. Re-run that command only
 when you want to explicitly re-scaffold the portfolio.
+
+### Diagnose installation
+
+If you (or an audit tool) report `schedule-config.yml missing` after
+`specify extension add schedule`, that is **expected pre-first-run
+state** — the portfolio config bootstraps automatically on the first
+invocation of `/speckit.schedule.run`. To get a definitive read-out
+of installation health:
+
+```
+/speckit.schedule.status
+```
+
+Reports five checks (extension files, hook registration, solver
+deps, portfolio config, run history) and tells you which state is
+expected pre-first-run vs which actually requires intervention.
+Verdicts are `healthy` (all ok), `first-run-pending` (only
+expected-missing items remain — bootstrap on first run), or
+`needs-attention` (at least one real problem, with hints listed in
+dependency order).
 
 Inside the repository the solver stages are regular Python modules and can be chained directly:
 
@@ -268,6 +288,8 @@ agents:
 | `/speckit.schedule.run`       | Parse tasks.md → solve CP-SAT → produce schedule.md (+ optional PNG images)                                                          |
 | `/speckit.schedule.portfolio` | Create or edit agent portfolio configuration                                                                                         |
 | `/speckit.schedule.visualize` | Emit publication-grade `<feature>-dag.png` and `<feature>-gantt.png` from a solver output JSON and embed references in `schedule.md` |
+| `/speckit.schedule.calibrate` | Recalibrate `speed_factor` and `token_estimates` from accumulated plan/actual logs in `.specify/schedule/runs/`                      |
+| `/speckit.schedule.status`    | Self-diagnose installation state — distinguishes real problems from expected pre-first-run state                                     |
 
 
 ## Mathematical Formulation

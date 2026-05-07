@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.6.2] - 2026-05-07
+
+### Added
+- **`/speckit.schedule.status` self-diagnose command.** Closes the
+  adoption-time gap where users (and audit agents like quantkit's
+  conductor) saw `.specify/schedule/schedule-config.yml` missing
+  immediately after `specify extension add schedule` and assumed the
+  extension was broken — the config is in fact bootstrapped
+  idempotently on the first `/speckit.schedule.run`. The new command
+  surfaces five ordered checks (extension files, hook registration,
+  solver deps, portfolio config, run history) and distinguishes
+  ``missing`` (real problem) from ``expected-missing`` (will
+  bootstrap automatically). Verdicts are `healthy`,
+  `first-run-pending`, or `needs-attention`; the latter lists every
+  actionable hint in dependency order. New module `solver.status`
+  exposes `collect_status` (pure, never raises) and `format_status`
+  (terminal-safe plain text — no markdown, simple
+  `✓ ⚠ ✗ —` glyphs); the CLI is `python -m solver.status` with
+  exit codes that map cleanly to the three verdicts (0 for healthy
+  + first-run-pending, 1 for needs-attention). Stdlib-only
+  implementation so the command works even when the encapsulated
+  venv has not yet been bootstrapped. The README "Diagnose
+  installation" section now points users at this command and
+  documents the false-alarm vs real-problem distinction explicitly.
+
 ## [0.6.1] - 2026-05-07
 
 ### Fixed

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spec-kit-schedule"
-version = "0.6.1"
+version = "0.6.2"
 description = "Optimal multi-agent task scheduling via CP-SAT (spec-kit extension)"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
@@ -90,6 +90,7 @@ exclude = ["tests*", "docs*"]
     "commands/calibrate.md",
     "commands/portfolio.md",
     "commands/schedule.md",
+    "commands/status.md",
     "commands/visualize.md",
 ]
 "share/spec-kit-schedule/templates" = [
