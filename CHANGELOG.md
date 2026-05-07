@@ -2,7 +2,48 @@
 
 ## [Unreleased]
 
+### Fixed
+- **CRITICAL: per-AI template prices were 1000× inflated.** The four
+  per-AI portfolio templates (`portfolio-claude.yml`,
+  `portfolio-copilot.yml`, `portfolio-cursor.yml`,
+  `portfolio-gemini.yml`) populated `price_per_1k_tokens` with
+  per-1M-token list prices (e.g. `15.0` for Opus, meant as $15/MTok)
+  while the schema field is per-1K tokens. Result: `cost_aware`
+  optimization reported dollar figures 1000× larger than reality, and
+  cost rankings were correct only by coincidence. All four templates
+  are now corrected to genuine per-1K rates (e.g. Opus is now
+  `0.005` = $5/MTok). Users on the previous templates who relied on
+  cost figures should re-run after upgrading. Examples
+  (`examples/02-cost-aware/`, `examples/04-multi-provider/`)
+  deliberately keep their scaled prices for demo visibility — they
+  are fixtures, not templates, and their frozen baselines are
+  unchanged.
+- **Per-AI templates updated to verified May 2026 GA model
+  identifiers.** Anthropic templates now reference
+  `claude-opus-4-7` / `claude-sonnet-4-6` / `claude-haiku-4-5`
+  (the prior 4.0/4.1 generations retire 2026-06-15, and
+  `claude-haiku-4` was never a real id). OpenAI templates now
+  reference `gpt-5.4` / `gpt-5.4-mini` / `o4-mini` (replacing the
+  superseded `gpt-4o` / `gpt-4o-mini` / `o3-mini`). Google templates
+  now reference `gemini-2.5-flash` / `gemini-2.5-flash-lite` for the
+  speed tiers (the 2.0-flash family is being shut down). The Gemini
+  Pro slot carries a comment about its tiered context-length
+  pricing cliff at 200k input tokens.
+
 ### Added
+- **Inline schedule summary** (Build 3a of v0.6.x). New
+  `solver.result.summary.format_inline_summary` renders the headline
+  numbers (status, makespan, agent utilisation, top-3 critical-path
+  waves, total cost, anytime gap) into a compact, terminal-safe block
+  that `/speckit.schedule.run` Step 2 prints to the agent's stdout
+  AFTER the solver writes `out.json`. Lex mode shows a single
+  `Total cost` line; cost-aware mode adds the per-agent split. Anytime
+  runs surface the unproven optimality gap. INFEASIBLE results
+  surface the diagnostic from `_phase1_infeasible_message` plus a
+  short fixes list. Pure function (no IO, no logging, no side
+  effects) so it composes cleanly into pipelines and tests. Closes
+  the "what just happened?" gap by removing the need to open
+  `schedule.md` for the verdict.
 - **Calibration feedback loop** (Build 2 of v0.6.x). Every
   `/speckit.schedule.run` now silently drops a
   `<run_id>-plan.json` into `.specify/schedule/runs/` (best-effort

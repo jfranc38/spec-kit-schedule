@@ -30,25 +30,28 @@ agents:
     kappa: 6                 # Frontier tier
     context_budget: 32       # conservative; raise after calibration
     speed_factor: 1.0
-    price_per_1k_tokens: 1.25
+    # $1.25/MTok at ≤200k input tokens; $2.50/MTok above. The schema
+    # can't represent the cliff — set the lower tier here and document
+    # via comment if you regularly exceed 200k.
+    price_per_1k_tokens: 0.00125
 
   - id: flash
     provider: google
-    model: gemini-2.0-flash
+    model: gemini-2.5-flash
     skills: [python, backend, frontend, impl, api, test]
     kappa: 12                # Mid tier
     context_budget: 16
     speed_factor: 1.8
-    price_per_1k_tokens: 0.075
+    price_per_1k_tokens: 0.0003
 
   - id: flash-lite
     provider: google
-    model: gemini-2.0-flash-lite
+    model: gemini-2.5-flash-lite
     skills: [docs, lint, format]
     kappa: 15                # Small tier
     context_budget: 8
     speed_factor: 2.0
-    price_per_1k_tokens: 0.0375
+    price_per_1k_tokens: 0.0001
 
 solver:
   objective: lexicographic

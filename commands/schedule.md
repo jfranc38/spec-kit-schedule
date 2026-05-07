@@ -112,20 +112,39 @@ PY="$EXT_DIR/.venv/bin/python"
 "$PY" -m solver.parse_tasks tasks.md "$CFG" > in.json
 "$PY" -m solver.scheduler < in.json > out.json
 
-# 2. (optional) Static images — requires the `viz` extra
+# 2. Inline summary — headline numbers (status, makespan, agent
+#    utilisation, top critical-path waves, total cost) printed to the
+#    agent's stdout so the user sees the verdict WITHOUT opening
+#    schedule.md. Pure read of out.json; no file IO. Runs after the
+#    solver writes out.json so a piped solver invocation never sees this
+#    output.
+"$PY" -c '
+import json, sys
+from solver.result.summary import format_inline_summary
+with open("out.json", encoding="utf-8") as f:
+    result = json.load(f)
+print(format_inline_summary(result, feature_name="<feature>"))
+'
+
+# 3. (optional) Static images — requires the `viz` extra
 #    (auto-installed by bin/install.sh) and places <feature>-dag.png /
 #    <feature>-gantt.png in <outdir>.
 "$PY" -m solver.visualize out.json images/ --feature <feature>
 
-# 3. Render markdown; with --image-prefix the PNGs are embedded next to
+# 4. Render markdown; with --image-prefix the PNGs are embedded next to
 #    the Mermaid blocks so consumers without Mermaid still see the charts.
 "$PY" -m solver.render_schedule out.json <feature> \
     --image-prefix images/<feature> > schedule.md
 
-# 4. (optional) Interactive HTML — requires plotly (included in `viz` extra).
+# 5. (optional) Interactive HTML — requires plotly (included in `viz` extra).
 "$PY" -m solver.render_html out.json <feature> \
     --image-prefix images/<feature> > schedule.html
 ```
+
+After Step 2 prints the summary, the agent SHOULD relay that summary
+verbatim to the user (or surface its highlights) so the headline
+numbers are visible inline without the user having to open
+`schedule.md`. `schedule.md` still holds the full report.
 
 The solver output exposes three edge collections:
 

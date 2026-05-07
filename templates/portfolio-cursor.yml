@@ -21,48 +21,48 @@
 agents:
   - id: opus
     provider: anthropic
-    model: claude-opus-4
+    model: claude-opus-4-7
     skills: [design, architecture, schema]
     kappa: 6                 # Frontier tier
     context_budget: 32
     speed_factor: 1.0
-    price_per_1k_tokens: 15.0
+    price_per_1k_tokens: 0.005
 
   - id: sonnet
     provider: anthropic
-    model: claude-sonnet-4
+    model: claude-sonnet-4-6
     skills: [python, backend, review]
     kappa: 10                # Mid tier
     context_budget: 16
     speed_factor: 1.5
-    price_per_1k_tokens: 3.0
+    price_per_1k_tokens: 0.003
 
-  - id: gpt4o
+  - id: gpt5
     provider: openai
-    model: gpt-4o
+    model: gpt-5.4
     skills: [frontend, impl, api]
     kappa: 10                # Mid tier
     context_budget: 16
     speed_factor: 1.4
-    price_per_1k_tokens: 5.0
+    price_per_1k_tokens: 0.0025
 
-  - id: gpt4o-mini
+  - id: gpt5-mini
     provider: openai
-    model: gpt-4o-mini
+    model: gpt-5.4-mini
     skills: [test, lint]
     kappa: 12                # Mid tier
     context_budget: 16
     speed_factor: 1.8
-    price_per_1k_tokens: 0.15
+    price_per_1k_tokens: 0.00075
 
   - id: gemini-flash
     provider: google
-    model: gemini-2.0-flash
+    model: gemini-2.5-flash
     skills: [docs, format]
     kappa: 12                # Small/Mid tier
     context_budget: 8
     speed_factor: 2.0
-    price_per_1k_tokens: 0.075
+    price_per_1k_tokens: 0.0003
 
 solver:
   objective: cost_aware
