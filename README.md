@@ -41,6 +41,17 @@ MAQA solves this with a **greedy heuristic** (first-available agent). This exten
 7. **(Optional)** Static `{feature}-dag.png` and `{feature}-gantt.png` via the matplotlib-backed visualiser (see `--image-prefix`).
 8. **(Optional)** Interactive `schedule.html` via the Plotly-backed renderer (`python -m solver.render_html`) — self-contained, no server required.
 
+### Auto-suggestion via the `after_tasks` hook
+
+When installed alongside spec-kit, the extension registers an
+opt-in hook on the `after_tasks` event. Right after `/speckit.tasks`
+finishes, the agent will surface this prompt:
+
+> *Generate an optimal CP-SAT schedule from the new tasks?*
+
+Decline and the workflow continues normally. Accept and `/speckit.schedule.run`
+fires immediately. The hook is `optional: true` — it never auto-executes.
+
 ## The Optimization Model
 
 The model is a Multi-Skill RCPSP (Bellenguez-Morineau & Néron 2007) enhanced with:
@@ -93,7 +104,7 @@ The solver output includes `total_cost` (in the same unit as `price_per_1k_token
 ### From a tagged release (recommended)
 
 ```bash
-specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.5.4.zip
+specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.5.5.zip
 ```
 
 ### Local development install
@@ -137,6 +148,9 @@ Install the **Explicit Task Dependencies** preset for machine-readable dependenc
 # 4. Execute using the wave plan
 /speckit.implement
 ```
+
+After `/speckit.tasks` finishes, accept the auto-prompt to schedule.
+Or invoke `/speckit.schedule.run` manually any time.
 
 Inside the repository the solver stages are regular Python modules and can be chained directly:
 

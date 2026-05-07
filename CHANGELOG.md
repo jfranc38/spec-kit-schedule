@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.5.5] - 2026-05-07
+
+### Added
+- **README documents the `after_tasks` hook**: the opt-in scheduler
+  prompt added in v0.5.4 was wired in `extension.yml` but invisible to
+  fresh-clone users browsing the README. Added a "How It Works"
+  subsection explaining the prompt verbatim and a one-liner in
+  Quick Start pointing to it as the natural path post-`/speckit.tasks`.
+- **`/speckit.schedule.portfolio` is now autodetect-first**: the
+  command walks the user through (1) detecting the runtime IDE/CLI,
+  (2) scaffolding via `uv run python -m solver.autodetect
+  --project-dir . --output schedule-config.yml`, (3) interactive
+  refinement against the matching recipe in `docs/portfolio-design.md`,
+  (4) validation through `solver.config_schema.load_config`, and
+  (5) optional pre-flight solve. Replaces the previous blank-slate
+  prompting workflow that asked users to invent every agent from
+  scratch with no project context.
+
 ## [0.5.4] - 2026-05-07
 
 ### Added
