@@ -38,6 +38,9 @@ provides:
     - name: "speckit.schedule.visualize"
       file: "commands/visualize.md"
       description: "Render the solved schedule as a Gantt chart and DAG diagram"
+    - name: "speckit.schedule.calibrate"
+      file: "commands/calibrate.md"
+      description: "Recalibrate speed_factor and token_estimates from accumulated plan/actual logs in .specify/schedule/runs/"
 
 # Optional opt-in hook fired by spec-kit immediately after `/speckit.tasks`.
 # Because `optional: true`, the agent surfaces the prompt and the user

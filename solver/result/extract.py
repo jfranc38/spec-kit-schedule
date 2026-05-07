@@ -466,7 +466,7 @@ def _finalize_result(
     # ``stats``. The rendered output and existing tests still read from
     # ``stats``; mirroring keeps both surfaces in sync without duplicating
     # the source-of-truth (which remains the per-phase computation above).
-    return {
+    result: dict[str, Any] = {
         "status": status_str,
         "assignments": assignments,
         "waves": waves,
@@ -480,3 +480,18 @@ def _finalize_result(
         "max_load": stats["max_load"],
         "total_cost": stats["total_cost"],
     }
+
+    # Best-effort calibration capture: write a plan.json snapshot under
+    # ``.specify/schedule/runs/`` so the user can run
+    # ``/speckit.schedule.calibrate`` later. ``record_plan`` is the
+    # designated swallow-all wrapper — it never raises, returns ``None``
+    # whenever the write is impossible (no ``.specify/`` ancestor,
+    # filesystem error, …) — so this call cannot regress the solve.
+    # Lazy import to keep ``solver.result.extract`` cheap for callers
+    # that only need the helpers above.
+    if status_str in ("OPTIMAL", "FEASIBLE"):
+        from .. import run_log
+
+        run_log.record_plan(result, objective=stats.get("objective"))
+
+    return result

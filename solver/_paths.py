@@ -32,6 +32,7 @@ __all__ = [
     "legacy_config_path",
     "migrate_legacy_config",
     "project_root",
+    "runs_dir",
     "schedule_config_path",
 ]
 
@@ -91,6 +92,16 @@ def schedule_config_path(start: Path | None = None) -> Path:
     Returns ``<project_root>/.specify/schedule/schedule-config.yml``.
     """
     return extension_state_dir(start) / "schedule-config.yml"
+
+
+def runs_dir(start: Path | None = None) -> Path:
+    """Directory holding plan/actual artefacts for the calibration loop.
+
+    Returns ``<project_root>/.specify/schedule/runs/``. Created on
+    demand by :func:`solver.run_log.record_plan` and friends — the
+    accessor itself is a pure path constructor with no side effects.
+    """
+    return extension_state_dir(start) / "runs"
 
 
 def encapsulated_venv_python(start: Path | None = None) -> Path:

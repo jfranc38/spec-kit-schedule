@@ -3,6 +3,21 @@
 ## [Unreleased]
 
 ### Added
+- **Calibration feedback loop** (Build 2 of v0.6.x). Every
+  `/speckit.schedule.run` now silently drops a
+  `<run_id>-plan.json` into `.specify/schedule/runs/` (best-effort
+  via the new `solver.run_log` module — write failures are logged,
+  never fatal). Users record observed durations to the matching
+  `<run_id>-actual.jsonl` (helper CLI:
+  `python -m solver.run_log append-actual`), and the new
+  `/speckit.schedule.calibrate` command aggregates accumulated
+  pairs to update each agent's `speed_factor` and the per-complexity
+  `token_estimates` in place. Aggregation uses median-of-runs +
+  EMA smoothing (`alpha=0.3` default) so individual outliers do
+  not destabilise the portfolio. Adds `solver.calibrate.calibrate_from_runs`
+  + `--from-runs` CLI flag, `solver._paths.runs_dir`, and the new
+  command file `commands/calibrate.md`. See
+  [`docs/calibration.md`](docs/calibration.md) for the full workflow.
 - **Per-AI portfolio templates** with realistic 2026 model
   identifiers and list prices: `templates/portfolio-claude.yml`
   (Anthropic-only), `templates/portfolio-copilot.yml` (OpenAI-tier

@@ -87,6 +87,7 @@ exclude = ["tests*", "docs*"]
 [tool.setuptools.data-files]
 "share/spec-kit-schedule" = ["extension.yml", "LICENSE", "README.md"]
 "share/spec-kit-schedule/commands" = [
+    "commands/calibrate.md",
     "commands/portfolio.md",
     "commands/schedule.md",
     "commands/visualize.md",

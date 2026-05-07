@@ -4,9 +4,52 @@
 and updating your `schedule-config.yml` so the second solve is measurably better than
 the first.
 
+There are **two ways** to feed calibration data:
+
+1. **Runs-directory feedback loop** (v0.6.x Build 2, recommended) — every
+   `/speckit.schedule.run` writes a plan snapshot under
+   `.specify/schedule/runs/<run_id>-plan.json`. You record the observed
+   durations to the matching `<run_id>-actual.jsonl`, and
+   `/speckit.schedule.calibrate` aggregates the pairs in place. No
+   manual JSONL schema, no separate orchestrator integration.
+2. **Flat `runs.jsonl` ingestion** (legacy) — emit a single combined
+   JSONL file from a custom orchestrator and feed it via
+   `python -m solver.calibrate --runs runs.jsonl --config …`. Same
+   algorithm, different data source.
+
+The two modes are mutually exclusive on a single CLI invocation but
+can be used interchangeably across runs.
+
 ---
 
-## Quickstart
+## Quickstart — runs-directory mode (recommended)
+
+Every `/speckit.schedule.run` automatically writes its plan to
+`.specify/schedule/runs/<run_id>-plan.json` (see
+[Plan capture](#plan-capture-runs-mode) below). After executing a
+batch of runs and recording the observed durations to the matching
+`<run_id>-actual.jsonl` files:
+
+```bash
+# Aggregate every plan/actual pair under .specify/schedule/runs/
+# and rewrite the portfolio in place. --backup keeps a .bak copy.
+python -m solver.calibrate \
+  --from-runs .specify/schedule/runs \
+  --config .specify/schedule/schedule-config.yml \
+  --alpha 0.3 \
+  --backup
+```
+
+Or, equivalently, run the slash command:
+
+```
+/speckit.schedule.calibrate
+```
+
+If fewer than 3 paired runs exist the command exits with a warning
+and does not modify the portfolio.
+
+## Quickstart — flat runs.jsonl (legacy)
 
 ```bash
 # 1. Run a schedule and collect execution data into runs.jsonl (see "Producing runs.jsonl" below).
@@ -22,6 +65,88 @@ python -m solver.calibrate \
   --runs runs.jsonl \
   --config schedule-config.yml
 ```
+
+---
+
+## Plan capture (runs mode)
+
+Every successful solve writes a small JSON snapshot to
+`.specify/schedule/runs/<run_id>-plan.json` via
+`solver.run_log.record_plan`. The capture is **best-effort**:
+
+- A failed write is logged at `WARNING` level but does not raise.
+- Solves outside a `.specify/`-rooted project are no-ops (the helper
+  detects the missing marker and skips).
+
+The on-disk shape is intentionally a subset of the full result envelope:
+
+```json
+{
+  "schema_version": "1.0",
+  "run_id": "2026-05-07T12:34:56Z-abc123",
+  "created_at": "2026-05-07T12:34:56Z",
+  "config_path": ".specify/schedule/schedule-config.yml",
+  "tasks_md_path": "tasks.md",
+  "objective": "lexicographic",
+  "status": "OPTIMAL",
+  "makespan": 218,
+  "max_load": 106,
+  "total_cost": null,
+  "assignments": [
+    {"task_id": "T001", "agent_id": "opus",
+     "expected_duration": 80, "expected_start": 0, "expected_end": 80}
+  ]
+}
+```
+
+`run_id` is `<ISO8601 timestamp>-<short-uuid>` so concurrent solves
+in the same second still produce unique files.
+
+### Recording actuals
+
+Each line of `<run_id>-actual.jsonl` is a JSON object:
+
+```json
+{"task_id": "T001", "agent_id": "opus", "actual_duration": 92,
+ "completed_at": "2026-05-07T13:15:32Z", "notes": null}
+```
+
+Append via the helper CLI:
+
+```bash
+python -m solver.run_log append-actual \
+  --run-id 2026-05-07T12:34:56Z-abc123 \
+  --task T001 --agent opus --duration 92
+```
+
+…or write the line by hand. JSONL is append-safe, so any append-only
+writer (including `>> file`) works.
+
+### Aggregation algorithm (`--from-runs`)
+
+For every paired `(plan, actual)` file in the runs directory:
+
+1. Index the plan's assignments by `task_id`.
+2. For each actual line, join on `task_id` and compute
+   `actual_duration / expected_duration` (the slowdown ratio).
+3. Per agent: aggregate ratios via `median`, then derive the
+   implied speed_factor as `old_speed_factor / median_ratio`
+   (slower → smaller factor).
+4. Per complexity bucket (inferred from the expected duration vs the
+   existing `token_estimates` means): aggregate observed durations
+   via `median` and use that as the implied bucket mean.
+5. Apply EMA smoothing against the existing values:
+   `new = (1 - alpha) * old + alpha * implied`.
+
+The function exits gracefully (no portfolio mutation) when:
+
+- The runs directory does not exist;
+- Fewer than `--min-pairs` paired runs are present (default 3);
+- No pair contains a usable matching task.
+
+Runs whose `agent_id` is no longer in the current portfolio are
+skipped with a `CALIBRATE_UNKNOWN_AGENT` warning. The remaining
+agents calibrate normally.
 
 ---
 
@@ -179,13 +304,25 @@ Low-confidence agents and skipped rows are listed here with diagnostic codes:
 
 ## CLI reference
 
-```
-python -m solver.calibrate --runs PATH --config PATH [options]
+`solver.calibrate` is dual-mode — `--runs` and `--from-runs` are
+mutually exclusive. Pick one source per invocation.
 
-Options:
+```
+python -m solver.calibrate (--runs PATH | --from-runs DIR) --config PATH [options]
+
+Source flags:
+  --runs PATH                Flat runs.jsonl (legacy log-ingestion mode).
+  --from-runs DIR            Directory of plan.json + actual.jsonl pairs.
+
+Legacy --runs options:
   --dry-run                  Compute updates but do not write to disk.
   --confidence-threshold N   Min samples for medium confidence (default: 5).
   --ema-alpha ALPHA          EMA blending factor [0,1] (default: 0.3).
+
+Runs-mode --from-runs options:
+  --alpha ALPHA              EMA blending factor [0,1] (default: 0.3).
+  --min-pairs N              Min paired runs required (default: 3).
+  --backup                   Write <config>.bak before mutation.
 ```
 
 ---

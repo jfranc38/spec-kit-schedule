@@ -239,6 +239,18 @@ gantt
 3. Verify no file-conflict violations between concurrent tasks
 4. Print summary to the agent console
 
+### Calibration capture (automatic, best-effort)
+
+Every successful solve also drops a small `<run_id>-plan.json` into
+`.specify/schedule/runs/` via `solver.run_log.record_plan`. The capture
+is best-effort — a write failure is logged but never fails the solve
+— and silently no-ops when there is no `.specify/` ancestor (e.g. ad-
+hoc CLI runs in `examples/`). The captured plans feed
+`/speckit.schedule.calibrate`, which closes the planning feedback loop
+once the user records observed durations to the matching
+`<run_id>-actual.jsonl`. See `commands/calibrate.md` for the full
+workflow.
+
 ## Integration with /speckit.implement
 
 When `schedule.md` exists, `/speckit.implement` SHOULD:

@@ -33,6 +33,7 @@ solver/
 ├── parse_tasks.py           # tasks.md → JSON envelope (CLI + library)
 ├── replan.py                # Online re-optimisation
 ├── calibrate.py             # Log ingestion for speed_factor / token_estimates
+├── run_log.py               # Plan capture + actual recording for the calibration loop (v0.6.x Build 2)
 ├── render_schedule.py       # Markdown output
 ├── render_html.py           # Plotly HTML output
 ├── visualize.py             # PNG (matplotlib) output
@@ -61,7 +62,10 @@ into the repo root:
 │   │       ├── bin/, commands/, solver/, templates/, ...
 │   │       └── .venv/                   # ← Encapsulated Python venv
 │   ├── schedule/                        # ← Extension RUNTIME state (managed by us)
-│   │   └── schedule-config.yml          # ← User portfolio
+│   │   ├── schedule-config.yml          # ← User portfolio
+│   │   └── runs/                        # ← Plan/actual log pairs (calibration feedback loop)
+│   │       ├── <run_id>-plan.json       #     Captured automatically after each solve
+│   │       └── <run_id>-actual.jsonl    #     Appended via solver.run_log.append_actual
 │   ├── integration.json                 # (read-only, written by `specify init`)
 │   └── ...
 └── tasks.md, package.json, ...
@@ -78,6 +82,7 @@ separate so users can wipe state without re-installing the extension
 - `extension_code_dir(start)` — `<root>/.specify/extensions/schedule`
 - `extension_state_dir(start)` — `<root>/.specify/schedule`
 - `schedule_config_path(start)` — `<state>/schedule-config.yml`
+- `runs_dir(start)` — `<state>/runs` (calibration plan/actual logs)
 - `encapsulated_venv_python(start)` — `<code>/.venv/bin/python`
 - `migrate_legacy_config(project)` — one-shot migration from
   pre-0.6.0 `./schedule-config.yml`. Conservative: refuses to
