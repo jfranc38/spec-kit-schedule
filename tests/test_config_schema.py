@@ -14,6 +14,7 @@ from solver.config_schema import (
     Config,
     SolverOptions,
     TokenEstimate,
+    existing_config_path,
     load_config,
 )
 from solver.validation import ScheduleInputError
@@ -369,3 +370,27 @@ class TestRetrocompat:
         assert cfg.solver.cost_weight == 0
         assert cfg.solver.stochastic_quantile == 0.5
         assert cfg.solver.anytime is False
+
+
+class TestExistingConfigPath:
+    @staticmethod
+    def _project(tmp_path: Path) -> Path:
+        (tmp_path / ".specify").mkdir()
+        return tmp_path
+
+    def test_none_without_any_file(self, tmp_path: Path) -> None:
+        assert existing_config_path(self._project(tmp_path)) is None
+
+    def test_scaffolded_copy_is_found(self, tmp_path: Path) -> None:
+        root = self._project(tmp_path)
+        scaffolded = root / ".specify" / "extensions" / "schedule" / "schedule-config.yml"
+        scaffolded.parent.mkdir(parents=True)
+        scaffolded.write_text("workers: 2\n", encoding="utf-8")
+        assert existing_config_path(root) == scaffolded
+
+    def test_user_config_wins_over_scaffolded(self, tmp_path: Path) -> None:
+        root = self._project(tmp_path)
+        for rel in (".specify/extensions/schedule", ".specify/schedule"):
+            (root / rel).mkdir(parents=True, exist_ok=True)
+            (root / rel / "schedule-config.yml").write_text("workers: 2\n", encoding="utf-8")
+        assert existing_config_path(root) == root / ".specify" / "schedule" / "schedule-config.yml"

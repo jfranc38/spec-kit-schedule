@@ -11,14 +11,12 @@ from solver.render_schedule import render
 from solver.result.summary import format_inline_summary
 from solver.scheduler import solve_from_json
 from solver.wave_executor import parse_schedule_md
+from tests._helpers import FAST_SOLVER, SPECKIT_FIXTURE
 
-FIXTURE = Path(__file__).parent / "fixtures" / "tasks-speckit-0.16.md"
 
-
-@pytest.fixture(scope="module")
-def zero_config_result() -> dict:
-    parsed = parse_tasks_md(str(FIXTURE), {"solver": {"time_limit": 3, "num_workers": 1}})
-    return solve_from_json(parsed)
+@pytest.fixture
+def zero_config_result(speckit_solved: tuple[dict, dict]) -> dict:
+    return speckit_solved[1]
 
 
 @pytest.fixture(scope="module")
@@ -28,9 +26,9 @@ def advanced_result() -> dict:
             {"id": "backend", "model": "m", "skills": ["*"], "kappa": 30, "context_budget": 200},
             {"id": "tester", "model": "m", "skills": ["*"], "kappa": 30, "context_budget": 200},
         ],
-        "solver": {"time_limit": 10, "num_workers": 1},
+        **FAST_SOLVER,
     }
-    return solve_from_json(parse_tasks_md(str(FIXTURE), cfg))
+    return solve_from_json(parse_tasks_md(str(SPECKIT_FIXTURE), cfg))
 
 
 class TestScheduleMarkdown:

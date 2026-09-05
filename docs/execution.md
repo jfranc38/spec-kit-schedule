@@ -127,7 +127,7 @@ Invariants the protocol relies on:
 
 - **Single writer.** Only the orchestrator edits `tasks.md`, only via
   `python -m solver mark` (atomic rewrite, idempotent, refuses unknown
-  ids).
+  ids; `--undo` unticks).
 - **No partial rounds.** A round with a FAILED lane is not advanced;
   `next` re-emits the pending tasks after the user decides.
 - **Stale plans are rejected**, never silently reused.
@@ -143,5 +143,5 @@ Invariants the protocol relies on:
 | Verb | 0 | 1 | 2 | 3 |
 |------|---|---|---|---|
 | `plan` | schedule written | INFEASIBLE / UNKNOWN (summary printed) | input error | — |
-| `next` | round printed, or `DONE` | — | stale/missing plan, missing tasks.md | blocked |
+| `next` | round printed, or `DONE` | — | stale, missing or unsolved plan, missing tasks.md | blocked |
 | `mark` | done | — | unknown id / missing file | — |

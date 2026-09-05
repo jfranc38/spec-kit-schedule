@@ -20,9 +20,7 @@ import pytest
 from solver.defaults import DEFAULT_SKILL_RULES
 from solver.parse_tasks import extract_file_paths, parse_tasks_md
 from solver.validation import ScheduleInputError
-from solver.warnings_collector import WarningCollector
-
-FIXTURE = Path(__file__).parent / "fixtures" / "tasks-speckit-0.16.md"
+from tests._helpers import SPECKIT_FIXTURE
 
 # A portfolio wide enough that every inferred skill is covered.
 _WIDE_AGENT = {
@@ -101,12 +99,12 @@ class TestExtractFilePaths:
 
 class TestSpeckitFixture:
     def test_every_task_parsed(self) -> None:
-        result = _parse(FIXTURE)
+        result = _parse(SPECKIT_FIXTURE)
         ids = [t["id"] for t in result["tasks"]]
         assert ids == [f"T{i:03d}" for i in range(1, 26)]
 
     def test_bare_paths_and_story_context(self) -> None:
-        by_id = {t["id"]: t for t in _parse(FIXTURE)["tasks"]}
+        by_id = {t["id"]: t for t in _parse(SPECKIT_FIXTURE)["tasks"]}
         assert by_id["T011"]["file_paths"] == ["src/models/note.py"]
         assert by_id["T002"]["file_paths"] == ["pyproject.toml"]
         assert by_id["T022"]["file_paths"] == ["docs/"]
@@ -118,28 +116,28 @@ class TestSpeckitFixture:
         assert by_id["T020"]["story_id"] == "US2"
 
     def test_priority_from_priority_colon_form(self) -> None:
-        by_id = {t["id"]: t for t in _parse(FIXTURE)["tasks"]}
+        by_id = {t["id"]: t for t in _parse(SPECKIT_FIXTURE)["tasks"]}
         assert by_id["T011"]["story_priority"] == 1
         assert by_id["T018"]["story_priority"] == 2
         assert by_id["T004"]["story_priority"] == 99
 
     def test_tags_and_checkbox(self) -> None:
-        by_id = {t["id"]: t for t in _parse(FIXTURE)["tasks"]}
+        by_id = {t["id"]: t for t in _parse(SPECKIT_FIXTURE)["tasks"]}
         assert by_id["T003"]["parallel_flag"] is True
         assert by_id["T004"]["parallel_flag"] is False
         assert all(not t["done"] for t in by_id.values())
         assert by_id["T013"]["description"] == (
             "Implement NoteService in src/services/note_service.py"
         )
-        assert by_id["T013"]["source_line"] > 0
+        assert by_id["T013"]["source_line"] == 64
 
     def test_explicit_depends_on_prose(self) -> None:
-        edges = _parse(FIXTURE)["edges"]
+        edges = _parse(SPECKIT_FIXTURE)["edges"]
         assert ["T011", "T013"] in edges
         assert ["T012", "T013"] in edges
 
     def test_phase_barriers_are_complete(self) -> None:
-        edges = _parse(FIXTURE)["edges"]
+        edges = _parse(SPECKIT_FIXTURE)["edges"]
         # Every Setup task precedes every Foundational task (transitively).
         for s in ("T001", "T002", "T003"):
             for f in ("T004", "T005", "T006", "T007", "T008"):
@@ -157,14 +155,14 @@ class TestSpeckitFixture:
                 assert _reachable(edges, st, p)
 
     def test_same_file_order_within_story(self) -> None:
-        edges = _parse(FIXTURE)["edges"]
+        edges = _parse(SPECKIT_FIXTURE)["edges"]
         # T014 and T015 both write src/api/notes.py inside US1.
         assert ["T014", "T015"] in edges
         # T020 writes the same file in US2 — different scope, no cross-story edge.
         assert ["T015", "T020"] not in edges
 
     def test_tests_first_within_story(self) -> None:
-        edges = _parse(FIXTURE)["edges"]
+        edges = _parse(SPECKIT_FIXTURE)["edges"]
         # Test tasks declared first precede the story's implementation tasks.
         assert _reachable(edges, "T009", "T011")
         assert _reachable(edges, "T010", "T013")
@@ -172,8 +170,8 @@ class TestSpeckitFixture:
         # Polish unit tests are not TDD: no edge to Polish impl tasks.
         assert not _reachable(edges, "T024", "T023")
 
-    def test_dag_is_acyclic_and_solvable(self) -> None:
-        result = _parse(FIXTURE)
+    def test_dag_is_acyclic(self) -> None:
+        result = _parse(SPECKIT_FIXTURE)
         g = nx.DiGraph()
         g.add_nodes_from(t["id"] for t in result["tasks"])
         g.add_edges_from((a, b) for a, b in result["edges"])
@@ -281,10 +279,7 @@ class TestCycles:
             "- [ ] T001 Update schema in src/schema.sql (depends on T002)\n"
             "- [ ] T002 Design schema in src/schema.sql\n"
         )
-        warnings = WarningCollector()
-        result = parse_tasks_md(
-            str(p), {"agents": [_WIDE_AGENT]}, warnings=warnings
-        )
+        result = _parse(p)
         assert ["T002", "T001"] in result["edges"]
         assert ["T001", "T002"] not in result["edges"]
         codes = [w["code"] for w in result["warnings"]]
@@ -326,7 +321,7 @@ class TestCycles:
 
 
 class TestDefaultSkillRules:
-    def test_defaults_apply_only_without_agents(self, write_tasks) -> None:
+    def test_declared_agents_switch_default_rules_off(self, write_tasks) -> None:
         p = write_tasks(
             "## Setup\n"
             "- [ ] T001 Write tests in tests/test_a.py\n"
@@ -334,3 +329,55 @@ class TestDefaultSkillRules:
         )
         with_agents = parse_tasks_md(str(p), {"agents": [_WIDE_AGENT]})
         assert [t["required_skill"] for t in with_agents["tasks"]] == ["backend", "backend"]
+
+
+class TestCycleResolutionAcrossPhases:
+    """A story-tagged test task placed under Polish is a real spec-kit shape."""
+
+    STORY_IMPL = (
+        "## Phase 3: User Story 1 (Priority: P1)\n"
+        "- [ ] T001 [US1] Implement service in src/svc.py\n"
+        "## Phase 4: Polish\n"
+    )
+
+    def test_edges_are_unique_after_cycle_breaking(self, write_tasks) -> None:
+        # same-file T001→T002 is dropped by the breaker, then re-derived as a
+        # phase barrier: the output must still list the pair once.
+        p = write_tasks(
+            self.STORY_IMPL
+            + "- [ ] T002 [US1] Add unit tests for service in tests/test_svc.py and src/svc.py\n"
+        )
+        edges = _parse(p)["edges"]
+        assert ["T001", "T002"] in edges
+        assert len(edges) == len({tuple(e) for e in edges})
+
+    def test_backward_tdd_edge_across_phases_is_dropped_not_fatal(self, write_tasks) -> None:
+        # [P] removes the same-file edge; only tdd (Polish→US1) + the phase
+        # barrier (US1→Polish) remain, and a heuristic edge never makes a
+        # cycle fatal.
+        p = write_tasks(
+            self.STORY_IMPL
+            + "- [ ] T002 [P] [US1] Add unit tests for service in tests/test_svc.py and src/svc.py\n"
+        )
+        result = _parse(p)
+        assert result["edges"] == [["T001", "T002"]]
+        assert [w["code"] for w in result["warnings"]] == ["heuristic_edge_dropped"]
+
+
+class TestEdgeRulesWithoutFixtureCoverage:
+    def test_test_task_precedes_impl_sharing_its_file_in_the_same_scope(self, write_tasks) -> None:
+        # [P] on the test keeps the same-file rule out; only the TDD join remains.
+        p = write_tasks(
+            "## Phase 3: User Story 1 (Priority: P1)\n"
+            "- [ ] T001 [US1] Implement service in src/svc.py\n"
+            "- [ ] T002 [P] [US1] Write unit tests for service in tests/test_svc.py and src/svc.py\n"
+        )
+        assert _parse(p)["edges"] == [["T002", "T001"]]
+
+    def test_polish_waits_for_the_prerequisite_chain_when_there_are_no_stories(self, write_tasks) -> None:
+        p = write_tasks(
+            "## Phase 1: Setup\n- [ ] T001 Init project in pyproject.toml\n"
+            "## Phase 2: Foundational\n- [ ] T002 Add base model in src/base.py\n"
+            "## Phase 4: Polish\n- [ ] T003 Add docs in docs/README.md\n"
+        )
+        assert _parse(p)["edges"] == [["T001", "T002"], ["T002", "T003"]]

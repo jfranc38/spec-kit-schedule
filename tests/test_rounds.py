@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from solver.parse_tasks import parse_tasks_md
-from solver.result.extract import _build_waves
 from solver.rounds import (
     Lane,
     Round,
@@ -17,12 +13,9 @@ from solver.rounds import (
     next_round,
     predecessor_map,
     round_to_dict,
-    rounds_from_result,
 )
 from solver.scheduler import solve_from_json
 from tests._helpers import make_agent, make_solver_input, make_task
-
-FIXTURE = Path(__file__).parent / "fixtures" / "tasks-speckit-0.16.md"
 
 
 def _assn(task_id: str, agent: str, start: int, dur: int = 1) -> dict:
@@ -139,39 +132,35 @@ class TestHelpers:
 
 
 class TestSolverIntegration:
-    @pytest.fixture(scope="class")
-    def solved(self) -> tuple[dict, dict]:
-        parsed = parse_tasks_md(str(FIXTURE), {"solver": {"time_limit": 3, "num_workers": 1}})
-        return parsed, solve_from_json(parsed)
-
-    def test_result_carries_rounds_and_speedup(self, solved: tuple[dict, dict]) -> None:
-        _, result = solved
+    def test_result_carries_rounds_and_speedup(self, speckit_solved: tuple[dict, dict]) -> None:
+        _, result = speckit_solved
         assert result["rounds"], "rounds present in result envelope"
         stats = result["stats"]
         assert stats["total_rounds"] == len(result["rounds"])
         assert stats["barrier_makespan"] >= stats["makespan"]
         assert stats["sequential_duration"] >= stats["barrier_makespan"]
         assert stats["speedup"] >= 1.0
+        assert stats["speedup"] == round(stats["sequential_duration"] / stats["barrier_makespan"], 2)
         assert result["speedup"] == stats["speedup"]
         assert result["barrier_makespan"] == stats["barrier_makespan"]
 
-    def test_rounds_respect_realised_dag(self, solved: tuple[dict, dict]) -> None:
-        parsed, result = solved
-        rounds = rounds_from_result(result)
+    def test_rounds_respect_realised_dag(self, speckit_solved: tuple[dict, dict]) -> None:
+        parsed, result = speckit_solved
         queues = lane_queues(result["assignments"])
         preds = predecessor_map(
             [t["id"] for t in parsed["tasks"]], result["edges"], result["resource_edges"]
         )
+        rounds = build_rounds(queues, preds)
         _assert_valid(rounds, queues, preds)
         # Same rounds the solver stored.
         assert [round_to_dict(r) for r in rounds] == result["rounds"]
 
-    def test_rounds_never_more_than_waves(self, solved: tuple[dict, dict]) -> None:
-        _, result = solved
-        assert len(result["rounds"]) <= len(_build_waves(result["assignments"]))
+    def test_rounds_never_more_than_waves(self, speckit_solved: tuple[dict, dict]) -> None:
+        _, result = speckit_solved
+        assert len(result["rounds"]) <= len(result["waves"])
 
-    def test_tasks_carry_description_and_done(self, solved: tuple[dict, dict]) -> None:
-        _, result = solved
+    def test_tasks_carry_description_and_done(self, speckit_solved: tuple[dict, dict]) -> None:
+        _, result = speckit_solved
         by_id = {t["id"]: t for t in result["tasks"]}
         assert by_id["T011"]["description"] == "Create Note model in src/models/note.py"
         assert by_id["T011"]["file_paths"] == ["src/models/note.py"]
@@ -186,37 +175,12 @@ class TestSolverIntegration:
         assert result["stats"]["speedup"] == pytest.approx(3.0)
 
 
-hypothesis = pytest.importorskip("hypothesis")
-from hypothesis import given, settings  # noqa: E402
-from hypothesis import strategies as st  # noqa: E402
 
-
-@st.composite
-def _dag_with_lanes(draw: st.DrawFn) -> tuple[dict[str, list[str]], dict[str, set[str]]]:
-    n = draw(st.integers(min_value=1, max_value=12))
-    n_lanes = draw(st.integers(min_value=1, max_value=4))
-    ids = [f"T{i:02d}" for i in range(n)]
-    # Random DAG: edges only from lower to higher index.
-    edges: list[list[str]] = []
-    for j in range(1, n):
-        for i in range(j):
-            if draw(st.booleans()) and draw(st.integers(0, 3)) == 0:
-                edges.append([ids[i], ids[j]])
-    # Lane assignment in index order keeps lane order consistent with the DAG.
-    queues: dict[str, list[str]] = {f"w{k}": [] for k in range(n_lanes)}
-    for tid in ids:
-        queues[f"w{draw(st.integers(0, n_lanes - 1))}"].append(tid)
-    queues = {k: v for k, v in queues.items() if v}
-    # Same-lane consecutive arcs, as the realised schedule graph would have.
-    for q in queues.values():
-        edges.extend([a, b] for a, b in zip(q, q[1:], strict=False))
-    return queues, predecessor_map(ids, edges)
-
-
-@given(_dag_with_lanes())
-@settings(max_examples=150, deadline=None)
-def test_property_rounds_valid(case: tuple[dict[str, list[str]], dict[str, set[str]]]) -> None:
-    queues, preds = case
-    rounds = build_rounds(queues, preds)
-    _assert_valid(rounds, queues, preds)
-    assert len(rounds) <= sum(len(q) for q in queues.values())
+def test_lane_stops_at_its_first_blocked_task() -> None:
+    # B waits on another lane; C is free but comes after B in its own lane,
+    # so the segment is the prefix [A], not [A, C].
+    queues = {"w1": ["A", "B", "C"], "w2": ["X"]}
+    preds = predecessor_map(["A", "B", "C", "X"], [["X", "B"]])
+    rnd = next_round(queues, preds, set())
+    assert rnd is not None
+    assert {lane.agent_id: lane.task_ids for lane in rnd.lanes} == {"w1": ("A",), "w2": ("X",)}

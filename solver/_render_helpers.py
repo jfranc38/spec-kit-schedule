@@ -1,4 +1,4 @@
-"""Tiny formatting helpers shared by the markdown and HTML renderers.
+"""Tiny formatting helpers shared by the markdown/HTML renderers, briefs and summary.
 
 The two renderers consume the same solver result envelope and compose the
 same display labels (task short label, agent model/provider line); keeping
@@ -8,10 +8,28 @@ the schema evolves.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-__all__ = ["task_label", "format_agent_model_label"]
+__all__ = ["task_label", "format_agent_model_label", "task_index", "lane_files"]
+
+
+def task_index(result: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """``{task_id: task}`` over the result envelope's ``tasks`` list."""
+    return {str(t["id"]): t for t in result.get("tasks", []) or []}
+
+
+def lane_files(plan: Mapping[str, Any], task_ids: Iterable[str]) -> list[str]:
+    """Ordered, de-duplicated file paths across the given tasks."""
+    by_id = task_index(plan)
+    seen: set[str] = set()
+    out: list[str] = []
+    for tid in task_ids:
+        for fp in by_id.get(tid, {}).get("file_paths", []) or []:
+            if fp not in seen:
+                seen.add(fp)
+                out.append(str(fp))
+    return out
 
 
 def task_label(task: dict[str, Any]) -> str:

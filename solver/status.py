@@ -292,7 +292,7 @@ def _count_agents(raw: str) -> int:
 _WORKERS_LINE_RE = re.compile(r"^\s*workers\s*:\s*(\d+)?", re.MULTILINE)
 
 
-def _check_portfolio(root: Path) -> StatusItem:
+def _check_config(root: Path) -> StatusItem:
     """Report the optional config (``.specify/schedule/`` or the scaffolded copy).
 
     v0.7.0+: the file is not required — without it the planner uses
@@ -309,7 +309,7 @@ def _check_portfolio(root: Path) -> StatusItem:
         return StatusItem(
             name="Config (optional)",
             state="ok",
-            detail="none — zero-config mode (3 workers); see config-template.yml to pin",
+            detail=f"none — zero-config mode ({WORKERS_DEFAULT} workers); see config-template.yml to pin",
         )
     n_agents = _count_agents(raw)
     if n_agents:
@@ -320,7 +320,7 @@ def _check_portfolio(root: Path) -> StatusItem:
         note = ", the default" if n and int(n) == WORKERS_DEFAULT else ""
         detail = f"{cfg.relative_to(root)}: workers mode ({lanes}{note})"
     else:
-        detail = f"{cfg.relative_to(root)}: present, defaults apply (3 workers)"
+        detail = f"{cfg.relative_to(root)}: present, defaults apply ({WORKERS_DEFAULT} workers)"
     return StatusItem(name="Config (optional)", state="ok", detail=detail)
 
 
@@ -390,7 +390,7 @@ def collect_status(project: Path | None = None) -> StatusReport:
     items.append(extension_item)
     items.append(_check_hook_registered(root))
     items.append(_check_solver_venv(root))
-    items.append(_check_portfolio(root))
+    items.append(_check_config(root))
     items.append(_check_run_history(root))
 
     overall = _verdict(items)

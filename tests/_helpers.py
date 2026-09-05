@@ -7,6 +7,9 @@ plain functions (not fixtures) so callers can pass per-task overrides.
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 
 def make_task(tid: str, **overrides: object) -> dict:
     """Build a task dict for ``solve_from_json``; overrides replace defaults."""
@@ -85,3 +88,9 @@ def make_chain_problem(
 
 
 TERMINAL_STATUSES = frozenset({"OPTIMAL", "FEASIBLE"})
+
+
+# Shared by the v0.7 test modules: the spec-kit 0.16 tasks.md fixture and the
+# fast CP-SAT settings (3 s, one thread) every solve of it uses.
+SPECKIT_FIXTURE = Path(__file__).parent / "fixtures" / "tasks-speckit-0.16.md"
+FAST_SOLVER: dict[str, Any] = {"solver": {"time_limit": 3, "num_workers": 1}}

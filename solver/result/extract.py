@@ -18,7 +18,13 @@ from typing import TYPE_CHECKING, Any
 import networkx as nx
 from ortools.sat.python import cp_model
 
-from ..defaults import STATUS_FEASIBLE, STATUS_OPTIMAL, STATUS_UNKNOWN
+from ..defaults import (
+    PORTFOLIO_AGENTS,
+    PORTFOLIO_WORKERS,
+    STATUS_FEASIBLE,
+    STATUS_OPTIMAL,
+    STATUS_UNKNOWN,
+)
 from ..model.types import Agent, Durations, Task
 from ..rounds import barrier_makespan, build_rounds, lane_queues, predecessor_map, round_to_dict
 from ..workers import is_synthesized_worker
@@ -446,11 +452,6 @@ def _finalize_result(
     duration_of = {a["task_id"]: int(a["duration"]) for a in assignments}
     sequential = sum(duration_of.values())
     barrier = barrier_makespan(rounds, duration_of)
-    stats["portfolio_mode"] = (
-        "workers"
-        if agents and all(is_synthesized_worker(ag.skills, ag.model) for ag in agents)
-        else "agents"
-    )
     stats["total_rounds"] = len(rounds)
     stats["sequential_duration"] = sequential
     stats["barrier_makespan"] = barrier
@@ -462,6 +463,11 @@ def _finalize_result(
     stats["min_load"] = min(loads) if loads else 0
     stats["total_tasks"] = len(tasks)
     stats["total_agents"] = len(agents)
+    stats["portfolio_mode"] = (
+        PORTFOLIO_WORKERS
+        if agents and all(is_synthesized_worker(ag.skills, ag.model) for ag in agents)
+        else PORTFOLIO_AGENTS
+    )
     stats["total_waves"] = len(waves)
     stats["total_cost"] = round(sum(row["cost"] for row in agent_summary), 4)
 

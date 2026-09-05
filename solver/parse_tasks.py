@@ -33,7 +33,7 @@ if __package__ in (None, ""):
 
 import yaml  # type: ignore[import-untyped, unused-ignore]  # PyYAML ships no type stubs by default
 
-from .config_schema import Config
+from .config_schema import validate_config
 from .defaults import (
     COMPLEXITY_VERBS,
     CONTEXT_BUDGET_KTOKENS_DEFAULT,
@@ -105,7 +105,7 @@ EXPLICIT_SKILL_RE = re.compile(r"\(skill:\s*([a-z][a-z0-9_-]*)\s*\)")
 # Phase headers — keywords anchored to heading body (after optional
 # "Phase N:" / "N." prefix). Matching the whole heading avoids
 # "Advanced Setup Instructions" being read as a Setup phase.
-_PHASE_PREFIX = r"(?P<hashes>#{1,4})\s+(?:Phase\s+\d+[:.\-]?\s+|\d+[.)]\s+)?"
+_PHASE_PREFIX = r"#{1,4}\s+(?:Phase\s+\d+[:.\-]?\s+|\d+[.)]\s+)?"
 PHASE_SETUP_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Setup|Environment|Configuration)\b", re.I)
 PHASE_FOUND_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Foundation|Foundational|Core|Base)\b", re.I)
 PHASE_IMPL_RE = re.compile(
@@ -117,11 +117,13 @@ PHASE_POLISH_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Polish|Cleanup|Final|Integrat
 # Sub-sections inside a user story phase (spec-kit tasks-template.md):
 #   ### Tests for User Story 1 (OPTIONAL ...)
 #   ### Implementation for User Story 1
-# They refine the current story; they never change the phase.
+# The depth rule in ``_PhaseTracker`` already keeps them inside their
+# story; this regex covers a sub-header that names a story on its own.
 STORY_SUBHEADER_RE = re.compile(
     r"^#{1,6}\s+(?:Tests?|Implementation|Impl)\s+for\s+User\s+Story\s+(?P<num>\d+)\b", re.I
 )
 _HEADER_RE = re.compile(r"^(?P<hashes>#{1,6})\s+\S")
+_MULTISPACE_RE = re.compile(r"\s{2,}")
 
 # ``(P1)`` (docs/example-tasks.md) and ``(Priority: P1)`` (spec-kit template).
 PRIORITY_RE = re.compile(r"\((?:Priority:\s*)?P(\d+)\)", re.I)
@@ -162,6 +164,7 @@ _BARE_FILE_RE = re.compile(r"^[\w.\-@+~]+\.[A-Za-z][A-Za-z0-9]{0,9}$")
 _BARE_DIRPATH_RE = re.compile(r"^\.?[\w.\-@+~\[\]{}]+(?:/[\w.\-@+~\[\]{}*]*)+$")
 _STRIP_LEADING = "([{<\"'"
 _STRIP_TRAILING = ".,;:!?)]}>\"'"
+_STRIP_CHARS = _STRIP_LEADING + _STRIP_TRAILING
 # Words that commonly precede a file path in a task description.
 _PATH_PREPOSITIONS = frozenset({"in", "into", "to", "at", "under", "from", "on", "within"})
 # Dotted tokens that are not files (lower-cased comparison).
@@ -169,9 +172,6 @@ _NOT_PATHS = frozenset(
     {
         "e.g",
         "i.e",
-        "etc",
-        "vs",
-        "cf",
         "node.js",
         "next.js",
         "nuxt.js",
@@ -188,7 +188,6 @@ _NOT_PATHS = frozenset(
         "moment.js",
         "socket.io",
         "asp.net",
-        "vs.code",
     }
 )
 # Extensions accepted even when no preposition precedes the token.
@@ -261,14 +260,14 @@ def extract_file_paths(text: str) -> list[str]:
     Directory tokens keep their trailing slash so ``skill_rules``
     patterns like ``docs/`` still match.
     """
-    raw: list[str] = list(PATH_IN_BACKTICKS_RE.findall(text))
+    raw: list[str] = PATH_IN_BACKTICKS_RE.findall(text)
     words = _BACKTICK_SPAN_RE.sub(" ", text).split()
     prev = ""
     for word in words:
         candidate = _bare_path_candidate(word, prev)
         if candidate is not None:
             raw.append(candidate)
-        prev = word.lower().strip(_STRIP_LEADING + _STRIP_TRAILING)
+        prev = word.lower().strip(_STRIP_CHARS)
 
     seen: set[str] = set()
     out: list[str] = []
@@ -346,9 +345,9 @@ def _merge_config(config: dict[str, Any]) -> dict[str, Any]:
     # declare agents keep an empty default: their skill vocabulary is
     # whatever the agents list, and surprising skills would fail preflight.
     if not raw.get("agents"):
-        raw.setdefault("skill_rules", [dict(r) for r in DEFAULT_SKILL_RULES])
+        raw.setdefault("skill_rules", list(DEFAULT_SKILL_RULES))
 
-    validated: Config = Config.model_validate(raw)
+    validated = validate_config(raw)
     cfg = validated.model_dump(mode="python")
 
     # Normalise token_estimates to plain dictionaries so downstream code can
@@ -380,7 +379,7 @@ def _merge_config(config: dict[str, Any]) -> dict[str, Any]:
     # Zero-config solves favour a fast answer: anytime mode with a short
     # limit (the warm-start incumbent is always there) and threads bounded
     # by the machine. Only fill what the user left unset.
-    if not cfg.get("agents"):
+    if validated.workers_mode:
         raw_solver = config.get("solver") or {}
         zero_config_defaults: dict[str, object] = {
             "time_limit": ZERO_CONFIG_TIME_LIMIT_SECONDS,
@@ -399,26 +398,22 @@ def _merge_config(config: dict[str, Any]) -> dict[str, Any]:
 # ───────────────────────────────────────────────────────────────────────
 
 
-def _detect_phase(line: str) -> tuple[str, str | None, int, int] | None:
-    """Return ``(phase, story_id, priority, depth)`` or None if not a phase header."""
-    m = PHASE_SETUP_RE.match(line)
-    if m:
-        return ("Setup", None, STORY_PRIORITY_DEFAULT, len(m.group("hashes")))
-    m = PHASE_FOUND_RE.match(line)
-    if m:
-        return ("Foundational", None, STORY_PRIORITY_DEFAULT, len(m.group("hashes")))
-    m = PHASE_IMPL_RE.match(line)
-    if m:
-        return ("Implementation", None, STORY_PRIORITY_DEFAULT, len(m.group("hashes")))
+def _detect_phase(line: str) -> tuple[str, str | None, int] | None:
+    """Return ``(phase, story_id, priority)`` or None if not a phase header."""
+    if PHASE_SETUP_RE.match(line):
+        return ("Setup", None, STORY_PRIORITY_DEFAULT)
+    if PHASE_FOUND_RE.match(line):
+        return ("Foundational", None, STORY_PRIORITY_DEFAULT)
+    if PHASE_IMPL_RE.match(line):
+        return ("Implementation", None, STORY_PRIORITY_DEFAULT)
     m = PHASE_STORY_RE.match(line)
     if m:
         num = m.group("num")
         pm = PRIORITY_RE.search(line)
         priority = int(pm.group(1)) if pm else STORY_PRIORITY_DEFAULT
-        return (f"User Story {num}", f"US{num}", priority, len(m.group("hashes")))
-    m = PHASE_POLISH_RE.match(line)
-    if m:
-        return ("Polish", None, STORY_PRIORITY_DEFAULT, len(m.group("hashes")))
+        return (f"User Story {num}", f"US{num}", priority)
+    if PHASE_POLISH_RE.match(line):
+        return ("Polish", None, STORY_PRIORITY_DEFAULT)
     return None
 
 
@@ -455,7 +450,8 @@ class _PhaseTracker:
         if self.story_id is not None and depth > self.depth:
             log.debug("line %d: sub-section under %s ignored", line_num, self.phase)
             return True
-        self.phase, self.story_id, self.priority, self.depth = hit
+        self.phase, self.story_id, self.priority = hit
+        self.depth = depth
         if self.story_id is not None:
             self._story_priority[self.story_id] = self.priority
         log.debug(
@@ -473,52 +469,33 @@ class _PhaseTracker:
 # ───────────────────────────────────────────────────────────────────────
 
 
-class _EdgeSet:
-    """Insertion-ordered edge set with per-edge origin and removal support."""
+# Edges in insertion order, each with the origin that first produced it.
+_Edges = dict[tuple[int, int], str]
 
-    def __init__(self) -> None:
-        self._order: list[tuple[int, int]] = []
-        self.origins: dict[tuple[int, int], str] = {}
 
-    def add(self, src: int, dst: int, origin: str) -> None:
-        if src == dst:
-            return
-        key = (src, dst)
-        if key in self.origins:
-            return
-        self._order.append(key)
-        self.origins[key] = origin
-
-    def remove(self, key: tuple[int, int]) -> None:
-        self.origins.pop(key, None)
-
-    def __contains__(self, key: tuple[int, int]) -> bool:
-        return key in self.origins
-
-    def pairs(self) -> list[tuple[int, int]]:
-        return [k for k in self._order if k in self.origins]
+def _add_edge(edges: _Edges, src: int, dst: int, origin: str) -> None:
+    if src != dst:
+        edges.setdefault((src, dst), origin)
 
 
 def _break_heuristic_cycles(
-    n: int,
-    edges: _EdgeSet,
+    edges: _Edges,
     tasks: list[dict[str, Any]],
     warnings: WarningCollector,
 ) -> None:
     """Drop same-file / TDD edges that close a cycle; explicit-only cycles are fatal."""
     while True:
-        cycle = find_cycle(n, edges.pairs())
+        cycle = find_cycle(len(tasks), list(edges))
         if cycle is None:
             return
         pairs = list(zip(cycle, cycle[1:], strict=False))
         names = " → ".join(tasks[i]["id"] for i in cycle)
-        heuristic = [p for p in pairs if edges.origins.get(p) in _HEURISTIC_ORIGINS]
+        heuristic = [p for p in pairs if edges.get(p) in _HEURISTIC_ORIGINS]
         if not heuristic:
-            origins = [edges.origins.get(p, "?") for p in pairs]
+            origins = [edges.get(p, "?") for p in pairs]
             raise ScheduleInputError(t("cycle_detected", names=names, origins=origins))
         for src, dst in heuristic:
-            origin = edges.origins[(src, dst)]
-            edges.remove((src, dst))
+            origin = edges.pop((src, dst))
             warnings.add(
                 WARN_HEURISTIC_EDGE_DROPPED,
                 t(
@@ -536,13 +513,13 @@ def _break_heuristic_cycles(
 
 def _phase_boundary(
     members: list[int],
-    edges: _EdgeSet,
+    edges: _Edges,
 ) -> tuple[list[int], list[int]]:
     """Return ``(sources, sinks)`` of a phase w.r.t. its intra-phase edges."""
     member_set = set(members)
     has_pred = dict.fromkeys(members, False)
     has_succ = dict.fromkeys(members, False)
-    for src, dst in edges.pairs():
+    for src, dst in edges:
         if src in member_set and dst in member_set:
             has_succ[src] = True
             has_pred[dst] = True
@@ -553,7 +530,7 @@ def _phase_boundary(
 
 def _add_phase_barriers(
     tasks: list[dict[str, Any]],
-    edges: _EdgeSet,
+    edges: _Edges,
 ) -> None:
     """Every task of phase N precedes every task of phase N+1 (transitively).
 
@@ -570,8 +547,8 @@ def _add_phase_barriers(
         return int(match.group()) if match else 0
 
     phase_tasks: dict[str, list[int]] = defaultdict(list)
-    for td in tasks:
-        phase_tasks[td["phase"]].append(td["index"])
+    for i, td in enumerate(tasks):
+        phase_tasks[td["phase"]].append(i)
 
     story_phases = sorted(
         (p for p in phase_tasks if p.startswith("User Story")), key=_story_index
@@ -581,7 +558,7 @@ def _add_phase_barriers(
     def _barrier(before: str, after: str) -> None:
         for src in boundary[before][1]:
             for dst in boundary[after][0]:
-                edges.add(src, dst, EdgeOrigin.PHASE)
+                _add_edge(edges, src, dst, EdgeOrigin.PHASE)
 
     prereq_chain = [p for p in ("Setup", "Foundational") if p in phase_tasks]
     for before, after in zip(prereq_chain, prereq_chain[1:], strict=False):
@@ -611,7 +588,7 @@ def _parse_task_line(
     tracker: _PhaseTracker,
 ) -> dict[str, Any]:
     """Build the raw task record for one matched checklist line."""
-    tags = m.group("tags") or ""
+    tags = m.group("tags")
     story_tag = _STORY_TAG_RE.search(tags)
     desc = m.group("desc").strip()
 
@@ -631,14 +608,14 @@ def _parse_task_line(
     if skill_match is not None:
         explicit_skill = skill_match.group(1)
         desc = (desc[: skill_match.start()] + desc[skill_match.end() :]).strip()
-    desc = re.sub(r"\s{2,}", " ", desc)
+    desc = _MULTISPACE_RE.sub(" ", desc)
 
     vm = VERB_RE.match(desc)
     verb = vm.group(1) if vm else "implement"
 
     return {
         "id": m.group("id"),
-        "done": (m.group("check") or "").lower() == "x",
+        "done": m.group("check").lower() == "x",
         "phase": tracker.phase,
         "story_id": story_tag.group(1) if story_tag else tracker.story_id,
         "story_priority": tracker.priority,
@@ -701,7 +678,6 @@ def parse_tasks_md(
         if td["id"] in task_ids:
             raise ScheduleInputError(t("duplicate_task_id", task_id=td["id"], line=line_num))
         task_ids.add(td["id"])
-        td["index"] = len(tasks)
 
         inferred_skill = infer_skill(td["file_paths"], skill_rules, default_skill)
         td["required_skill"] = td["explicit_skill"] or inferred_skill
@@ -714,7 +690,7 @@ def parse_tasks_md(
             or {"mean": TOKEN_ESTIMATES["medium"], "std_dev": 0}
         )
         td["estimated_tokens"] = int(estimate["mean"])
-        td["token_std_dev"] = int(estimate.get("std_dev", 0))
+        td["token_std_dev"] = int(estimate["std_dev"])
         tasks.append(td)
 
     if not tasks:
@@ -724,7 +700,7 @@ def parse_tasks_md(
 
     # ── Build edges ───────────────────────────────────────────────────
     id_to_idx = {td["id"]: i for i, td in enumerate(tasks)}
-    edges = _EdgeSet()
+    edges: _Edges = {}
 
     # (a) Explicit dependencies — fail hard on unknown references.
     missing_deps: list[tuple[str, str, int]] = []
@@ -733,7 +709,7 @@ def parse_tasks_md(
             if dep_id not in id_to_idx:
                 missing_deps.append((td["id"], dep_id, td["source_line"]))
                 continue
-            edges.add(id_to_idx[dep_id], i, EdgeOrigin.EXPLICIT)
+            _add_edge(edges, id_to_idx[dep_id], i, EdgeOrigin.EXPLICIT)
     if missing_deps:
         details = "; ".join(
             t("unresolved_dep", task_id=tid, line=ln, dep=dep) for tid, dep, ln in missing_deps
@@ -749,7 +725,7 @@ def parse_tasks_md(
             scope_file_writers[(td["story_id"] or td["phase"], fp)].append(i)
     for writers in scope_file_writers.values():
         for k in range(len(writers) - 1):
-            edges.add(writers[k], writers[k + 1], EdgeOrigin.SAME_FILE)
+            _add_edge(edges, writers[k], writers[k + 1], EdgeOrigin.SAME_FILE)
 
     # (c) TDD rule within the same scope: test tasks precede implementation
     # tasks that touch the same file. Indexed so the join is O(n).
@@ -762,7 +738,7 @@ def parse_tasks_md(
     for key, test_tasks in test_idx.items():
         for impl in impl_idx.get(key, ()):
             for test in test_tasks:
-                edges.add(test, impl, EdgeOrigin.TDD)
+                _add_edge(edges, test, impl, EdgeOrigin.TDD)
 
     # (c') spec-kit "tests FIRST": inside a user story, test tasks declared
     # before an implementation task precede it. Declaration order is never
@@ -775,22 +751,22 @@ def parse_tasks_md(
             story_tests[td["story_id"]].append(i)
             continue
         for test in story_tests[td["story_id"]]:
-            edges.add(test, i, EdgeOrigin.TDD)
+            _add_edge(edges, test, i, EdgeOrigin.TDD)
 
     # Heuristic edges may contradict explicit intent — resolve before the
     # phase barriers are derived from the intra-phase structure.
-    _break_heuristic_cycles(len(tasks), edges, tasks, warnings)
+    _break_heuristic_cycles(edges, tasks, warnings)
 
-    # (d) Phase barriers: Setup → Foundational → {stories} → Polish.
-    _add_phase_barriers(tasks, edges)
-
-    cycle = find_cycle(len(tasks), edges.pairs())
-    if cycle is not None:
-        names = " → ".join(tasks[i]["id"] for i in cycle)
-        origins = [
-            edges.origins.get((a, b), "?") for a, b in zip(cycle, cycle[1:], strict=False)
-        ]
-        raise ScheduleInputError(t("cycle_detected", names=names, origins=origins))
+    # (d) Phase barriers: Setup → Foundational → {stories} → Polish. A
+    # barrier can close a cycle with a backward heuristic edge (a
+    # story-tagged test task placed under Polish); drop it like any other
+    # heuristic conflict and re-derive the barriers until the graph is a
+    # DAG. Explicit / phase-only cycles raise inside the breaker.
+    while True:
+        _add_phase_barriers(tasks, edges)
+        if find_cycle(len(tasks), list(edges)) is None:
+            break
+        _break_heuristic_cycles(edges, tasks, warnings)
 
     # ── Parallel-flag sanity: two [P] tasks writing the same file ─────
     parallel_writers: dict[str, list[int]] = defaultdict(list)
@@ -810,25 +786,20 @@ def parse_tasks_md(
             )
 
     # ── Agents ────────────────────────────────────────────────────────
-    # Zero-config: no ``agents:`` block → N identical subagent lanes.
+    # Zero-config: no ``agents:`` block → N identical subagent lanes,
+    # already in the output shape (budgets in raw tokens).
+    agents_out: list[dict[str, Any]] = []
     if not cfg["agents"]:
-        cfg["agents"] = synthesize_workers(
+        agents_out = synthesize_workers(
             len(tasks),
             sum(td["estimated_tokens"] for td in tasks),
-            workers=int(cfg.get("workers", 3)),
-            max_tasks_per_worker=int(cfg.get("max_tasks_per_worker", 0)),
+            workers=cfg["workers"],
+            max_tasks_per_worker=cfg["max_tasks_per_worker"],
             warnings=warnings,
         )
-        # Synthesised budgets are already raw tokens; declared agents use
-        # kilotokens (×1000 below). Mark them so the loop does not rescale.
-        for ac in cfg["agents"]:
-            ac["_raw_budget"] = True
-
-    agents_out: list[dict[str, Any]] = []
     for ac in cfg["agents"]:
-        budget = int(ac.get("context_budget", CONTEXT_BUDGET_KTOKENS_DEFAULT))
-        if not ac.get("_raw_budget"):
-            budget *= 1000
+        # Declared budgets are kilotokens.
+        budget = int(ac.get("context_budget", CONTEXT_BUDGET_KTOKENS_DEFAULT)) * 1000
         agent_dict: dict[str, Any] = {
             "id": ac["id"],
             "model": ac.get("model", "unknown"),
@@ -868,7 +839,7 @@ def parse_tasks_md(
 
     return {
         "tasks": tasks_out,
-        "edges": [[tasks[s]["id"], tasks[d]["id"]] for s, d in edges.pairs()],
+        "edges": [[tasks[s]["id"], tasks[d]["id"]] for s, d in edges],
         "agents": agents_out,
         "config": solver_cfg,
         "warnings": warnings.as_list(),

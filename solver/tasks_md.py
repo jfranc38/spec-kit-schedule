@@ -5,8 +5,7 @@ its line reads ``- [x] T###``. The orchestrator (``python -m solver
 mark``) is the only writer; subagents report ids instead of editing the
 file, so concurrent lanes never race on it.
 
-Both helpers are deliberately tiny and dependency-free — they must work
-even when the solver stack is not importable.
+Both helpers are deliberately tiny: one regex over the lines, no parser.
 """
 
 from __future__ import annotations
@@ -16,6 +15,7 @@ __all__ = ["mark_tasks", "scan_checkboxes"]
 import contextlib
 import os
 import re
+import shutil
 import tempfile
 from collections.abc import Iterable
 from pathlib import Path
@@ -54,7 +54,8 @@ def mark_tasks(path: str | Path, task_ids: Iterable[str], *, done: bool = True) 
     # orchestrator pasting the DONE line) as well as separate arguments.
     tokens = [tok for t_id in task_ids for tok in re.split(r"[\s,]+", str(t_id)) if tok]
     wanted = list(dict.fromkeys(tokens))
-    text = p.read_text(encoding="utf-8")
+    with p.open(encoding="utf-8", newline="") as fh:
+        text = fh.read()
     known = scan_checkboxes(p)
     unknown = [tid for tid in wanted if tid not in known]
     if unknown:
@@ -71,7 +72,7 @@ def mark_tasks(path: str | Path, task_ids: Iterable[str], *, done: bool = True) 
         if m is None or m.group("id") not in remaining:
             continue
         remaining.discard(m.group("id"))
-        if m.group("state").lower() == target.strip().lower():
+        if (m.group("state") or " ").lower() == target:
             continue
         lines[i] = f"{m.group('lead')}{target}{line[m.end('state'):]}"
         changed += 1
@@ -80,8 +81,9 @@ def mark_tasks(path: str | Path, task_ids: Iterable[str], *, done: bool = True) 
 
     tmp_fd, tmp_path = tempfile.mkstemp(dir=p.parent, prefix=".tasks_md_")
     try:
-        with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8", newline="") as fh:
             fh.write("\n".join(lines))
+        shutil.copymode(p, tmp_path)
         os.replace(tmp_path, p)
     except Exception:
         with contextlib.suppress(OSError):

@@ -7,6 +7,7 @@ and parser defaults to drift in the past — do not reintroduce that.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from types import MappingProxyType
 from typing import Any, Final, Literal
@@ -26,6 +27,8 @@ __all__ = [
     "MAX_TASKS_PER_WORKER_DEFAULT",
     "WILDCARD_SKILL",
     "SUBAGENT_MODEL",
+    "PORTFOLIO_WORKERS",
+    "PORTFOLIO_AGENTS",
     "ZERO_CONFIG_TIME_LIMIT_SECONDS",
     "zero_config_num_workers",
     "CONTEXT_BUDGET_KTOKENS_DEFAULT",
@@ -239,6 +242,9 @@ WILDCARD_SKILL = "*"
 # ``model`` recorded on synthesised workers: the user's AI assistant runs
 # each lane as a subagent, so there is no model string to pass through.
 SUBAGENT_MODEL = "subagent"
+# ``stats["portfolio_mode"]``: every lane is a synthesized worker, or not.
+PORTFOLIO_WORKERS = "workers"
+PORTFOLIO_AGENTS = "agents"
 # Zero-config solves run in anytime mode with a short per-phase limit: the
 # warm-start incumbent is always available and CP-SAT usually finds the
 # optimum in well under a second — the rest of the budget only buys the
@@ -257,9 +263,7 @@ STORY_PRIORITY_DEFAULT = 99
 
 
 def zero_config_num_workers() -> int:
-    """CP-SAT worker threads for zero-config solves: ``min(8, cpu_count)``."""
-    import os
-
+    """CP-SAT worker threads for zero-config solves: ``min(NUM_WORKERS, cpu_count)``."""
     return max(1, min(NUM_WORKERS, os.cpu_count() or 1))
 
 

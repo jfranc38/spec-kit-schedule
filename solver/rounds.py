@@ -35,7 +35,6 @@ __all__ = [
     "next_round",
     "predecessor_map",
     "round_to_dict",
-    "rounds_from_result",
 ]
 
 from collections.abc import Iterable, Mapping
@@ -53,7 +52,7 @@ class Lane:
 
 @dataclass(frozen=True)
 class Blocked:
-    """A lane that cannot start its next task yet (dynamic use only)."""
+    """A lane whose next task waits on a task another lane has not finished."""
 
     agent_id: str
     task_id: str
@@ -90,7 +89,7 @@ def predecessor_map(
     preds: dict[str, set[str]] = {tid: set() for tid in task_ids}
     for edges in edge_lists:
         for edge in edges:
-            src, dst = tuple(edge)
+            src, dst = edge
             preds.setdefault(dst, set()).add(src)
             preds.setdefault(src, set())
     return preds
@@ -111,8 +110,9 @@ def next_round(
     that sit in *another* lane must be done — that is the barrier.
 
     Returns ``None`` when nothing is pending. A lane whose first pending
-    task is blocked is reported in ``Round.blocked`` (empty in the static
-    case, since a valid DAG always has a ready task per round).
+    task waits on another lane is reported in ``Round.blocked``; ``lanes``
+    is never empty for a DAG consistent with the lane order, and
+    :func:`build_rounds` drops ``blocked`` from the static plan.
     """
     lanes: list[Lane] = []
     blocked: list[Blocked] = []
@@ -140,14 +140,13 @@ def next_round(
 def build_rounds(
     queues: Mapping[str, list[str]],
     preds: Mapping[str, set[str]],
-    done: set[str] | None = None,
 ) -> list[Round]:
     """Static round plan: apply :func:`next_round` until every task is placed.
 
     Raises ``ValueError`` if a round makes no progress, which can only
     happen when ``preds`` is not a DAG consistent with the lane order.
     """
-    done_so_far = set(done or ())
+    done_so_far: set[str] = set()
     rounds: list[Round] = []
     while True:
         rnd = next_round(queues, preds, done_so_far, index=len(rounds) + 1)
@@ -183,18 +182,3 @@ def round_to_dict(rnd: Round) -> dict[str, Any]:
             for b in rnd.blocked
         ]
     return out
-
-
-def rounds_from_result(
-    result: Mapping[str, Any],
-    done: set[str] | None = None,
-) -> list[Round]:
-    """Rebuild rounds from a solver result / ``schedule.json`` envelope."""
-    assignments = result.get("assignments", []) or []
-    task_ids = [str(a["task_id"]) for a in assignments]
-    preds = predecessor_map(
-        task_ids,
-        result.get("edges", []) or [],
-        result.get("resource_edges", []) or [],
-    )
-    return build_rounds(lane_queues(assignments), preds, done)

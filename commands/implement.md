@@ -89,6 +89,8 @@ Repeat until `next` prints `DONE`:
    "$SKS" mark "$TASKS" T001 T002 ...
    ```
 
+   (`mark --undo` unticks a task marked by mistake.)
+
 5. **Verify the round.** Run the project's test / lint command if one is
    obvious (`plan.md`, `Makefile`, `package.json`, `pyproject.toml`).
    Then `git add -A && git status --short`; if the user opted in, commit

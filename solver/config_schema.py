@@ -22,14 +22,23 @@ __all__ = [
     "load_config",
     "resolve_config_path",
     "existing_config_path",
+    "validate_config",
 ]
 
 import logging
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import yaml  # type: ignore[import-untyped, unused-ignore]  # PyYAML ships no type stubs by default
-from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, PositiveInt, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PositiveFloat,
+    PositiveInt,
+    ValidationError,
+    field_validator,
+)
 
 from ._paths import migrate_legacy_config, scaffolded_config_path, schedule_config_path
 from .defaults import (
@@ -219,6 +228,18 @@ def resolve_config_path(
     return default_config_path(project)
 
 
+def validate_config(raw: dict[str, Any]) -> Config:
+    """``Config.model_validate`` with per-field errors re-raised as ScheduleInputError."""
+    try:
+        return Config.model_validate(raw)
+    except ValidationError as exc:
+        parts = [
+            f"config error at '{'.'.join(str(s) for s in err['loc']) or '?'}': {err['msg']}"
+            for err in exc.errors()
+        ]
+        raise ScheduleInputError("; ".join(parts)) from exc
+
+
 def existing_config_path(project: Path | None = None) -> Path | None:
     """Return the config file the planner should read, or ``None`` (zero-config).
 
@@ -260,19 +281,7 @@ def load_config(path: str | Path | None = None, *, project: Path | None = None) 
     """
     resolved = resolve_config_path(path, project=project)
     raw = yaml.safe_load(Path(resolved).read_text(encoding="utf-8")) or {}
-    try:
-        config = Config.model_validate(raw)
-    except Exception as exc:  # pydantic.ValidationError
-        # Extract per-field errors and re-raise with actionable messages.
-        errors = getattr(exc, "errors", None)
-        if errors is not None:
-            parts = []
-            for err in errors():
-                loc = ".".join(str(s) for s in err["loc"]) if err.get("loc") else "?"
-                msg = err.get("msg", str(err))
-                parts.append(f"config error at '{loc}': {msg}")
-            raise ScheduleInputError("; ".join(parts)) from exc
-        raise ScheduleInputError(f"config error: {exc}") from exc
+    config = validate_config(raw)
 
     log.debug("loaded config from %s: %d agents", resolved, len(config.agents))
     return config

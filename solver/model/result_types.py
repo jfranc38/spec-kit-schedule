@@ -81,12 +81,20 @@ class LaneBlock(TypedDict):
     tasks: list[str]
 
 
+class BlockedLane(TypedDict):
+    """A lane whose next task waits on another lane (``solver next`` only)."""
+
+    agent_id: str
+    task_id: str
+    waiting_on: list[str]
+
+
 class RoundBlock(TypedDict, total=False):
     """One parallel launch of subagents (see ``solver.rounds``)."""
 
     round: int
     lanes: list[LaneBlock]
-    blocked: list[dict[str, Any]]
+    blocked: list[BlockedLane]
 
 
 class WarningRecord(TypedDict, total=False):
@@ -111,6 +119,7 @@ class Stats(TypedDict, total=False):
     min_load: int
     total_tasks: int
     total_agents: int
+    portfolio_mode: str
     total_waves: int
     total_rounds: int
     sequential_duration: int

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spec-kit-schedule"
-version = "0.7.0"
+version = "0.7.1"
 description = "Optimal multi-agent task scheduling via CP-SAT (spec-kit extension)"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
@@ -85,7 +85,7 @@ exclude = ["tests*", "docs*"]
 # in installed environments and are visible in the wheel under
 # `spec_kit_schedule-<ver>.data/data/share/spec-kit-schedule/...`.
 [tool.setuptools.data-files]
-"share/spec-kit-schedule" = ["extension.yml", "LICENSE", "README.md"]
+"share/spec-kit-schedule" = ["config-template.yml", "extension.yml", "LICENSE", "README.md"]
 "share/spec-kit-schedule/commands" = [
     "commands/implement.md",
     "commands/schedule.md",

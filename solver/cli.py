@@ -76,7 +76,12 @@ def _load_raw_config(explicit: str | None, project_dir: Path) -> tuple[Path | No
         if found is None:
             return None, {}
         path = found
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        raise ScheduleInputError(
+            t("cannot_read_file", file_kind="config", path_suffix=f" {path}", error=exc)
+        ) from exc
     if not isinstance(raw, dict):
         raise ScheduleInputError(t("cli_config_not_mapping", path=path))
     return path, raw
@@ -86,7 +91,7 @@ def _feature_name(tasks_path: Path, explicit: str | None) -> str:
     if explicit:
         return explicit
     name = tasks_path.parent.name
-    return name if name not in ("", ".", "/") else "feature"
+    return name or "feature"
 
 
 def _brief_context(plan: dict[str, Any], tasks_path: Path) -> BriefContext:
@@ -108,8 +113,6 @@ def _try_images(schedule_json: Path, out_dir: Path, feature: str) -> str | None:
         from .visualize import main as visualize_main
 
         rc = visualize_main([str(schedule_json), str(images_dir), "--feature", feature])
-    except SystemExit as exc:  # visualize exits on missing matplotlib
-        rc = int(exc.code or 1)
     except Exception as exc:  # noqa: BLE001 — images are optional
         log.warning("image rendering skipped: %s", exc)
         return None
@@ -193,6 +196,11 @@ def _load_plan(path: Path) -> dict[str, Any]:
         raise ScheduleInputError(t("cli_plan_invalid", path=path, error=exc)) from exc
     if not isinstance(data, dict) or "assignments" not in data:
         raise ScheduleInputError(t("cli_plan_invalid", path=path, error="missing assignments"))
+    status = data.get("status")
+    if status is not None and status not in (STATUS_OPTIMAL, STATUS_FEASIBLE):
+        raise ScheduleInputError(
+            t("cli_plan_invalid", path=path, error=f"status {status}, nothing to run")
+        )
     return data
 
 
@@ -294,7 +302,7 @@ def cmd_mark(args: argparse.Namespace) -> int:
 def cmd_status(args: argparse.Namespace) -> int:
     from .status import main as status_main
 
-    return int(status_main(list(args.rest)))
+    return int(status_main([]))
 
 
 # ───────────────────────────────────────────────────────────────────────
@@ -336,7 +344,6 @@ def _build_parser() -> argparse.ArgumentParser:
     mark.set_defaults(func=cmd_mark)
 
     status = sub.add_parser("status", help="Diagnose the installation (see solver.status)")
-    status.add_argument("rest", nargs=argparse.REMAINDER)
     status.set_defaults(func=cmd_status)
     return ap
 
@@ -353,7 +360,7 @@ def main(argv: list[str] | None = None) -> int:
     except ScheduleInputError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return EXIT_INPUT_ERROR
-    except FileNotFoundError as exc:
+    except OSError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return EXIT_INPUT_ERROR
 

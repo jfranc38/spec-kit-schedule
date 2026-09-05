@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.7.1] - 2026-09-05
+
+Refinement pass over the 0.7.0 change: nine reachable bugs fixed with a
+failing test each, dead weight removed, and the test suite made faster.
+No new features, no configuration or command changes.
+
+### Fixed
+- `mark` rewrote a CRLF `tasks.md` entirely as LF; line endings are now
+  preserved (`tasks_md` reads and writes with `newline=""`).
+- `mark --undo` on an already-unchecked task counted as a change and
+  rewrote the file; it is idempotent again.
+- `mark` left `tasks.md` with mode 0600 (the temp file's); the original
+  mode is copied before the atomic replace.
+- `next` reported `DONE` on a `schedule.json` whose solve was
+  INFEASIBLE/UNKNOWN; such plans are now rejected with exit 2.
+- `--workers 0` (or `workers: 0` in the YAML), an invalid YAML config and
+  an unwritable `--out` directory produced raw tracebacks; each is now an
+  `ERROR:` line with exit 2 (`config_schema.validate_config` wraps
+  pydantic errors once, at the boundary).
+- A story-tagged test task placed under Polish that touched a story file
+  raised a fatal `cycle_detected` (phase barrier + backward TDD edge)
+  although the documented rule says heuristic edges never make a cycle
+  fatal; barriers are now re-derived after breaking such cycles.
+- A heuristic edge dropped by the cycle breaker and re-derived as a phase
+  barrier appeared twice in the output `edges`; edges are an
+  insertion-ordered dict now.
+
+### Changed
+- `python -m solver status` no longer forwards extra arguments (the
+  status report never read them).
+- `config-template.yml` ships in the wheel's data files (it is the
+  `provides.config` template).
+- Internal: `rounds.rounds_from_result`, `BriefContext.extra_docs` and
+  the `_raw_budget` marker removed (no callers); `task_index` /
+  `lane_files` shared by briefs, `schedule.md` and the summary;
+  `portfolio_mode` values named (`PORTFOLIO_WORKERS` / `PORTFOLIO_AGENTS`).
+
+### Tests
+- One cached zero-config solve per session replaces seven identical
+  solves; the suite runs in ~44 s instead of ~67 s. Four assertions that
+  survived a mutation probe were rewritten; 18 tests added for the fixes
+  and for uncovered edge rules; the hypothesis property test lives in
+  its own module so a missing dev extra skips one test, not seventeen.
+
 ## [0.7.0] - 2026-09-05
 
 Zero configuration, real execution. The extension now plans `tasks.md`

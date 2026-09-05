@@ -103,7 +103,7 @@ def scaffolded_config_path(start: Path | None = None) -> Path:
     it across updates. :func:`schedule_config_path` takes precedence when
     both exist.
     """
-    return project_root(start) / ".specify" / "extensions" / EXTENSION_ID / "schedule-config.yml"
+    return extension_code_dir(start) / "schedule-config.yml"
 
 
 def runs_dir(start: Path | None = None) -> Path:

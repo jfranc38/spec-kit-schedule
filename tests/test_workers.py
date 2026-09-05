@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from solver.parse_tasks import parse_tasks_md
 from solver.scheduler import solve_from_json
 from solver.warnings_collector import WarningCollector
 from solver.workers import WILDCARD_SKILL, agent_covers, synthesize_workers
-from tests._helpers import make_agent, make_solver_input, make_task
-
-FIXTURE = Path(__file__).parent / "fixtures" / "tasks-speckit-0.16.md"
+from tests._helpers import SPECKIT_FIXTURE, make_agent, make_solver_input, make_task
 
 
 class TestSynthesizeWorkers:
@@ -65,7 +61,7 @@ class TestAgentCovers:
 
 class TestParserZeroConfig:
     def test_no_config_synthesises_workers_and_default_rules(self) -> None:
-        result = parse_tasks_md(str(FIXTURE), {})
+        result = parse_tasks_md(str(SPECKIT_FIXTURE), {})
         assert [a["id"] for a in result["agents"]] == ["worker-1", "worker-2", "worker-3"]
         by_id = {t["id"]: t for t in result["tasks"]}
         # Default skill rules apply: test files are recognised (TDD ordering).
@@ -77,21 +73,23 @@ class TestParserZeroConfig:
 
     def test_workers_and_cap_from_config(self) -> None:
         result = parse_tasks_md(
-            str(FIXTURE), {"workers": 2, "max_tasks_per_worker": 8}
+            str(SPECKIT_FIXTURE), {"workers": 2, "max_tasks_per_worker": 8}
         )
         # 25 tasks / 8 per worker → 4 lanes, raised from 2 with a warning.
         assert len(result["agents"]) == 4
         assert {w["code"] for w in result["warnings"]} == {"workers_raised"}
 
-    def test_zero_config_solver_defaults(self) -> None:
-        result = parse_tasks_md(str(FIXTURE), {})
-        cfg = result["config"]
+    def test_zero_config_solver_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("solver.defaults.os.cpu_count", lambda: 2)
+        cfg = parse_tasks_md(str(SPECKIT_FIXTURE), {})["config"]
         assert cfg["time_limit"] == 10
         assert cfg["anytime"] is True
-        assert 1 <= cfg["num_workers"] <= 8
+        assert cfg["num_workers"] == 2
+        monkeypatch.setattr("solver.defaults.os.cpu_count", lambda: 32)
+        assert parse_tasks_md(str(SPECKIT_FIXTURE), {})["config"]["num_workers"] == 8
 
     def test_user_solver_overrides_win(self) -> None:
-        result = parse_tasks_md(str(FIXTURE), {"solver": {"time_limit": 5, "anytime": False}})
+        result = parse_tasks_md(str(SPECKIT_FIXTURE), {"solver": {"time_limit": 5, "anytime": False}})
         assert result["config"]["time_limit"] == 5
         assert result["config"]["anytime"] is False
 
@@ -101,15 +99,14 @@ class TestParserZeroConfig:
                 {"id": "a", "model": "m", "skills": ["*"], "kappa": 50, "context_budget": 16}
             ]
         }
-        result = parse_tasks_md(str(FIXTURE), cfg)
+        result = parse_tasks_md(str(SPECKIT_FIXTURE), cfg)
         assert result["agents"][0]["context_budget"] == 16_000
         assert "_raw_budget" not in result["agents"][0]
 
 
 class TestSolveZeroConfig:
-    def test_fixture_solves_end_to_end(self) -> None:
-        parsed = parse_tasks_md(str(FIXTURE), {"solver": {"time_limit": 3, "num_workers": 1}})
-        result = solve_from_json(parsed)
+    def test_fixture_solves_end_to_end(self, speckit_solved: tuple[dict, dict]) -> None:
+        parsed, result = speckit_solved
         assert result["status"] in ("OPTIMAL", "FEASIBLE")
         assigned = {a["task_id"] for a in result["assignments"]}
         assert assigned == {t["id"] for t in parsed["tasks"]}

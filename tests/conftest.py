@@ -12,6 +12,10 @@ from pathlib import Path
 import pytest
 import yaml
 
+from solver.parse_tasks import parse_tasks_md
+from solver.scheduler import solve_from_json
+from tests._helpers import FAST_SOLVER, SPECKIT_FIXTURE
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -88,3 +92,16 @@ def clone_config(minimal_config):
         return copy.deepcopy(minimal_config)
 
     return _clone
+
+
+@pytest.fixture(scope="session")
+def _speckit_solve_cache() -> tuple[dict, dict]:
+    """One zero-config solve of the spec-kit fixture per session (≈3 s)."""
+    parsed = parse_tasks_md(str(SPECKIT_FIXTURE), copy.deepcopy(FAST_SOLVER))
+    return parsed, solve_from_json(parsed)
+
+
+@pytest.fixture
+def speckit_solved(_speckit_solve_cache: tuple[dict, dict]) -> tuple[dict, dict]:
+    """``(parsed, result)`` of the shared solve, deep-copied so tests may mutate it."""
+    return copy.deepcopy(_speckit_solve_cache)

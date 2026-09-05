@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from solver.briefs import (
@@ -13,10 +11,6 @@ from solver.briefs import (
     render_brief,
     render_round,
 )
-from solver.parse_tasks import parse_tasks_md
-from solver.scheduler import solve_from_json
-
-FIXTURE = Path(__file__).parent / "fixtures" / "tasks-speckit-0.16.md"
 
 
 def _plan() -> dict:
@@ -108,9 +102,8 @@ class TestRenderRound:
         assert out.count("# Subagent brief") == 2
         assert out.endswith("\n")
 
-    def test_end_to_end_from_solver_result(self) -> None:
-        parsed = parse_tasks_md(str(FIXTURE), {"solver": {"time_limit": 3, "num_workers": 1}})
-        result = solve_from_json(parsed)
+    def test_end_to_end_from_solver_result(self, speckit_solved: tuple[dict, dict]) -> None:
+        _, result = speckit_solved
         first = result["rounds"][0]
         out = render_round(result, first, total_rounds=len(result["rounds"]))
         for lane in first["lanes"]:

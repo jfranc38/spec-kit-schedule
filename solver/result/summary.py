@@ -13,6 +13,9 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
+from .._render_helpers import task_index
+from ..defaults import PORTFOLIO_WORKERS
+
 __all__ = ["format_inline_summary"]
 
 
@@ -95,17 +98,18 @@ def _critical_path_lines(result: dict[str, Any], stats: dict[str, Any]) -> list[
     if not path:
         return []
     by_id = {a.get("task_id"): a for a in result.get("assignments", []) or []}
-    desc = {t.get("id"): t.get("description", "") for t in result.get("tasks", []) or []}
+    tasks_by_id = task_index(result)
     chain = sum(int(by_id.get(t, {}).get("duration", 0)) for t in path)
     total = int(stats.get("sequential_duration", 0) or 0)
     share = f", {round(chain / total * 100)}% of total effort" if total else ""
     lines = [f"Critical path ({len(path)} tasks{share}):", f"  {' → '.join(path)}"]
-    for tid in path[:8]:
-        text = str(desc.get(tid, "") or "").strip()
+    shown = path[:8]
+    for tid in shown:
+        text = str(tasks_by_id.get(tid, {}).get("description") or "").strip()
         if text:
             lines.append(f"    {tid}  {text[:72]}")
-    if len(path) > 8:
-        lines.append(f"    … {len(path) - 8} more")
+    if len(path) > len(shown):
+        lines.append(f"    … {len(path) - len(shown)} more")
     return lines
 
 
@@ -120,7 +124,7 @@ def _optimal(result: dict[str, Any], header: str) -> list[str]:
     total_cost = float(stats.get("total_cost", result.get("total_cost", 0.0)) or 0.0)
     # phase3_status is the cost-aware sentinel: lex stops at 2 phases, cost_aware runs 3.
     cost_aware = "phase3_status" in stats
-    workers_mode = stats.get("portfolio_mode") == "workers"
+    workers_mode = stats.get("portfolio_mode") == PORTFOLIO_WORKERS
     lane_word = "workers" if workers_mode else "agents"
     lines = [
         header,

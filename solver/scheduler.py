@@ -203,9 +203,7 @@ def preflight_checks(
                 budget_by_skill[s] += ag.context_budget
                 kappa_by_skill[s] += ag.kappa
 
-    uncovered = {
-        s for s in tokens_by_skill if not any(agent_covers(ag.skills, s) for ag in agents)
-    }
+    uncovered = set(tokens_by_skill) - budget_by_skill.keys()
     if uncovered:
         details = "; ".join(
             f"skill {s!r} required by "

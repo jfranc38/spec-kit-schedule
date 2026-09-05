@@ -23,8 +23,8 @@ if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = "solver"  # noqa: A001
 
-from ._render_helpers import format_agent_model_label, task_label
-from .defaults import AGENT_COLORS, CRITICAL_COLOR
+from ._render_helpers import format_agent_model_label, lane_files, task_index, task_label
+from .defaults import AGENT_COLORS, CRITICAL_COLOR, PORTFOLIO_WORKERS
 from .model.result_types import ScheduleResult  # noqa: F401  (schema doc — see render() docstring)
 
 __all__ = ["render", "main"]
@@ -61,9 +61,8 @@ def render(
     assignments = data.get("assignments", [])
     waves = data.get("waves", [])
     rounds = data.get("rounds", [])
-    workers_mode = stats.get("portfolio_mode") == "workers"
-    task_files = {t["id"]: t.get("file_paths", []) for t in data.get("tasks", []) or []}
-    task_desc = {t["id"]: t.get("description", "") for t in data.get("tasks", []) or []}
+    workers_mode = stats.get("portfolio_mode") == PORTFOLIO_WORKERS
+    tasks_by_id = task_index(data)
     agent_summary = data.get("agent_summary", [])
     parser_edges = data.get("edges", [])
     resource_edges = data.get("resource_edges", [])
@@ -116,8 +115,6 @@ def render(
         lines.append("")
 
     # ── Execution Rounds ──────────────────────────────────────────────
-    # The executable plan: one parallel launch per round, one ordered
-    # segment per lane (subagent). See solver.rounds for the semantics.
     if rounds:
         lines.append("## Execution Rounds")
         lines.append("")
@@ -139,12 +136,7 @@ def render(
             lines.append("|------|------------------|-------|")
             for lane in lanes:
                 ids = lane.get("tasks", [])
-                lane_paths: list[str] = []
-                for tid in ids:
-                    for fp in task_files.get(tid, []):
-                        if fp not in lane_paths:
-                            lane_paths.append(fp)
-                files_md = ", ".join(f"`{f}`" for f in lane_paths) or "-"
+                files_md = ", ".join(f"`{f}`" for f in lane_files(data, ids)) or "-"
                 lines.append(f"| {lane.get('agent_id', '?')} | {' → '.join(ids)} | {files_md} |")
             lines.append("")
         lines.append("---")
@@ -217,7 +209,7 @@ def render(
             if a is None:
                 continue
             cumulative += a["duration"]
-            desc = str(task_desc.get(task_id, "")).replace("|", "\\|")
+            desc = str(tasks_by_id.get(task_id, {}).get("description", "")).replace("|", "\\|")
             lines.append(
                 f"| {i} | **{task_id}** | {a['agent_id']} | "
                 f"{a['start']} | {a['end']} | {a['duration']} | {cumulative} | {desc} |"

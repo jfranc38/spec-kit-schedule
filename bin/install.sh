@@ -9,10 +9,9 @@
 #   - teammates who received a shared `spec-kit-schedule.zip` and need
 #     to bootstrap the Python solver dependencies the `specify` CLI
 #     does not install for them,
-#   - the v0.6.0+ first-run auto-bootstrap path inside
-#     `commands/schedule.md`, which calls
-#     `bash bin/install.sh --target ./.venv` from the encapsulated
-#     extension code dir (`.specify/extensions/schedule`).
+#   - the first-run auto-bootstrap in `bin/speckit-schedule`, which calls
+#     `bash bin/install.sh --target ./.venv --skip-smoke` from the
+#     encapsulated extension code dir (`.specify/extensions/schedule`).
 #
 # What it does:
 # - Ensures `uv` is available (installs to ~/.local/bin if missing).

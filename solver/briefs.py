@@ -20,9 +20,6 @@ from __future__ import annotations
 
 __all__ = [
     "BriefContext",
-    "REPORT_DONE",
-    "REPORT_FAILED",
-    "REPORT_TOUCHED",
     "lane_files",
     "parse_report",
     "render_brief",
@@ -33,6 +30,8 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
+
+from ._render_helpers import lane_files, task_index
 
 REPORT_DONE = "DONE:"
 REPORT_FAILED = "FAILED:"
@@ -49,24 +48,6 @@ class BriefContext:
     spec_path: str | None = None
     plan_path: str | None = None
     tasks_path: str | None = None
-    extra_docs: tuple[str, ...] = ()
-
-
-def _task_index(plan: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
-    return {str(t["id"]): t for t in plan.get("tasks", []) or []}
-
-
-def lane_files(plan: Mapping[str, Any], task_ids: Iterable[str]) -> list[str]:
-    """Ordered, de-duplicated file paths across the given tasks."""
-    by_id = _task_index(plan)
-    seen: set[str] = set()
-    out: list[str] = []
-    for tid in task_ids:
-        for fp in by_id.get(tid, {}).get("file_paths", []) or []:
-            if fp not in seen:
-                seen.add(fp)
-                out.append(str(fp))
-    return out
 
 
 def _task_line(task: Mapping[str, Any]) -> str:
@@ -90,10 +71,11 @@ def render_brief(
     (``{"round": k, "lanes": [{"agent_id", "tasks"}]}``).
     """
     ctx = context or BriefContext()
-    by_id = _task_index(plan)
+    by_id = task_index(plan)
     agent_id = str(lane["agent_id"])
     task_ids = [str(t) for t in lane["tasks"]]
-    n_lanes = len(round_block.get("lanes", []) or [])
+    lanes = round_block.get("lanes", []) or []
+    n_lanes = len(lanes)
     round_no = int(round_block.get("round", 1))
     of = f" of {total_rounds}" if total_rounds else ""
     feature = f" — {ctx.feature_name}" if ctx.feature_name else ""
@@ -101,7 +83,7 @@ def render_brief(
     own = lane_files(plan, task_ids)
     own_set = set(own)
     others: dict[str, str] = {}
-    for other in round_block.get("lanes", []) or []:
+    for other in lanes:
         if str(other["agent_id"]) == agent_id:
             continue
         for fp in lane_files(plan, [str(t) for t in other["tasks"]]):
@@ -123,19 +105,15 @@ def render_brief(
         "",
     ]
     docs = [
-        ("Spec", ctx.spec_path),
-        ("Plan", ctx.plan_path),
-        ("Tasks", ctx.tasks_path),
+        ("Spec", ctx.spec_path, ""),
+        ("Plan", ctx.plan_path, ""),
+        ("Tasks", ctx.tasks_path, "  (do NOT edit — the orchestrator marks tasks done)"),
     ]
     any_doc = False
-    for label, path in docs:
+    for label, path, note in docs:
         if path:
             any_doc = True
-            note = "  (do NOT edit — the orchestrator marks tasks done)" if label == "Tasks" else ""
             lines.append(f"- {label}: `{path}`{note}")
-    for path in ctx.extra_docs:
-        any_doc = True
-        lines.append(f"- `{path}`")
     if not any_doc:
         lines.append("- Read the feature's `spec.md` and `plan.md` before starting.")
     lines += ["", "## Your tasks (in order)", ""]
