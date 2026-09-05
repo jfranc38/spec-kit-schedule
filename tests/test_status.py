@@ -93,6 +93,36 @@ def _write_portfolio(root: Path, agents: int = 2) -> None:
     cfg.write_text(body, encoding="utf-8")
 
 
+def _write_scaffolded(root: Path, body: str) -> Path:
+    """Config where ``specify extension add`` scaffolds ``provides.config``."""
+    cfg = root / ".specify" / "extensions" / "schedule" / "schedule-config.yml"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(body, encoding="utf-8")
+    return cfg
+
+
+class TestScaffoldedConfig:
+    def test_scaffolded_template_is_reported(self, tmp_path: Path) -> None:
+        (tmp_path / ".specify").mkdir()
+        _write_scaffolded(tmp_path, "# defaults\nworkers: 3\nmax_tasks_per_worker: 0\n")
+        item = next(
+            i for i in status.collect_status(tmp_path).items if i.name == "Config (optional)"
+        )
+        assert item.state == "ok"
+        assert ".specify/extensions/schedule/schedule-config.yml" in item.detail.replace("\\", "/")
+        assert "workers mode" in item.detail
+
+    def test_user_config_wins_over_scaffolded(self, tmp_path: Path) -> None:
+        (tmp_path / ".specify").mkdir()
+        _write_scaffolded(tmp_path, "workers: 3\n")
+        _write_portfolio(tmp_path, agents=2)
+        item = next(
+            i for i in status.collect_status(tmp_path).items if i.name == "Config (optional)"
+        )
+        assert "advanced portfolio, 2 agents" in item.detail
+        assert ".specify/schedule/schedule-config.yml" in item.detail.replace("\\", "/")
+
+
 def _add_runs(root: Path, count: int = 1) -> None:
     """Drop ``count`` synthetic ``*-plan.json`` files under runs/."""
     rdir = runs_dir(root)
@@ -130,9 +160,9 @@ class TestCollectStatusFirstRunPending:
     """The "quantkit case": extension installed but never run yet.
 
     Files + hook + venv all there, but the user has not yet invoked
-    ``/speckit.schedule.run``, so the portfolio config and run logs
-    are absent. The verdict must be ``first-run-pending``, NOT
-    ``needs-attention`` — those two missing items are expected.
+    ``/speckit.schedule.run``, so the run logs are absent (and the
+    optional config too). The verdict must be ``first-run-pending``,
+    NOT ``needs-attention`` — a missing run history is expected.
     """
 
     def test_extension_installed_but_unused(self, tmp_path: Path) -> None:
@@ -148,7 +178,7 @@ class TestCollectStatusFirstRunPending:
         assert states["Extension files installed"] == "ok"
         assert states["Hook registered"] == "ok"
         assert states["Solver deps bootstrapped"] == "ok"
-        assert states["Portfolio configured"] == "expected-missing"
+        assert states["Config (optional)"] == "ok"
         assert states["Run history"] == "expected-missing"
 
 
@@ -164,8 +194,8 @@ class TestCollectStatusHealthy:
         report = status.collect_status(root)
         assert report.overall == "healthy"
         assert all(item.state == "ok" for item in report.items)
-        # The portfolio item details the agent count.
-        portfolio = next(i for i in report.items if i.name == "Portfolio configured")
+        # The config item details the agent count.
+        portfolio = next(i for i in report.items if i.name == "Config (optional)")
         assert "3 agents" in portfolio.detail
         # The run-history item details the latest run.
         history = next(i for i in report.items if i.name == "Run history")
@@ -243,7 +273,7 @@ class TestCollectStatusReturnsTypedReport:
             "Extension files installed",
             "Hook registered",
             "Solver deps bootstrapped",
-            "Portfolio configured",
+            "Config (optional)",
             "Run history",
         ]
 
@@ -261,31 +291,50 @@ class TestCollectStatusReturnsTypedReport:
         assert len(report.items) == 5
 
 
-class TestCollectStatusPortfolioCornerCases:
-    def test_portfolio_with_zero_agents_is_unknown(self, tmp_path: Path) -> None:
+class TestCollectStatusConfigCornerCases:
+    def test_config_without_agents_is_workers_mode(self, tmp_path: Path) -> None:
         root = _make_specify(tmp_path)
         _install_extension_files(root)
         _register_hook(root)
         _install_venv(root)
         cfg = schedule_config_path(root)
         cfg.parent.mkdir(parents=True, exist_ok=True)
-        # File exists but has no `- id:` lines.
-        cfg.write_text("# empty config\nagents: []\n", encoding="utf-8")
+        cfg.write_text("workers: 4\n", encoding="utf-8")
 
         report = status.collect_status(root)
-        portfolio = next(i for i in report.items if i.name == "Portfolio configured")
-        assert portfolio.state == "unknown"
-        assert report.overall == "needs-attention"
+        item = next(i for i in report.items if i.name == "Config (optional)")
+        assert item.state == "ok"
+        assert "workers mode" in item.detail
+        assert report.overall != "needs-attention"
+
+    def test_config_with_defaults_only(self, tmp_path: Path) -> None:
+        root = _make_specify(tmp_path)
+        cfg = schedule_config_path(root)
+        cfg.parent.mkdir(parents=True, exist_ok=True)
+        cfg.write_text("# empty config\nagents: []\n", encoding="utf-8")
+        item = next(
+            i for i in status.collect_status(root).items if i.name == "Config (optional)"
+        )
+        assert item.state == "ok"
+        assert "defaults apply" in item.detail
+
+    def test_no_config_is_ok_zero_config(self, tmp_path: Path) -> None:
+        root = _make_specify(tmp_path)
+        item = next(
+            i for i in status.collect_status(root).items if i.name == "Config (optional)"
+        )
+        assert item.state == "ok"
+        assert "zero-config" in item.detail
 
     def test_portfolio_agent_count_singular(self, tmp_path: Path) -> None:
         root = _make_specify(tmp_path)
         _write_portfolio(root, agents=1)
         report = status.collect_status(root)
-        portfolio = next(i for i in report.items if i.name == "Portfolio configured")
-        # "1 agent configured" — singular form.
+        portfolio = next(i for i in report.items if i.name == "Config (optional)")
+        # "1 agent" — singular form.
         assert portfolio.state == "ok"
-        assert portfolio.detail.startswith("1 agent ")
-        assert " agents " not in portfolio.detail
+        assert portfolio.detail.endswith("1 agent")
+        assert " agents" not in portfolio.detail
 
 
 # ---------------------------------------------------------------------------
@@ -332,7 +381,7 @@ class TestFormatStatus:
         assert report.overall == "first-run-pending"
         # Message reassures the user this is normal pre-first-run.
         assert "Status: first-run-pending" in out
-        assert "/speckit.schedule.run" in out
+        assert "/speckit-schedule-run" in out
         # No scary "needs-attention" hint shown.
         assert "Address the following" not in out
 

@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-import yaml  # type: ignore[import-untyped, unused-ignore]
+import yaml  # type: ignore[import-untyped, unused-ignore]  # PyYAML ships no type stubs by default
 
 from .config_schema import Config, load_config
 from .i18n import t

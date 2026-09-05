@@ -209,13 +209,25 @@ class TestConfig:
         assert cfg.default_skill == "backend"
         assert cfg.solver.objective == "lexicographic"
 
-    def test_no_agents_raises(self):
-        with pytest.raises(ValidationError, match="agents"):
-            Config.model_validate({"agents": []})
+    def test_no_agents_is_workers_mode(self):
+        cfg = Config.model_validate({"agents": []})
+        assert cfg.workers_mode is True
+        assert cfg.workers == 3
+        assert cfg.max_tasks_per_worker == 0
 
-    def test_missing_agents_raises(self):
-        with pytest.raises(ValidationError, match="agents"):
-            Config.model_validate({})
+    def test_missing_agents_is_workers_mode(self):
+        cfg = Config.model_validate({"workers": 4, "max_tasks_per_worker": 6})
+        assert cfg.workers_mode is True
+        assert cfg.workers == 4
+        assert cfg.max_tasks_per_worker == 6
+
+    def test_workers_must_be_positive(self):
+        with pytest.raises(ValidationError, match="workers"):
+            Config.model_validate({"workers": 0})
+
+    def test_declared_agents_disable_workers_mode(self):
+        cfg = Config.model_validate({"agents": [_minimal_agent()], "workers": 9})
+        assert cfg.workers_mode is False
 
     def test_extra_top_level_key_allowed(self):
         """output: block and future keys must not raise (extra='allow')."""
@@ -322,9 +334,11 @@ class TestLoadConfig:
         with pytest.raises(ScheduleInputError):
             load_config(bad)
 
-    def test_config_template_loads(self):
+    def test_config_template_loads_as_workers_mode(self):
         cfg = load_config(REPO_ROOT / "config-template.yml")
-        assert len(cfg.agents) >= 1
+        assert cfg.workers_mode is True
+        assert cfg.workers == 3
+        assert cfg.max_tasks_per_worker == 0
 
     def test_price_per_1k_tokens_in_example_configs(self):
         for name in ("example-config.yml", "example-config-mixed.yml"):

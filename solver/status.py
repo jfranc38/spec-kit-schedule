@@ -15,7 +15,7 @@ Public surface:
 Implementation notes
 --------------------
 * The five checks are ordered by dependency: extension files →
-  hook → venv → portfolio → run history. ``format_status`` preserves
+  hook → venv → config (optional) → run history. ``format_status`` preserves
   this order so the surfaced "Next" hint targets the earliest-broken
   link in the chain.
 * ``collect_status`` swallows every filesystem exception. The status
@@ -50,8 +50,10 @@ from ._paths import (
     extension_code_dir,
     project_root,
     runs_dir,
+    scaffolded_config_path,
     schedule_config_path,
 )
+from .defaults import WORKERS_DEFAULT
 
 log = logging.getLogger(__name__)
 
@@ -287,33 +289,39 @@ def _count_agents(raw: str) -> int:
     return len(_AGENT_LINE_RE.findall(raw))
 
 
+_WORKERS_LINE_RE = re.compile(r"^\s*workers\s*:\s*(\d+)?", re.MULTILINE)
+
+
 def _check_portfolio(root: Path) -> StatusItem:
-    """Check ``.specify/schedule/schedule-config.yml`` presence."""
+    """Report the optional config (``.specify/schedule/`` or the scaffolded copy).
+
+    v0.7.0+: the file is not required — without it the planner uses
+    three identical subagent lanes. Its absence is therefore ``ok``.
+    """
+    raw: str | None = None
     cfg = schedule_config_path(root)
-    raw = _safe_read_text(cfg)
+    for candidate in (cfg, scaffolded_config_path(root)):
+        raw = _safe_read_text(candidate)
+        if raw is not None:
+            cfg = candidate
+            break
     if raw is None:
         return StatusItem(
-            name="Portfolio configured",
-            state="expected-missing",
-            detail="not yet configured (auto-bootstraps on first run)",
-            hint=(
-                "run /speckit.schedule.run (idempotent — auto-creates) "
-                "or /speckit.schedule.portfolio (interactive)"
-            ),
+            name="Config (optional)",
+            state="ok",
+            detail="none — zero-config mode (3 workers); see config-template.yml to pin",
         )
     n_agents = _count_agents(raw)
-    if n_agents == 0:
-        return StatusItem(
-            name="Portfolio configured",
-            state="unknown",
-            detail=f"{cfg.relative_to(root)} present but no agents parsed",
-            hint="open the config and verify the `agents:` section",
-        )
-    return StatusItem(
-        name="Portfolio configured",
-        state="ok",
-        detail=f"{n_agents} agent{'s' if n_agents != 1 else ''} configured",
-    )
+    if n_agents:
+        detail = f"{cfg.relative_to(root)}: advanced portfolio, {n_agents} agent{'s' if n_agents != 1 else ''}"
+    elif (m := _WORKERS_LINE_RE.search(raw)) is not None:
+        n = m.group(1)
+        lanes = f"{n} lanes" if n else "custom lane count"
+        note = ", the default" if n and int(n) == WORKERS_DEFAULT else ""
+        detail = f"{cfg.relative_to(root)}: workers mode ({lanes}{note})"
+    else:
+        detail = f"{cfg.relative_to(root)}: present, defaults apply (3 workers)"
+    return StatusItem(name="Config (optional)", state="ok", detail=detail)
 
 
 def _check_run_history(root: Path) -> StatusItem:
@@ -420,10 +428,9 @@ def _verdict(items: list[StatusItem]) -> Overall:
 _NEXT_STEP_HEADERS: dict[Overall, str] = {
     "healthy": "All checks pass. The extension is fully bootstrapped.",
     "first-run-pending": (
-        "Run /speckit.tasks (in your spec-kit workflow), then accept the "
-        '"Generate an optimal CP-SAT schedule?" prompt to bootstrap and '
-        "solve in one step. Or invoke /speckit.schedule.run directly any "
-        "time."
+        "Nothing is wrong. Run /speckit-schedule-run on a feature with a "
+        "tasks.md: the first run bootstraps the solver environment, then "
+        "plans. /speckit-schedule-implement runs the rounds."
     ),
     "needs-attention": (
         "Address the following item(s) in order — earlier items gate "

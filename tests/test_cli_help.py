@@ -6,6 +6,7 @@ import sys
 import pytest
 
 MODULES = [
+    "solver",
     "solver.parse_tasks",
     "solver.scheduler",
     "solver.render_schedule",

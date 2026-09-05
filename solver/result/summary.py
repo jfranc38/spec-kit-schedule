@@ -89,20 +89,57 @@ def _cost_lines(
     return out
 
 
+def _critical_path_lines(result: dict[str, Any], stats: dict[str, Any]) -> list[str]:
+    """Critical chain with descriptions and its share of the total effort."""
+    path: list[str] = list(result.get("critical_path", []) or [])
+    if not path:
+        return []
+    by_id = {a.get("task_id"): a for a in result.get("assignments", []) or []}
+    desc = {t.get("id"): t.get("description", "") for t in result.get("tasks", []) or []}
+    chain = sum(int(by_id.get(t, {}).get("duration", 0)) for t in path)
+    total = int(stats.get("sequential_duration", 0) or 0)
+    share = f", {round(chain / total * 100)}% of total effort" if total else ""
+    lines = [f"Critical path ({len(path)} tasks{share}):", f"  {' → '.join(path)}"]
+    for tid in path[:8]:
+        text = str(desc.get(tid, "") or "").strip()
+        if text:
+            lines.append(f"    {tid}  {text[:72]}")
+    if len(path) > 8:
+        lines.append(f"    … {len(path) - 8} more")
+    return lines
+
+
 def _optimal(result: dict[str, Any], header: str) -> list[str]:
     stats = result.get("stats", {}) or {}
     agents = result.get("agent_summary", []) or []
     waves = result.get("waves", []) or []
+    rounds = result.get("rounds", []) or []
     crit = set(result.get("critical_path", []) or [])
     total_agents = stats.get("total_agents", len(agents))
     active = sum(1 for a in agents if int(a.get("task_count", 0)) > 0)
     total_cost = float(stats.get("total_cost", result.get("total_cost", 0.0)) or 0.0)
     # phase3_status is the cost-aware sentinel: lex stops at 2 phases, cost_aware runs 3.
     cost_aware = "phase3_status" in stats
+    workers_mode = stats.get("portfolio_mode") == "workers"
+    lane_word = "workers" if workers_mode else "agents"
     lines = [
         header,
         f"Status:    {result.get('status', '?')}",
-        f"Makespan:  {stats.get('makespan', result.get('makespan', '?'))} time units",
+        f"Tasks:     {stats.get('total_tasks', len(result.get('assignments', []) or []))}",
+    ]
+    if rounds:
+        lines.append(
+            f"Rounds:    {len(rounds)} parallel rounds × {total_agents} {lane_word}"
+        )
+        seq = stats.get("sequential_duration")
+        barrier = stats.get("barrier_makespan")
+        speedup = stats.get("speedup")
+        if seq is not None and barrier is not None and speedup is not None:
+            lines.append(
+                f"Speedup:   {speedup}× (sequential {seq} → {barrier} time units with barriers)"
+            )
+    lines += [
+        f"Makespan:  {stats.get('makespan', result.get('makespan', '?'))} time units (solver bound)",
         f"Waves:     {stats.get('total_waves', len(waves))}",
         f"Agents:    {total_agents} ({total_agents - active} idle, {active} active)",
     ]
@@ -112,13 +149,20 @@ def _optimal(result: dict[str, Any], header: str) -> list[str]:
             f"Gap:       {float(gap) * 100.0:.1f}% "
             "(anytime mode — increase time_limit for tighter bound)"
         )
+    crit_lines = _critical_path_lines(result, stats)
+    if crit_lines:
+        lines += ["", *crit_lines]
     lines += ["", "Agent utilization (descending):", *_utilization(agents)]
     lines += ["", "Critical-path waves (top 3 by total wall time):", *_critical_waves(waves, crit)]
     lines += ["", *_cost_lines(agents, total_cost, cost_aware)]
     solve_time = stats.get("total_solve_time")
     if solve_time is not None:
         lines.append(f"Total solve time: {float(solve_time):.2f} s")
-    lines += ["", "Full report: schedule.md", "Next: /speckit.implement to execute"]
+    lines += [
+        "",
+        "Full report: schedule.md",
+        "Next: /speckit-schedule-implement to run the rounds with parallel subagents",
+    ]
     return lines
 
 

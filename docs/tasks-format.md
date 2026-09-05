@@ -1,246 +1,129 @@
 # tasks.md format reference
 
-The solver parses task specs from a Markdown file. The format
-specifies a DAG of tasks across phases, each with a skill requirement,
-optional precedence edges, and optional flags. This page is the
-authoritative reference for what the parser at `solver/parse_tasks.py`
-actually accepts.
+The parser (`solver/parse_tasks.py`) reads the `tasks.md` that
+`/speckit.tasks` generates (spec-kit 0.16 format) and also accepts the
+older backticked-path style. This page is the authoritative description
+of what it extracts and how the dependency graph is built.
 
-For a worked example, see [`docs/example-tasks.md`](example-tasks.md)
-or any of the four [`examples/`](../examples/) projects.
-
----
-
-## File structure
-
-```
-# Tasks — <project name>
-
-## <Phase Header>
-
-- [ ] T### [P] [USn] <action> in `<path>` (depends on T###, T###) (skill: <name>)
-- [ ] T### ...
-
-## <Phase Header>
-
-- [ ] ...
-```
-
-Anything that is not a recognised phase header or a task line is
-ignored. You can interleave free-form prose, tables, or sub-headings
-between phases without affecting parsing.
-
----
-
-## Phase headers
-
-The parser uses five regexes (in `solver/parse_tasks.py`) to detect
-phase headers, all anchored to the heading line and case-insensitive:
-
-| Regex constant     | Recognised keywords                                              | Resulting phase     |
-|--------------------|------------------------------------------------------------------|---------------------|
-| `PHASE_SETUP_RE`   | `Setup`, `Environment`, `Configuration`                          | `"Setup"`           |
-| `PHASE_FOUND_RE`   | `Foundation`, `Foundational`, `Core`, `Base`                     | `"Foundational"`    |
-| `PHASE_IMPL_RE`    | `Implementation`, `Implement`, `Build`, `Development`, `Develop` | `"Implementation"`  |
-| `PHASE_STORY_RE`   | `User Story <N>`, `US<N>`                                        | `"User Story <N>"`  |
-| `PHASE_POLISH_RE`  | `Polish`, `Cleanup`, `Final`, `Integration`                      | `"Polish"`          |
-
-A heading also accepts an optional `Phase N:` or `N.` / `N)` prefix
-before the keyword. Markdown depth (`##`, `###`, `####`) does not
-matter; any of `#` through `####` works.
-
-Examples that match:
-
-```
-## Setup Phase
-## Setup
-## Environment
-### Foundational Phase
-## Implementation Phase
-## Build Phase
-## Phase 1: Setup
-## Phase 2: Implementation
-## 2) User Story 1 (P1)
-## User Story 3 — Comments (P2)
-## US3
-## Polish Phase
-```
-
-Examples that do **not** match (silently fall through to the most
-recent recognised phase, or `"Setup"` if none seen yet):
-
-```
-## Testing Phase
-## Tasks
-## Notes
-```
-
-A user-story heading tags every task it covers with the matching
-`story_id` (`USn`), used by C4 (per-story file scoping) and
-`story_priority` (set by the trailing `(Pn)` if present, otherwise
-`99`).
-
-Phase ordering is a chain: the last task of one phase must finish
-before the first task of the next, in the order
-`Setup → Foundational → User Story 1, 2, 3, … → Polish`. Tasks under
-`## Implementation Phase` carry the `"Implementation"` label for
-display and grouping but are not part of the inter-phase precedence
-chain — order them with explicit `(depends on T###)` edges as in the
-shipped examples.
+For a worked example see [`tests/fixtures/tasks-speckit-0.16.md`](../tests/fixtures/tasks-speckit-0.16.md)
+or [`docs/example-tasks.md`](example-tasks.md).
 
 ---
 
 ## Task lines
 
 ```
-- [ ] T### [P] [USn] <action verb> <description> in `<path>` (depends on T###, T###) (skill: <name>)
+- [ ] T012 [P] [US1] Create User model in src/models/user.py (depends on T005, T006)
+- [x] T013 [US1] Implement UserService in src/services/user_service.py (skill: backend)
 ```
 
-Required:
+- Checkbox `- [ ]` / `- [x]` / `- [X]`. The state is recorded as `done`
+  and drives `python -m solver next`; the plan itself covers every task.
+- Id `T###` (3–4 digits). Duplicates are an error.
+- Tags `[P]` and `[USn]` in either order. `[P]` = parallel-safe (see
+  below). `[USn]` overrides the story inherited from the phase header.
+- Description: free text. The first word is the **action verb** used for
+  effort estimation.
+- Annotations, anywhere after the description, any order:
+  `(depends on T###, T###)` explicit predecessors (unknown ids are an
+  error); `(skill: name)` explicit skill (advanced portfolios).
 
-- The leading bullet is `- [ ]`, `- [x]`, or `- [X]` — checkbox state
-  is parsed but does not currently affect scheduling.
-- `T###` (three or four digits, e.g. `T001`, `T1024`). Duplicates
-  raise `ScheduleInputError`.
-- An action verb followed by a description. The verb is the first
-  word of the description after the optional flags.
+### File paths
 
-Optional, in this order:
+Paths are read from the description whether or not they are backticked:
 
-- `[P]` — parallel-safe flag (see below).
-- `[USn]` — explicit user-story tag (overrides the inherited
-  story from the phase header).
-- `` in `<path>` `` — explicit file path (backtick-quoted). Any
-  additional backticked tokens in the description that look like
-  paths (i.e. contain `/` or end in a `.ext`) are also collected.
-- `(depends on T###, T###, ...)` — explicit precedence edges.
-- `(skill: <name>)` — explicit skill, overriding inference.
+| Recognised | Not a path |
+|------------|------------|
+| `src/models/user.py`, `tests/contract/test_x.py`, `frontend/src/App.tsx` | `Node.js`, `Next.js`, `Vue.js` … |
+| `package.json`, `ruff.toml`, `README.md` (known extension) | `1.2.3`, `v2.0` (versions) |
+| `docs/`, `backend/src/` (directory — keeps its trailing slash) | `https://…` (URLs) |
+| `Makefile`, `Dockerfile`, `.env`, `.gitignore` (canonical names) | `models/entities`, `and/or` (prose slashes — no extension, no preposition) |
+| `in vault.kv` — unknown extension after a preposition (`in`, `to`, `at`, `from`, `on`, …) | `e.g.`, `i.e.`, `etc.` |
 
-The parser tolerates any whitespace between fields and accepts the
-annotations in either order at the end of the line, but both must
-appear after the file path if a file path is present.
+Paths are normalised (`./src/a.py` = `src/a.py`) and de-duplicated.
 
 ---
 
-## Flags and tags
+## Phase headers
 
-### `[P]` — parallel-safe
+```
+## Phase 1: Setup (Shared Infrastructure)
+## Phase 2: Foundational (Blocking Prerequisites)
+## Phase 3: User Story 1 - Title (Priority: P1) 🎯 MVP
+### Tests for User Story 1 (OPTIONAL …)
+### Implementation for User Story 1
+## Phase 5: Polish & Cross-Cutting Concerns
+```
 
-Excludes the task from the same-file precedence chain (C7). Use only
-for tasks that genuinely do not write the same file. The parser
-warns (`WARN_PARALLEL_WRITE_CONFLICT`) when two `[P]` tasks share a
-file path *and* both have a write-style verb (`implement`, `create`,
-`write`, `build`, `refactor`, `add`, `update`, `design`, `architect`,
-`integrate`, `migrate`, `optimize`).
+| Keywords (case-insensitive, optional `Phase N:` / `N.` prefix) | Phase |
+|----------------------------------------------------------------|-------|
+| Setup, Environment, Configuration | `Setup` |
+| Foundation, Foundational, Core, Base | `Foundational` |
+| User Story N, USN | `User Story N` (story `USN`, priority from `(P1)` or `(Priority: P1)`) |
+| Polish, Cleanup, Final, Integration | `Polish` |
+| Implementation, Implement, Build, Development, Develop | `Implementation` (display bucket outside the phase chain) |
 
-### `[USn]` — user-story tag
-
-Assigns the task to user story `n` (e.g. `[US3]`). Without this tag,
-a task inherits the story of its enclosing `## User Story N` phase
-header, or `null` outside a story phase.
+`### Tests for User Story N` / `### Implementation for User Story N`
+sub-sections keep the story context. Any header **deeper** than the
+current user-story header is treated as a sub-section too. Headers that
+match nothing (`## Dependencies & Execution Order`, `## Notes`) leave
+the phase unchanged; prose, tables and code blocks are ignored.
 
 ---
 
-## Annotations
+## Dependency graph
 
-### `(depends on T###, T###, ...)`
+Edges are added in this order; the origin is kept for diagnostics.
 
-Adds explicit precedence edges. Comma-separated; whitespace
-flexible. Unknown task ids raise `ScheduleInputError`. Cycles are
-detected after all edges (explicit + phase + same-file + TDD) are
-inserted, with a `cycle_detected` error naming the cycle and edge
-origins.
+1. **explicit** — `(depends on …)`.
+2. **same-file** — within one story (or one phase for Setup /
+   Foundational / Polish), tasks that are not `[P]` and mention the same
+   file are ordered by declaration.
+3. **tdd** — within the same scope, a test task (skill `test`) precedes
+   an implementation task on the same file; and inside a user story,
+   test tasks declared *before* an implementation task precede it
+   (spec-kit's "write tests FIRST"). Declaration order is never reversed.
+4. **Cycle resolution.** A cycle that contains a same-file or tdd edge
+   is broken by dropping those edges (warning
+   `heuristic_edge_dropped`); the explicit order wins. A cycle made only
+   of explicit edges is an error.
+5. **phase** — complete barriers: every task of Setup precedes every
+   task of Foundational; Foundational precedes every user story; every
+   user story precedes Polish (stories stay independent of each other).
+   Implemented as sinks → sources of adjacent phases, which is
+   equivalent after transitive closure.
+6. A cycle at this point (an explicit note pointing backwards across
+   phases) is an error naming the cycle and the edge origins.
 
-```
-- [ ] T005 Implement endpoint in `src/api/users.py` (depends on T001, T002)
-```
-
-### `(skill: <name>)`
-
-Sets the required skill explicitly, overriding the auto-inferred
-value from `skill_rules`. The name must be lowercase
-(`[a-z][a-z0-9_-]*`). Use this when the path-pattern heuristic
-guesses wrong:
-
-```
-- [ ] T009 Update DB index in `src/models/schema.sql` (skill: backend)
-```
-
-Without the annotation, T009 would inherit whatever skill matches
-`src/models/` in `skill_rules` (typically `schema`). The annotation
-takes precedence and routes the task to a `backend`-skilled agent.
-
----
-
-## Skill inference
-
-When `(skill: <name>)` is **not** present, the parser infers the skill
-from the task's file paths using the `skill_rules` block in
-`config.yml`:
-
-```yaml
-skill_rules:
-  - pattern: "tests/"
-    skill: "test"
-  - pattern: "src/services/"
-    skill: "backend"
-  - pattern: "src/components/"
-    skill: "frontend"
-```
-
-Resolution rules (`infer_skill` in `solver/parse_tasks.py`):
-
-1. Each pattern is a plain substring match against every file path
-   on the task (no glob, no regex).
-2. The **longest** matching pattern wins, so a specific marker
-   (`test_`) beats a broad prefix (`src/`).
-3. Ties on length break by config order (earlier rules win).
-4. If no rule matches, `default_skill` is used (default
-   `"backend"`).
-
-The action verb is **not** part of skill inference — only file paths
-are. (The verb is used separately for token-estimate complexity
-bucketing.)
+`[P]` excludes a task from the same-file rule and from the solver's
+file mutex. Two `[P]` tasks that both write the same file produce the
+`parallel_write_conflict` warning.
 
 ---
 
-## Token estimation
+## Skills and effort
 
-The task's first action verb maps to a complexity bucket via
-`complexity_verbs`, which then indexes into `token_estimates`:
-
-| Bucket    | Default mean tokens | Default verbs (English, plus -s / -ing forms) |
-|-----------|---------------------|-----------------------------------------------|
-| `simple`  | 1,500               | add, update, rename, move, import, export, configure |
-| `medium`  | 3,500               | implement, create, write, build, refactor    |
-| `complex` | 6,000               | design, architect, integrate, migrate, optimize |
-| `review`  | 2,000               | review, validate, verify, analyze, audit     |
-
-Verbs not in any bucket fall back to `medium`. Both maps are
-overridable in `config.yml`. Each `token_estimates` value can be a
-plain integer or `{mean, std_dev}` for stochastic mode.
+- **Zero-config** (no `agents:` block): the canonical
+  `DEFAULT_SKILL_RULES` tag test files as `test` (that is all the TDD
+  rules need); every lane accepts every skill.
+- **Advanced portfolio**: `skill_rules` (longest path-fragment match,
+  ties by order, `default_skill` fallback) route tasks to agents whose
+  `skills` contain the tag; `(skill: name)` overrides.
+- **Effort**: the action verb maps to a bucket (`simple`, `medium`,
+  `complex`, `review`; unknown → `medium`) and `token_estimates` gives
+  the mean (and optional `std_dev`). Durations are
+  `ceil(tokens / token_unit / speed_factor)` time units.
 
 ---
 
-## Validation errors
+## Errors and warnings
 
-| Error                                | Cause                                                                  |
-|--------------------------------------|------------------------------------------------------------------------|
-| `duplicate_task_id`                  | Two tasks share an id (e.g. two `T005` lines).                         |
-| `unresolved_deps_summary`            | A `(depends on T###)` references an unknown id.                        |
-| `cycle_detected`                     | The combined explicit+phase+same-file+TDD edges form a cycle.          |
-| `no_tasks_found`                     | The file contains no recognisable task lines.                          |
-| `WARN_PARALLEL_WRITE_CONFLICT` (warn)| Two `[P]` tasks with write verbs share a file path.                    |
-
----
-
-## See also
-
-- [`docs/example-tasks.md`](example-tasks.md) — canonical sample
-- [`docs/architecture.md`](architecture.md) — full data flow
-- [`docs/portfolio-design.md`](portfolio-design.md) — agent / skill
-  setup
-- [`docs/calibration.md`](calibration.md) — refining
-  `token_estimates` and `speed_factor` from real runs
-- [`solver/parse_tasks.py`](../solver/parse_tasks.py) — source of
-  truth (regexes near the top of the file)
+| Code | Meaning |
+|------|---------|
+| `duplicate_task_id` | Two tasks share an id. |
+| `unresolved_deps_summary` | `(depends on T###)` names an unknown id. |
+| `cycle_detected` | Explicit/phase edges form a cycle (names the cycle and origins). |
+| `no_tasks_found` | No `- [ ] T###` lines. |
+| `heuristic_edge_dropped` (warning) | A same-file / tdd edge yielded to an explicit note. |
+| `parallel_write_conflict` (warning) | Two `[P]` tasks write the same file. |
+| `workers_raised` (warning) | `max_tasks_per_worker` was too small; lanes were added. |

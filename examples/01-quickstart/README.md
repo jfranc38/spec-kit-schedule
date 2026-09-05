@@ -1,49 +1,33 @@
-# 01 — Quickstart
+# 01 — Quickstart (zero-config)
 
-The "hello world" of `spec-kit-schedule`. Five tasks, two agents,
-default lexicographic objective `lex(C_max, L_max)` (minimise makespan,
-then balance load).
+The "hello world" of `spec-kit-schedule`: five tasks, two identical
+subagent lanes, no agent portfolio. `config.yml` only pins the lane
+count; delete it and you get the default of three.
 
 ## What this example shows
 
-- The smallest end-to-end pipeline: `tasks.md` + `config.yml` →
-  parser JSON → solver JSON → rendered `schedule.md`.
-- How `[P]` (parallel) and `(depends on T###)` annotations shape the DAG.
-- A two-agent portfolio with a `backend` and a `tester` skill split.
-
-For the full `tasks.md` syntax (recognised phase headers, the `[P]`
-flag, `[USn]` tag, and the `(depends on T###)` / `(skill: <name>)`
-annotations), see [`docs/tasks-format.md`](../../docs/tasks-format.md).
+- The unified CLI: `plan` → `schedule.md` + `schedule.json`, `next` →
+  the first round of briefs, `mark` → tick tasks, `next` → … → `DONE`.
+- How `[P]` and `(depends on T###)` shape the rounds.
 
 ## Run it
 
 From the repository root:
 
 ```bash
-uv run python -m solver.parse_tasks \
-    examples/01-quickstart/tasks.md \
-    examples/01-quickstart/config.yml \
-    > /tmp/in.json
+uv run python -m solver plan examples/01-quickstart/tasks.md \
+    --config examples/01-quickstart/config.yml --out /tmp/quickstart --feature quickstart
 
-uv run python -m solver.scheduler < /tmp/in.json > /tmp/out.json
-
-uv run python -m solver.render_schedule /tmp/out.json quickstart \
-    > /tmp/schedule.md
-
-cat /tmp/schedule.md
+uv run python -m solver next /tmp/quickstart/schedule.json examples/01-quickstart/tasks.md
 ```
+
+The second command prints round 1 with one brief per lane. In a real
+project `/speckit-schedule-implement` launches those briefs as
+subagents, collects their reports and calls
+`python -m solver mark tasks.md T001 …` before asking for the next round.
 
 ## Expected output
 
-`expected/out.json` is a frozen reference copy of the solver output.
-The schedule should reach status `OPTIMAL` in under one second on a
-modern laptop.
-
-To diff your run against the expected output:
-
-```bash
-diff <(jq -S . /tmp/out.json) <(jq -S . examples/01-quickstart/expected/out.json)
-```
-
-(Per-run timings — `phase1_time`, `total_solve_time`, the `intermediate`
-list — will differ; the schedule structure should not.)
+`expected/out.json` is a frozen solver result (`parse_tasks` +
+`scheduler` on this input). Timings differ per run; the assignments,
+rounds and critical path should not.

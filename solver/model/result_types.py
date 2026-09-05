@@ -24,6 +24,8 @@ from typing import Any, TypedDict
 __all__ = [
     "Assignment",
     "AgentSummary",
+    "LaneBlock",
+    "RoundBlock",
     "ScheduleResult",
     "Stats",
     "WaveBlock",
@@ -72,6 +74,21 @@ class WaveBlock(TypedDict):
     tasks: list[Assignment]
 
 
+class LaneBlock(TypedDict):
+    """Ordered task segment one subagent runs during a round."""
+
+    agent_id: str
+    tasks: list[str]
+
+
+class RoundBlock(TypedDict, total=False):
+    """One parallel launch of subagents (see ``solver.rounds``)."""
+
+    round: int
+    lanes: list[LaneBlock]
+    blocked: list[dict[str, Any]]
+
+
 class WarningRecord(TypedDict, total=False):
     """Structured warning surfaced by the solver."""
 
@@ -95,6 +112,10 @@ class Stats(TypedDict, total=False):
     total_tasks: int
     total_agents: int
     total_waves: int
+    total_rounds: int
+    sequential_duration: int
+    barrier_makespan: int
+    speedup: float
     total_cost: float
     horizon: int
     quantile_used: float
@@ -132,6 +153,7 @@ class ScheduleResult(TypedDict, total=False):
     message: str
     assignments: list[Assignment]
     waves: list[WaveBlock]
+    rounds: list[RoundBlock]
     agent_summary: list[AgentSummary]
     critical_path: list[str]
     critical_path_edges: list[list[str]]
@@ -144,3 +166,5 @@ class ScheduleResult(TypedDict, total=False):
     makespan: int
     max_load: int
     total_cost: float
+    barrier_makespan: int
+    speedup: float

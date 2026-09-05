@@ -80,7 +80,7 @@ release before reporting; the issue may already be fixed.
 - Denial-of-service caused by intentionally pathological inputs (huge
   task graphs, adversarial token estimates). The solver has a
   `time_limit` knob for this; see [`docs/determinism.md`](docs/determinism.md).
-- Behaviour of MAQA, spec-kit, or any downstream executor that consumes
+- Behaviour of spec-kit, the AI assistant, or any downstream executor that consumes
   `schedule.md`.
 
 ## Threat Model and Non-Goals

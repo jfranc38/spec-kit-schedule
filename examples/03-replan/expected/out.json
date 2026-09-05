@@ -305,6 +305,34 @@
       "T006"
     ]
   ],
+  "rounds": [
+    {
+      "round": 1,
+      "lanes": [
+        {
+          "agent_id": "backend",
+          "tasks": [
+            "T001",
+            "T002",
+            "T003",
+            "T004"
+          ]
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "lanes": [
+        {
+          "agent_id": "tester",
+          "tasks": [
+            "T005",
+            "T006"
+          ]
+        }
+      ]
+    }
+  ],
   "stats": {
     "horizon": 195,
     "heuristic_makespan": 165,
@@ -316,6 +344,11 @@
     "phase2_status": "OPTIMAL",
     "phase2_status_code": 4,
     "total_solve_time": 0.0,
+    "portfolio_mode": "agents",
+    "total_rounds": 2,
+    "sequential_duration": 190,
+    "barrier_makespan": 190,
+    "speedup": 1.0,
     "makespan": 165,
     "max_load": 140,
     "min_load": 50,
@@ -330,6 +363,8 @@
   "makespan": 165,
   "max_load": 140,
   "total_cost": 0.0,
+  "barrier_makespan": 190,
+  "speedup": 1.0,
   "edges": [
     [
       "T001",
@@ -354,6 +389,14 @@
     [
       "T004",
       "T006"
+    ],
+    [
+      "T001",
+      "T005"
+    ],
+    [
+      "T001",
+      "T006"
     ]
   ],
   "tasks": [
@@ -362,42 +405,78 @@
       "phase": "Setup",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "api"
+      "required_skill": "api",
+      "description": "Define API contract in `src/api/spec.yml`",
+      "file_paths": [
+        "src/api/spec.yml"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T002",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "backend"
+      "required_skill": "backend",
+      "description": "Implement core service in `src/services/core.py`",
+      "file_paths": [
+        "src/services/core.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T003",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "backend"
+      "required_skill": "backend",
+      "description": "Implement worker pool in `src/services/workers.py`",
+      "file_paths": [
+        "src/services/workers.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T004",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "backend"
+      "required_skill": "backend",
+      "description": "Build CLI entry point in `src/cli.py`",
+      "file_paths": [
+        "src/cli.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T005",
       "phase": "Polish",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "test"
+      "required_skill": "test",
+      "description": "Write unit tests in `tests/test_core.py`",
+      "file_paths": [
+        "tests/test_core.py"
+      ],
+      "parallel_flag": true,
+      "done": false
     },
     {
       "id": "T006",
       "phase": "Polish",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "test"
+      "required_skill": "test",
+      "description": "Write integration tests in `tests/test_cli.py`",
+      "file_paths": [
+        "tests/test_cli.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     }
   ]
 }

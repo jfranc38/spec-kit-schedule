@@ -1,5 +1,101 @@
 # Changelog
 
+## [0.7.0] - 2026-09-05
+
+Zero configuration, real execution. The extension now plans `tasks.md`
+into parallel **rounds** for subagents without any config file, and
+ships an implement command that runs those rounds with the assistant's
+own subagents. Most of the v0.6 configuration surface is gone.
+
+### Added
+- **Zero-config workers mode.** With no `agents:` block the planner
+  schedules over `workers` identical subagent lanes (default 3;
+  optional `max_tasks_per_worker`, lanes are added automatically when
+  the cap is too small — `workers_raised` warning). Wildcard skill
+  `"*"` is first-class in preflight and compatibility
+  (`solver/workers.py`). Zero-config solves run in anytime mode with a
+  10 s per-phase limit.
+- **Execution rounds** (`solver/rounds.py`). Barrier batches for a
+  subagent orchestrator: every lane gets the longest prefix of its
+  queue whose cross-lane predecessors are complete; the same function
+  fed the live `[x]` state drives execution. Results carry `rounds`,
+  `barrier_makespan`, `sequential_duration` and an honest `speedup`
+  (measured against the barrier execution, not the solver makespan).
+- **Subagent briefs** (`solver/briefs.py`): self-contained instruction
+  sheets per lane per round (ordered tasks, the files they name, files
+  owned by other lanes this round — the hard rule — read-only context,
+  rules, `DONE/FAILED/TOUCHED` report) plus `parse_report`. Path-less
+  tasks may edit other files; every touched path is reported and the
+  orchestrator flags any path two lanes both touched.
+- **Scaffolded config** via `provides.config`: `specify extension add`
+  copies `config-template.yml` to
+  `.specify/extensions/schedule/schedule-config.yml` (two knobs,
+  equivalent to the defaults, preserved on update);
+  `.specify/schedule/schedule-config.yml` still takes precedence.
+- **Self-healing wrapper**: `bin/speckit-schedule` rebuilds a private
+  venv whose interpreter no longer runs (the `--dev` install copies
+  `.venv/` verbatim) and never touches a `SPECKIT_SCHEDULE_VENV` override.
+- **Unified CLI** `python -m solver plan|next|mark|status`
+  (`solver/cli.py`) and the `bin/speckit-schedule` wrapper that
+  bootstraps the private environment on first use. `plan` writes
+  `schedule.md` + `schedule.json` (with a `source` block: tasks path,
+  sha256, task ids) and prints the summary; `next` emits the next round
+  or `DONE` and refuses stale plans; `mark` is the single, atomic
+  writer of `tasks.md` checkboxes.
+- **`/speckit.schedule.implement`** command: the orchestrator protocol
+  (parallel lanes per round, reports, `mark`, tests per round, opt-in
+  commit, resumable, never advances a round with a FAILED lane).
+- **Parser compatibility with the `tasks.md` that spec-kit 0.16
+  generates**: bare (un-backticked) file paths with prose/URL/version
+  filtering, `(Priority: P1)`, `### Tests/Implementation for User Story
+  N` sub-sections, tags in either order, annotations in any order,
+  `done` / `description` fields. `DEFAULT_SKILL_RULES` apply in
+  zero-config mode so test files are recognised.
+- **Complete phase barriers** (every Setup task precedes every
+  Foundational task, etc., via sinks → sources) and a story-level
+  tests-first rule that never reverses declaration order.
+- **Heuristic cycles are no longer fatal**: same-file / TDD edges that
+  contradict an explicit `depends on` are dropped with the
+  `heuristic_edge_dropped` warning; explicit/phase cycles still raise.
+- `after_converge` hook (re-plan when tasks were appended);
+  `docs/execution.md`; `tests/fixtures/tasks-speckit-0.16.md`.
+
+### Changed
+- `schedule.md` opens with an **Execution Rounds** section and a
+  speedup line; the critical-path table shows descriptions; budget/κ
+  utilisation is hidden for synthesised workers. The inline summary
+  leads with rounds × workers, speedup and the critical path.
+- `/speckit.schedule.status`: the config file is reported as optional
+  (`Config (optional)`), never as missing.
+- Encapsulated bootstrap installs core + `viz` only (dev tooling stays
+  in contributor checkouts). Command files are a few lines of shell
+  around `bin/speckit-schedule`.
+- Docs rewritten around the new workflow (README, INSTALL,
+  tasks-format, architecture, when-to-use, config-template).
+
+### Removed (breaking)
+- Slash commands `speckit.schedule.portfolio`, `.visualize`
+  (now `plan --images`) and `.calibrate` (CLI: `python -m
+  solver.calibrate`). Final command set: `run` (aliases `plan`,
+  `solve`), `implement`, `status`.
+- The auto-scaffolding stack: `solver.autodetect`,
+  `solver.fleet_discover`, `solver.integration_detect`,
+  `solver.portfolio_templates`, the per-AI portfolio templates,
+  `docs/portfolio-design.md`. The advanced `agents:` schema itself is
+  unchanged and documented in `docs/example-config.yml`.
+- `solver.wave_executor --format shell` (the `RUNNER=` script);
+  `docs/internal/wave-executor-bridge.md` is replaced by
+  `docs/execution.md`. `waves` stay in the result envelope.
+- References to the non-existent "Explicit Task Dependencies" preset.
+
+### Fixed
+- Configs without `skill_rules` silently routed every task to
+  `default_skill`, so the TDD rule never fired; zero-config now gets the
+  canonical rules (declared portfolios keep their own vocabulary).
+- `(depends on …)` followed by `(skill: …)` on the same line was not
+  parsed as a dependency.
+- `[US1] [P]` (story tag first) lost the action verb.
+
 ## [0.6.2] - 2026-05-07
 
 ### Added

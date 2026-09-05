@@ -78,6 +78,7 @@ from .validation import (
     find_cycle,
 )
 from .warnings_collector import WarningCollector
+from .workers import agent_covers
 
 __all__ = ["solve_from_json", "solve_with_fixed", "main"]
 
@@ -118,6 +119,8 @@ def _parse_input(
             action_verb=t_raw.get("action_verb", "implement"),
             token_std_dev=float(t_raw.get("token_std_dev", 0.0)),
             index=i,
+            description=str(t_raw.get("description", "") or ""),
+            done=bool(t_raw.get("done", False)),
         )
         tasks.append(task)
         id_to_idx[task.id] = i
@@ -188,18 +191,21 @@ def preflight_checks(
         tasks_by_skill[task.required_skill].append(task.id)
         total_tokens += task.estimated_tokens
 
+    # A wildcard agent (``skills: ["*"]``) covers every required skill and
+    # contributes its budget / κ to every skill bucket.
     budget_by_skill: dict[str, int] = defaultdict(int)
     kappa_by_skill: dict[str, int] = defaultdict(int)
-    all_agent_skills: set[str] = set()
     total_budget = 0
     for ag in agents:
-        all_agent_skills.update(ag.skills)
         total_budget += ag.context_budget
-        for s in ag.skills:
-            budget_by_skill[s] += ag.context_budget
-            kappa_by_skill[s] += ag.kappa
+        for s in tokens_by_skill:
+            if agent_covers(ag.skills, s):
+                budget_by_skill[s] += ag.context_budget
+                kappa_by_skill[s] += ag.kappa
 
-    uncovered = set(tokens_by_skill) - all_agent_skills
+    uncovered = {
+        s for s in tokens_by_skill if not any(agent_covers(ag.skills, s) for ag in agents)
+    }
     if uncovered:
         details = "; ".join(
             f"skill {s!r} required by "
@@ -250,7 +256,7 @@ def compute_compatible_agents(
     """
     compat: dict[int, list[int]] = {}
     for task in tasks:
-        matches = [ag.index for ag in agents if task.required_skill in ag.skills]
+        matches = [ag.index for ag in agents if agent_covers(ag.skills, task.required_skill)]
         if not matches:
             raise ScheduleInputError(t("task_no_skill", task_id=task.id, skill=task.required_skill))
         compat[task.index] = matches
@@ -625,6 +631,10 @@ def _decorate_result(
             "story_id": task.story_id,
             "story_priority": task.story_priority,
             "required_skill": task.required_skill,
+            "description": task.description,
+            "file_paths": list(task.file_paths),
+            "parallel_flag": task.parallel_flag,
+            "done": task.done,
         }
         for task in tasks
     ]

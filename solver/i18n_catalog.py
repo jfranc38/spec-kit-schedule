@@ -15,9 +15,11 @@ __all__ = [
     "MESSAGES",
     "WARN_ANYTIME_TIMEOUT",
     "WARN_COST_SCALE_UNDERFLOW",
+    "WARN_HEURISTIC_EDGE_DROPPED",
     "WARN_PARALLEL_WRITE_CONFLICT",
     "WARN_PHASE2_FALLBACK",
     "WARN_PHASE3_FALLBACK",
+    "WARN_WORKERS_RAISED",
 ]
 
 MESSAGES: dict[str, dict[str, str]] = {
@@ -87,6 +89,26 @@ MESSAGES: dict[str, dict[str, str]] = {
             "Inviable: {count} tareas requieren la habilidad {skill!r} pero "
             "el κ total de los agentes con esa habilidad es {kappa}. "
             "Aumente κ o agregue agentes."
+        ),
+    },
+    "heuristic_edge_dropped": {
+        "en": (
+            "Dropped the {origin} edge {src} → {dst} to break the dependency cycle "
+            "{names}; the explicit 'depends on' order wins."
+        ),
+        "es": (
+            "Se eliminó la arista {origin} {src} → {dst} para romper el ciclo de "
+            "dependencias {names}; prevalece el orden explícito de 'depends on'."
+        ),
+    },
+    "workers_raised": {
+        "en": (
+            "Raised workers from {requested} to {workers}: {n_tasks} tasks with "
+            "max_tasks_per_worker={cap} need at least {workers} lanes."
+        ),
+        "es": (
+            "Se aumentó workers de {requested} a {workers}: {n_tasks} tareas con "
+            "max_tasks_per_worker={cap} requieren al menos {workers} carriles."
         ),
     },
     "parallel_write_conflict": {
@@ -220,22 +242,6 @@ MESSAGES: dict[str, dict[str, str]] = {
             "La tarea congelada {tid!r} tiene una duración inválida={d}: "
             "la duración debe ser un entero positivo."
         ),
-    },
-    "not_a_directory": {
-        "en": "project_dir is not a directory: {path}",
-        "es": "project_dir no es un directorio: {path}",
-    },
-    "output_exists_use_force": {
-        "en": "{path} already exists. Use --force to overwrite.",
-        "es": "{path} ya existe. Use --force para sobrescribir.",
-    },
-    "autodetect_invalid_config": {
-        "en": "autodetect produced an invalid config (bug): {error}",
-        "es": "autodetect produjo una configuración inválida (bug): {error}",
-    },
-    "interactive_invalid_config": {
-        "en": "Interactive edits produced an invalid config: {error}",
-        "es": "Las ediciones interactivas produjeron una configuración inválida: {error}",
     },
     "cannot_read_file": {
         "en": "Cannot read {file_kind} file{path_suffix}: {error}",
@@ -381,6 +387,67 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "No agent headings found in {path}",
         "es": "No se encontraron encabezados de agentes en {path}",
     },
+    # ── unified CLI (python -m solver) ──────────────────────────────────
+    "cli_config_not_found": {
+        "en": "Config file not found: {path}",
+        "es": "No se encontró el archivo de configuración: {path}",
+    },
+    "cli_config_not_mapping": {
+        "en": "Config file {path} must contain a YAML mapping at the top level.",
+        "es": "El archivo de configuración {path} debe contener un mapa YAML en el nivel superior.",
+    },
+    "cli_tasks_not_found": {
+        "en": "tasks.md not found: {path}",
+        "es": "No se encontró tasks.md: {path}",
+    },
+    "cli_plan_not_found": {
+        "en": "schedule.json not found: {path}. Run `/speckit-schedule-run` first.",
+        "es": "No se encontró schedule.json: {path}. Ejecuta primero `/speckit-schedule-run`.",
+    },
+    "cli_plan_invalid": {
+        "en": "schedule.json at {path} is not a valid plan ({error}). Re-run `/speckit-schedule-run`.",
+        "es": "schedule.json en {path} no es un plan válido ({error}). Vuelve a ejecutar `/speckit-schedule-run`.",
+    },
+    "cli_agents_override_workers": {
+        "en": "schedule-config.yml declares agents; --workers / --max-tasks-per-worker are ignored.",
+        "es": "schedule-config.yml declara agents; se ignoran --workers / --max-tasks-per-worker.",
+    },
+    "cli_written": {
+        "en": "Written: {files}",
+        "es": "Escrito: {files}",
+    },
+    "cli_tasks_changed": {
+        "en": (
+            "{path} changed since the plan was made (added: {added}; removed: {removed}). "
+            "Re-run `/speckit-schedule-run` to plan again."
+        ),
+        "es": (
+            "{path} cambió desde que se hizo el plan (añadidas: {added}; eliminadas: {removed}). "
+            "Vuelve a ejecutar `/speckit-schedule-run` para planificar de nuevo."
+        ),
+    },
+    "cli_all_done": {
+        "en": "DONE — all {n} tasks are marked complete; nothing left to run.",
+        "es": "DONE — las {n} tareas están marcadas como completas; no queda nada por ejecutar.",
+    },
+    "cli_blocked": {
+        "en": (
+            "BLOCKED — no lane can start: every pending task waits on another pending task. "
+            "Check tasks.md for tasks that should already be marked [x]."
+        ),
+        "es": (
+            "BLOCKED — ningún carril puede empezar: cada tarea pendiente espera a otra pendiente. "
+            "Revisa en tasks.md las tareas que ya deberían estar marcadas [x]."
+        ),
+    },
+    "cli_marked": {
+        "en": "Marked {n} task(s) as {state} in {path}",
+        "es": "Se marcaron {n} tarea(s) como {state} en {path}",
+    },
+    "mark_unknown_task": {
+        "en": "Unknown task id(s) {ids} in {path}; nothing was changed.",
+        "es": "ID(s) de tarea desconocido(s) {ids} en {path}; no se cambió nada.",
+    },
     "wave_exec_unknown_agent": {
         "en": (
             "Task {task_id} references unknown agent {agent_id!r} not in agent "
@@ -395,6 +462,8 @@ MESSAGES: dict[str, dict[str, str]] = {
 
 WARN_ANYTIME_TIMEOUT: Final = "anytime_timeout"
 WARN_COST_SCALE_UNDERFLOW: Final = "cost_scale_underflow"
+WARN_HEURISTIC_EDGE_DROPPED: Final = "heuristic_edge_dropped"
 WARN_PARALLEL_WRITE_CONFLICT: Final = "parallel_write_conflict"
 WARN_PHASE2_FALLBACK: Final = "phase2_fallback"
 WARN_PHASE3_FALLBACK: Final = "phase3_fallback"
+WARN_WORKERS_RAISED: Final = "workers_raised"

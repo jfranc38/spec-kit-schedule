@@ -34,6 +34,7 @@ __all__ = [
     "project_root",
     "runs_dir",
     "schedule_config_path",
+    "scaffolded_config_path",
 ]
 
 import logging
@@ -92,6 +93,17 @@ def schedule_config_path(start: Path | None = None) -> Path:
     Returns ``<project_root>/.specify/schedule/schedule-config.yml``.
     """
     return extension_state_dir(start) / "schedule-config.yml"
+
+
+def scaffolded_config_path(start: Path | None = None) -> Path:
+    """Where ``specify extension add`` scaffolds ``provides.config`` (v0.7.0+).
+
+    Returns ``<project_root>/.specify/extensions/schedule/schedule-config.yml``
+    — spec-kit copies ``config-template.yml`` there on install and preserves
+    it across updates. :func:`schedule_config_path` takes precedence when
+    both exist.
+    """
+    return project_root(start) / ".specify" / "extensions" / EXTENSION_ID / "schedule-config.yml"
 
 
 def runs_dir(start: Path | None = None) -> Path:

@@ -20,6 +20,8 @@ from ortools.sat.python import cp_model
 
 from ..defaults import STATUS_FEASIBLE, STATUS_OPTIMAL, STATUS_UNKNOWN
 from ..model.types import Agent, Durations, Task
+from ..rounds import barrier_makespan, build_rounds, lane_queues, predecessor_map, round_to_dict
+from ..workers import is_synthesized_worker
 
 if TYPE_CHECKING:
     from ..model.build import ModelBundle
@@ -436,6 +438,24 @@ def _finalize_result(
         tasks,
     )
 
+    # Execution rounds (barrier batches for a subagent orchestrator) and
+    # the honest speedup figure derived from them. See ``solver.rounds``.
+    id_edges = [[tasks[s].id, tasks[d].id] for s, d in edges]
+    preds = predecessor_map([task.id for task in tasks], id_edges, resource_edges)
+    rounds = build_rounds(lane_queues(assignments), preds)
+    duration_of = {a["task_id"]: int(a["duration"]) for a in assignments}
+    sequential = sum(duration_of.values())
+    barrier = barrier_makespan(rounds, duration_of)
+    stats["portfolio_mode"] = (
+        "workers"
+        if agents and all(is_synthesized_worker(ag.skills, ag.model) for ag in agents)
+        else "agents"
+    )
+    stats["total_rounds"] = len(rounds)
+    stats["sequential_duration"] = sequential
+    stats["barrier_makespan"] = barrier
+    stats["speedup"] = round(sequential / barrier, 2) if barrier else 1.0
+
     stats["makespan"] = solver.value(bundle.makespan)
     stats["max_load"] = solver.value(bundle.max_load)
     loads = [solver.value(bundle.load[ag.index]) for ag in agents]
@@ -474,16 +494,19 @@ def _finalize_result(
         "critical_path": critical_path,
         "critical_path_edges": critical_path_edges,
         "resource_edges": resource_edges,
+        "rounds": [round_to_dict(r) for r in rounds],
         "stats": stats,
         "warnings": warnings.as_list(),
         "makespan": stats["makespan"],
         "max_load": stats["max_load"],
         "total_cost": stats["total_cost"],
+        "barrier_makespan": barrier,
+        "speedup": stats["speedup"],
     }
 
     # Best-effort calibration capture: write a plan.json snapshot under
     # ``.specify/schedule/runs/`` so the user can run
-    # ``/speckit.schedule.calibrate`` later. ``record_plan`` is the
+    # ``python -m solver.calibrate`` later. ``record_plan`` is the
     # designated swallow-all wrapper — it never raises, returns ``None``
     # whenever the write is impossible (no ``.specify/`` ancestor,
     # filesystem error, …) — so this call cannot regress the solve.

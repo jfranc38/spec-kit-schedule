@@ -1,175 +1,88 @@
-# Installation — v0.6.2
+# Installation — v0.7.0
 
-`spec-kit-schedule` is distributed as a spec-kit extension. The
-canonical install paths use the `specify` CLI; PyPI distribution is on
-the roadmap and documented at the bottom of this file as a future
-target.
-
----
+`spec-kit-schedule` is a spec-kit extension. Install it with the
+`specify` CLI; the Python solver environment bootstraps itself the first
+time a command runs.
 
 ## Prerequisites
 
+- [spec-kit](https://github.com/github/spec-kit) (`specify` CLI, 0.4+)
 - Python 3.10–3.12
-- `uv` (recommended) — install via `pipx install uv` or `brew install uv` or
-  `curl -LsSf https://astral.sh/uv/install.sh | sh`.
-- For the `specify extension add ...` flows below, install
-  [spec-kit](https://github.com/github/spec-kit) first (follow spec-kit's
-  own install docs).
+- `uv` (recommended; the bootstrap installs it if missing). Set
+  `SKIP_UV=1` to use `pip` instead in locked-down environments.
 
----
-
-## 1. Install from a tagged release (recommended)
+## 1. From a tagged release (recommended)
 
 ```bash
-specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.6.2.zip
+specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.7.0.zip
 ```
 
-`specify extension add <id> --from` accepts any HTTPS URL pointing at a zip
-of the extension. The URL above is GitHub's auto-generated source
-archive for the `v0.6.2` tag.
+Then, in a feature that already has a `tasks.md`:
 
-The `specify` CLI does not install Python packages. **v0.6.0+ users
-do not need to bootstrap manually** — the first invocation of
-`/speckit.schedule.run` auto-bootstraps the encapsulated Python venv
-at `.specify/extensions/schedule/.venv/` (and the portfolio config
-at `.specify/schedule/schedule-config.yml`) inline.
+```
+/speckit-schedule-run
+```
 
-If you'd prefer to bootstrap the venv ahead of time:
+The first invocation creates `.specify/extensions/schedule/.venv/` from
+the committed `uv.lock` (core solver + charting extras, about a minute)
+and plans. Nothing else to configure.
+
+To bootstrap ahead of time (e.g. in CI or an image):
 
 ```bash
-cd <your-project>
-bash .specify/extensions/schedule/bin/install.sh \
-    --target .specify/extensions/schedule/.venv
+bash .specify/extensions/schedule/bin/install.sh --target .specify/extensions/schedule/.venv
 ```
 
-Or, for a contributor checkout, the legacy repo-root layout still works:
+## 2. Local development checkout
 
 ```bash
 git clone https://github.com/jfranc38/spec-kit-schedule
 cd spec-kit-schedule
-uv sync --extra dev --extra viz
-# OR
-./bin/install.sh
-```
-
----
-
-## 2. Local development install
-
-For contributors, or when you have a checkout of the repo:
-
-```bash
-git clone https://github.com/jfranc38/spec-kit-schedule
-cd spec-kit-schedule
-./bin/install.sh             # uv + sync (dev+viz) + smoke test
+make install                       # uv + venv (dev+viz extras) + smoke test
 specify extension add schedule --dev .
 ```
 
-`specify extension add --dev` registers the working tree directly so
-edits to `commands/`, `templates/`, or `extension.yml` are picked up
-without re-installing.
-
-After installation the pipeline stages are regular Python modules:
+Inside the checkout the CLI works directly:
 
 ```bash
-uv run python -m solver.parse_tasks tasks.md schedule-config.yml > in.json
-uv run python -m solver.scheduler    < in.json > out.json
-uv run python -m solver.visualize    out.json images/ --feature my-feature
-uv run python -m solver.render_schedule out.json my-feature \
-    --image-prefix images/my-feature > schedule.md
+uv run python -m solver plan tests/fixtures/tasks-speckit-0.16.md --out /tmp/demo
+uv run python -m solver next /tmp/demo/schedule.json tests/fixtures/tasks-speckit-0.16.md
 ```
 
----
+## 3. Sharing a zip
 
-## 3. Zip-sharing flow
+`make package` produces `dist/spec-kit-schedule.zip`; a teammate runs
+`specify extension add schedule --from <path-or-url>` (or unzips and
+uses `--dev <dir>`).
 
-If a teammate shared a `spec-kit-schedule.zip`:
+`--dev` copies the checkout verbatim — `.venv/` and `.git/` included.
+The copied interpreter no longer runs from its new location; the wrapper
+notices and rebuilds the private environment on the first command
+(about a minute). Delete `.venv/` before installing to keep the copy small.
 
-```bash
-unzip spec-kit-schedule.zip
-cd spec-kit-schedule
-./bin/install.sh
+## Verifying
+
+```
+/speckit-schedule-status
 ```
 
-That script:
-
-1. Installs `uv` (https://docs.astral.sh/uv/) if it's not already on your `PATH`.
-2. Materialises a reproducible virtualenv from `uv.lock` with
-   `uv sync --frozen --extra dev --extra viz` (includes matplotlib so the
-   PNG visualiser works out of the box).
-3. Runs an end-to-end smoke test against `docs/example-tasks.md` and
-   fails loudly if anything is wrong.
-
-You can also point `specify` at the unpacked directory directly:
-
-```bash
-specify extension add schedule --dev /path/to/spec-kit-schedule
-```
-
----
-
-## 4. Corporate / locked-down environment without `uv`
-
-```bash
-SKIP_UV=1 ./bin/install.sh
-```
-
-Falls back to `python3 -m pip install -e '.[dev]'` against the currently
-active interpreter. You lose the reproducible lockfile guarantee, so
-pin your dependencies explicitly if reproducibility matters.
-
----
+reports `healthy`, `first-run-pending` (nothing wrong — the environment
+bootstraps on first run), or `needs-attention` with hints. From a
+checkout, `make smoke` runs the full pipeline against the bundled
+fixtures.
 
 ## Requirements
 
-| Tool       | Version          | Notes                                        |
-|------------|------------------|----------------------------------------------|
-| Python     | 3.10 – 3.12      | Enforced by `pyproject.toml`                 |
-| uv         | ≥ 0.4 (recommended) | `install.sh` will install it for you      |
-| ortools    | ≥ 9.9, < 10      | Core; installed transitively                 |
-| PyYAML     | ≥ 6, < 7         | Core; installed transitively                 |
-| networkx   | ≥ 3.1, < 4       | Core; graph algorithms                       |
-| pydantic   | ≥ 2, < 3         | Core; config schema validation               |
-| matplotlib | ≥ 3.7, < 4       | Optional (`viz` extra) — PNG rendering       |
-| plotly     | ≥ 5, < 6         | Optional (`viz` extra) — interactive HTML    |
+| Tool       | Version           | Notes                                   |
+|------------|-------------------|-----------------------------------------|
+| Python     | 3.10 – 3.12       | Enforced by `pyproject.toml`            |
+| uv         | ≥ 0.4             | `install.sh` installs it if absent      |
+| ortools    | ≥ 9.9, < 10       | Core (CP-SAT)                           |
+| networkx   | ≥ 3.1, < 4        | Core (graphs, critical path)            |
+| pydantic   | ≥ 2, < 3          | Core (config validation)                |
+| PyYAML     | ≥ 6, < 7          | Core                                    |
+| matplotlib | ≥ 3.7, < 4        | `viz` extra — `--images` PNGs           |
+| plotly     | ≥ 5, < 7          | `viz` extra — `python -m solver.render_html` |
 
-`matplotlib` is only needed for `python -m solver.visualize`.
-`plotly` is only needed for `python -m solver.render_html`.
-The Mermaid Gantt + DAG blocks in `schedule.md` render fine without them.
-
-## Verifying the install
-
-```bash
-uv run python -m solver.parse_tasks --help
-uv run python -m solver.scheduler --help
-uv run python -m solver.render_schedule --help
-uv run python -m solver.visualize --help
-uv run python -m solver.render_html --help
-make smoke
-```
-
-If `make smoke` prints `smoke OK (... lines)` the extension is ready.
-
----
-
-## Future: PyPI distribution
-
-PyPI publishing is on the roadmap but not yet active. Once the package
-is published, the install will be:
-
-```bash
-pip install spec-kit-schedule           # core only
-pip install 'spec-kit-schedule[viz]'    # + matplotlib/plotly for PNG and HTML images
-```
-
-Or with `uv`:
-
-```bash
-uv pip install spec-kit-schedule
-uv pip install 'spec-kit-schedule[viz]'
-```
-
-The wheel will ship `extension.yml`, `commands/`, and `templates/`
-under `<sys.prefix>/share/spec-kit-schedule/` so the same artifact can
-register as a spec-kit extension. Until then, install via the `specify`
-CLI as shown above.
+PyPI distribution is on the roadmap; `specify extension add` is the
+supported path today.

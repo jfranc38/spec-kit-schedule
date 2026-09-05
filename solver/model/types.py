@@ -44,6 +44,10 @@ class Task:
     action_verb: str = ""
     token_std_dev: float = 0.0
     index: int = 0
+    # Carried through to the result envelope so schedule.json / briefs can
+    # show the task text without re-parsing tasks.md.
+    description: str = ""
+    done: bool = False
 
 
 @dataclass

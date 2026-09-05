@@ -2,7 +2,7 @@
 # Claude, GitHub Copilot, Google Gemini, OpenAI, and a locally-hosted
 # Ollama model. The scheduler is provider-agnostic — `model` and `provider`
 # fields are informational and propagated to schedule.md so downstream
-# executors (e.g. MAQA coordinator, /speckit.implement) can route each
+# executors (e.g. /speckit-schedule-implement, a custom orchestrator) can route each
 # task to the right runner.
 #
 # Pricing here uses real 2026 list-price scale (e.g. $0.015 / 1K input

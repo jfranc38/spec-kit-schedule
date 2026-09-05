@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 from textwrap import dedent
 
@@ -15,7 +14,6 @@ from solver.wave_executor import (
     TaskSpec,
     Wave,
     _emit_json,
-    _emit_shell,
     _emit_table,
     main,
     parse_schedule_md,
@@ -412,41 +410,6 @@ class TestEmitJson:
         assert agents["backend"]["provider"] is None
 
 
-class TestEmitShell:
-    def test_shebang(self):
-        out = _emit_shell(_make_plan())
-        assert out.startswith("#!/usr/bin/env sh")
-
-    def test_set_euo_pipefail(self):
-        out = _emit_shell(_make_plan())
-        assert "set -euo pipefail" in out
-
-    def test_runner_check(self):
-        out = _emit_shell(_make_plan())
-        assert "RUNNER" in out
-
-    def test_wait_between_waves(self):
-        out = _emit_shell(_make_plan())
-        lines = out.splitlines()
-        # Each wave block must have a "wait" after agent launches.
-        wait_count = sum(1 for line in lines if line.strip() == "wait")
-        assert wait_count == 2  # one per wave
-
-    def test_agent_launched_in_background(self):
-        out = _emit_shell(_make_plan())
-        assert "$RUNNER backend T001 &" in out
-        assert "$RUNNER tester T002 &" in out
-
-    def test_valid_posix_syntax(self, tmp_path: Path):
-        out = _emit_shell(_make_plan())
-        script = tmp_path / "plan.sh"
-        script.write_text(out, encoding="utf-8")
-        result = subprocess.run(
-            ["bash", "-n", str(script)], capture_output=True
-        )
-        assert result.returncode == 0, result.stderr.decode()
-
-
 class TestEmitTable:
     def test_contains_header(self):
         out = _emit_table(_make_plan())
@@ -474,12 +437,6 @@ class TestCLI:
     def test_json_format(self, minimal_md: Path):
         rc = main([str(minimal_md), "--format", "json"])
         assert rc == 0
-
-    def test_shell_format(self, minimal_md: Path, capsys):
-        rc = main([str(minimal_md), "--format", "shell"])
-        assert rc == 0
-        out = capsys.readouterr().out
-        assert "set -euo pipefail" in out
 
     def test_table_format(self, minimal_md: Path, capsys):
         rc = main([str(minimal_md), "--format", "table"])
@@ -541,15 +498,6 @@ class TestExampleRoundTrip:
         d = json.loads(_emit_json(plan))
         assert d["makespan"] == plan.makespan
         assert len(d["waves"]) == len(plan.waves)
-
-    def test_shell_syntax(self, tmp_path: Path):
-        plan = parse_schedule_md(EXAMPLE_SCHEDULE)
-        script = tmp_path / "plan.sh"
-        script.write_text(_emit_shell(plan), encoding="utf-8")
-        result = subprocess.run(
-            ["bash", "-n", str(script)], capture_output=True
-        )
-        assert result.returncode == 0, result.stderr.decode()
 
     def test_table_has_all_tasks(self):
         plan = parse_schedule_md(EXAMPLE_SCHEDULE)

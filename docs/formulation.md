@@ -476,7 +476,7 @@ default time limit; see [Empirical Benchmarks](#empirical-benchmarks).
 ## Empirical Benchmarks
 
 The benchmarks compare the CP-SAT solver against a pure-Python greedy
-baseline (MAQA-style first-available-agent) which processes tasks in
+baseline (first-available-agent greedy) which processes tasks in
 topological order and assigns each to the eligible agent with the earliest
 available time, respecting $\kappa$ and context-budget constraints. The
 **Gap%** column reports `(greedy − cpsat) / greedy × 100`: positive means

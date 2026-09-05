@@ -101,7 +101,7 @@ if [[ "${SKIP_UV:-}" == "1" ]]; then
   if [[ -n "$target_venv" ]]; then
     python3 -m venv "$target_venv"
     "$target_venv/bin/python" -m pip install --upgrade pip
-    "$target_venv/bin/python" -m pip install -e '.[dev]'
+    "$target_venv/bin/python" -m pip install -e '.[viz]'
     RUNNER=("$target_venv/bin/python")
   else
     python3 -m pip install -e '.[dev]'
@@ -111,7 +111,9 @@ else
   ensure_uv
   if [[ -n "$target_venv" ]]; then
     log "syncing dependencies with uv into $target_venv (lockfile: uv.lock) ..."
-    UV_PROJECT_ENVIRONMENT="$target_venv" uv sync --frozen --extra dev --extra viz
+    # Encapsulated (end-user) layout: core solver + viz extra only. The dev
+    # tooling (pytest, mypy, ruff, hypothesis) is for contributor checkouts.
+    UV_PROJECT_ENVIRONMENT="$target_venv" uv sync --frozen --no-dev --extra viz
     # Use the venv's python directly so the smoke test cannot pick up
     # a different uv-managed env (UV_PROJECT_ENVIRONMENT does not
     # auto-export, and `uv run --project` resolves its own venv).

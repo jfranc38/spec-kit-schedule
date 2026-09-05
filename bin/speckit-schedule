@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# spec-kit-schedule — single entry point used by the slash commands.
+#
+#   bin/speckit-schedule plan   <tasks.md> [--workers N] [--images] ...
+#   bin/speckit-schedule next   <schedule.json> [<tasks.md>] [--format md|json]
+#   bin/speckit-schedule mark   <tasks.md> T001 T002 ...
+#   bin/speckit-schedule status
+#
+# Resolves the extension directory from its own location (works both for
+# `.specify/extensions/schedule/` installs and for a source checkout),
+# bootstraps the encapsulated Python environment on first use, then execs
+# `python -m solver "$@"` inside it. Nothing here depends on the caller's
+# cwd or on a globally installed Python package.
+#
+# Self-healing: `specify extension add <dir> --dev` copies a checkout
+# verbatim, `.venv` included, and the copied interpreter's absolute paths
+# no longer resolve. A venv at the default location whose Python does not
+# run is rebuilt; a venv named via SPECKIT_SCHEDULE_VENV is never deleted.
+
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+venv="${SPECKIT_SCHEDULE_VENV:-$here/.venv}"
+py="$venv/bin/python"
+probe="import solver, ortools, networkx, pydantic, yaml"
+
+bootstrap() {
+  echo "[speckit-schedule] bootstrapping the solver environment at $venv (one-time) ..." >&2
+  if ! bash "$here/bin/install.sh" --target "$venv" --skip-smoke >&2; then
+    echo "[speckit-schedule] ERROR: bootstrap failed. Run manually:" >&2
+    echo "    cd $here && bash bin/install.sh --target $venv" >&2
+    exit 1
+  fi
+}
+
+interpreter_runs() {
+  [[ -x "$py" ]] && "$py" -c pass >/dev/null 2>&1
+}
+
+if ! interpreter_runs; then
+  if [[ -d "$venv" && -n "$(ls -A "$venv" 2>/dev/null)" ]]; then
+    if [[ -n "${SPECKIT_SCHEDULE_VENV:-}" || ! -f "$venv/pyvenv.cfg" ]]; then
+      echo "[speckit-schedule] ERROR: $venv exists but its Python does not run." >&2
+      echo "    Remove or repair it, or unset SPECKIT_SCHEDULE_VENV, then retry." >&2
+      exit 1
+    fi
+    echo "[speckit-schedule] $venv has a broken interpreter (copied from another location?); rebuilding ..." >&2
+    rm -rf "$venv"
+  fi
+  bootstrap
+fi
+
+# Cheap import probe with a sentinel so the hot path stays under ~50 ms.
+# The sentinel records the venv path so a venv copied elsewhere is re-probed.
+sentinel="$venv/.deps-ok-cli"
+if [[ ! -f "$sentinel" || "$(<"$sentinel")" != "$venv" || "$sentinel" -ot "$venv/pyvenv.cfg" ]]; then
+  if ! "$py" -c "$probe" >/dev/null 2>&1; then
+    bootstrap
+    "$py" -c "$probe" >/dev/null 2>&1 || {
+      echo "[speckit-schedule] ERROR: solver dependencies still missing after bootstrap." >&2
+      exit 1
+    }
+  fi
+  printf '%s\n' "$venv" > "$sentinel" 2>/dev/null || true
+fi
+
+exec "$py" -m solver "$@"

@@ -1,225 +1,60 @@
 # =============================================================================
-# spec-kit-schedule — Agent Portfolio & Solver Configuration
+# spec-kit-schedule — optional configuration
 # =============================================================================
-# Copy this file to your project root as `schedule-config.yml`,
-# or run `python -m solver.autodetect --project-dir . --output schedule-config.yml`
-# to bootstrap a portfolio from your project's files automatically.
+# This file is NOT required. Without it the planner uses three identical
+# subagent lanes ("workers") and sensible solver defaults.
 #
-# The scheduler reads this file + your tasks.md to produce schedule.md
+# `specify extension add` scaffolds this file to
+#   .specify/extensions/schedule/schedule-config.yml   (kept across updates)
+# Edit it there, or copy it to .specify/schedule/schedule-config.yml (which
+# takes precedence). Both knobs are also flags:
+#   /speckit-schedule-run --workers 4 --max-tasks-per-worker 6
 # =============================================================================
 
-# ---------------------------------------------------------------------------
-# Agent Portfolio
-# ---------------------------------------------------------------------------
-# Each agent represents a distinct AI model/configuration that will execute
-# tasks in its own isolated context (worktree, session, subprocess).
+workers: 3              # parallel subagent lanes
+max_tasks_per_worker: 0 # 0 = no cap; e.g. 6 keeps every subagent's context short
+                        # (lanes are added automatically if the cap is too small)
+
+# -----------------------------------------------------------------------------
+# Advanced: heterogeneous agent portfolio (uncomment to use)
+# -----------------------------------------------------------------------------
+# Declaring `agents:` switches to the full model: each agent has a skill
+# set, a cardinality cap (kappa), a context budget (kilotokens), a relative
+# speed and an optional price; tasks are routed by `skill_rules` (longest
+# path-fragment match) and estimated by verb via `token_estimates`. See
+# docs/example-config.yml for a complete, runnable example and
+# docs/formulation.md for the model. When `agents:` is present the
+# `workers` knobs above are ignored.
 #
-# The scheduler is PROVIDER-AGNOSTIC: `model` and `provider` are informational
-# strings that propagate through schedule.md so downstream executors (MAQA,
-# /speckit.implement, custom orchestrators) can route tasks to the correct
-# runner — Claude, Copilot, Gemini, Ollama, OpenAI, or a bespoke endpoint.
+# agents:
+#   - id: builder
+#     provider: anthropic            # informational; passed through to schedule.md
+#     model: claude-sonnet-4-6       # informational
+#     skills: ["*"]                  # "*" = any task; or e.g. [python, backend, api]
+#     kappa: 10                      # max tasks per session
+#     context_budget: 32             # kilotokens per session
+#     speed_factor: 1.0              # 2.0 = twice as fast
+#     price_per_1k_tokens: 0.003     # only used by objective: cost_aware
+#   - id: tester
+#     model: claude-haiku-4-5
+#     skills: [test]
+#     kappa: 15
+#     context_budget: 16
+#     speed_factor: 1.5
 #
-# Fields per agent:
-#   id:             Unique lowercase identifier (used in schedule.md)
-#   provider:       Optional runner tag — one of:
-#                     anthropic | openai | github | google | ollama |
-#                     azure | bedrock | groq | mistral | local | custom
-#                   Unknown values are allowed (custom executors).
-#   model:          Free-form model string (e.g. "claude-opus-4", "gpt-5",
-#                   "copilot-gpt-4.1", "gemini-2.5-pro", "qwen2.5-coder:32b")
-#   skills:         Non-empty list of skill tags this agent can handle.
-#                   Every `required_skill` produced by skill_rules must be
-#                   covered by at least one agent's skills, or the solver
-#                   refuses to run.
-#   kappa:          Max number of tasks per session (cardinality cap, > 0).
-#                   STARTING ESTIMATE based on RULER/NoLiMa/Chroma; calibrate
-#                   to your model's empirical long-context performance.
-#   context_budget: Max cumulative input tokens per session, in thousands.
-#   speed_factor:       Relative speed multiplier (1.0 = baseline). 0.5 = takes
-#                       2× longer per task. Must be > 0.
-#   price_per_1k_tokens: Optional cost in USD per 1,000 input tokens (default 0.0).
-#                       Used by the cost_aware objective to trade off makespan
-#                       against monetary cost. Set to 0 for self-hosted models.
+# skill_rules:                       # path fragment → skill (longest match wins)
+#   - { pattern: "tests/", skill: test }
+#   - { pattern: "src/api/", skill: api }
+# default_skill: backend
 #
-# See docs/example-config-mixed.yml for a multi-provider portfolio.
-
-agents:
-  # The portfolio below mixes providers to illustrate the schema. Swap any
-  # agent for a different provider/model — the solver only consumes
-  # `skills`, `kappa`, `context_budget`, `speed_factor`, and (optionally)
-  # `price_per_1k_tokens`.
-  - id: "architect"
-    provider: "anthropic"
-    model: "claude-opus-4"
-    skills: ["design", "review", "schema", "architecture"]
-    kappa: 6
-    context_budget: 32
-    speed_factor: 0.8
-    price_per_1k_tokens: 0.015   # optional; USD per 1K input tokens
-
-  - id: "backend"
-    provider: "openai"
-    model: "gpt-4o"
-    skills: ["python", "backend", "api", "database", "schema"]
-    kappa: 10
-    context_budget: 16
-    speed_factor: 1.0
-    price_per_1k_tokens: 0.0025
-
-  - id: "frontend"
-    provider: "google"
-    model: "gemini-2.0-pro"
-    skills: ["frontend", "react", "css", "html", "javascript"]
-    kappa: 10
-    context_budget: 16
-    speed_factor: 1.0
-    price_per_1k_tokens: 0.00125
-
-  - id: "tester"
-    provider: "anthropic"
-    model: "claude-haiku-4.5"
-    skills: ["test", "e2e", "contract-test", "unit-test"]
-    kappa: 15
-    context_budget: 8
-    speed_factor: 1.5
-    price_per_1k_tokens: 0.0008
-
-# ---------------------------------------------------------------------------
-# Skill Inference Rules
-# ---------------------------------------------------------------------------
-# Map file-path fragments to skill tags. The parser scans each task's file
-# paths and picks the LONGEST matching pattern (ties fall back to list
-# order), so specific markers like "test_" or "src/components/" beat short
-# fragments like ".md" even when listed after them.
-
-skill_rules:
-  - pattern: "tests/"
-    skill: "test"
-  - pattern: "test_"
-    skill: "test"
-  - pattern: "_test.py"
-    skill: "test"
-  - pattern: ".test."
-    skill: "test"
-  - pattern: "spec/"
-    skill: "test"
-  - pattern: "src/models/"
-    skill: "schema"
-  - pattern: "migrations/"
-    skill: "schema"
-  - pattern: "src/api/"
-    skill: "api"
-  - pattern: "src/services/"
-    skill: "backend"
-  - pattern: "src/components/"
-    skill: "frontend"
-  - pattern: "src/pages/"
-    skill: "frontend"
-  - pattern: "src/hooks/"
-    skill: "frontend"
-  - pattern: ".css"
-    skill: "frontend"
-  - pattern: ".tsx"
-    skill: "frontend"
-  - pattern: ".jsx"
-    skill: "frontend"
-  - pattern: "docs/"
-    skill: "review"
-  - pattern: "README"
-    skill: "review"
-  - pattern: ".md"
-    skill: "review"
-
-default_skill: "backend"
-
-# ---------------------------------------------------------------------------
-# Token Estimation
-# ---------------------------------------------------------------------------
-# When tasks.md lacks explicit token estimates, the parser classifies each
-# task by its leading action verb (see complexity_verbs) and maps that
-# complexity bucket to a token count here.
-
-token_estimates:
-  simple:   1500    # "Add import", "Create empty file", "Update config"
-  # Dict form adds std_dev for stochastic scheduling (used when stochastic_quantile != 0.5):
-  medium:   {mean: 3500, std_dev: 500}   # "Implement service method", "Write unit test"
-  complex:  6000    # "Design schema", "Implement full CRUD endpoint"
-  review:   2000    # "Review contracts", "Validate integration"
-
-# Verb buckets are case-insensitive and match simple inflections
-# ("implementing", "creates", "designed" all count).
-complexity_verbs:
-  simple:  ["add", "update", "rename", "move", "import", "export", "configure"]
-  medium:  ["implement", "create", "write", "build", "refactor"]
-  complex: ["design", "architect", "integrate", "migrate", "optimize"]
-  review:  ["review", "validate", "verify", "analyze", "audit"]
-
-# ---------------------------------------------------------------------------
-# Solver Parameters
-# ---------------------------------------------------------------------------
-solver:
-  # Objective strategy:
-  #   "lexicographic" — Phase 1 minimises makespan, Phase 2 freezes that
-  #                     makespan and minimises the maximum agent load.
-  #   "weighted"      — Single-phase: minimise W*makespan + max_load.
-  #   "cost_aware"    — Single-phase: minimise W*makespan + cost_weight*cost.
-  #                     Requires price_per_1k_tokens set on each agent.
-  objective: "lexicographic"
-
-  # Weight for the weighted/cost_aware objectives. Ignored for lexicographic.
-  makespan_weight: 100
-
-  # Weight applied to estimated monetary cost in the cost_aware objective.
-  # Set to 0 (default) when cost optimisation is not needed.
-  cost_weight: 0
-
-  # Time limit per solver phase, in seconds.
-  # Recommended:
-  #   <100 tasks  — 30-60s is plenty.
-  #   100-500     — 60-120s.
-  #   >500        — split the feature or raise to 300s+.
-  time_limit: 60
-
-  # Parallel search workers. Safe default 8. Set to physical cores for
-  # large problems; leave at 1 for deterministic test output.
-  num_workers: 8
-
-  # Enable symmetry breaking between portfolio agents with identical
-  # (skills, kappa, context_budget, speed_factor). Significantly prunes
-  # the search space when you have multiple backend-1/backend-2 workers.
-  symmetry_breaking: true
-
-  # Run the priority-rule heuristic to seed the solver with a feasible
-  # hint. The heuristic respects file-mutex, precedence, κ, and C, so
-  # hints are never rejected.
-  warm_start: true
-
-  # Horizon = critical_path_bound * horizon_multiplier. 1.5 is a safe
-  # envelope for most realistic portfolios. Raise only if the solver
-  # reports INFEASIBLE on a problem you believe is feasible.
-  horizon_multiplier: 1.5
-
-  # Time units used internally. Duration(task, agent) =
-  #   ceil(estimated_tokens / token_unit / speed_factor).
-  # Smaller values keep more granularity (recommended); larger values
-  # shrink the horizon and may speed up solving at the cost of precision.
-  token_unit: 100
-
-  # Quantile used when token_estimates entries have std_dev > 0 (stochastic
-  # mode). 0.5 = median (default). 0.9 = conservative high estimate.
-  # Range: [0.0, 1.0].
-  stochastic_quantile: 0.5
-
-  # When true, the solver returns the best solution found within time_limit
-  # rather than waiting for optimality proof (anytime mode). Useful for
-  # very large problems where the first feasible solution is already good.
-  anytime: false
-
-# ---------------------------------------------------------------------------
-# Output
-# ---------------------------------------------------------------------------
-output:
-  schedule_file: "schedule.md"
-  gantt_chart: true
-  wave_plan: true
-  agent_summary: true
+# token_estimates:                   # per action-verb bucket (see complexity_verbs)
+#   simple: 1500
+#   medium: { mean: 3500, std_dev: 500 }
+#   complex: 6000
+#   review: 2000
+#
+# solver:
+#   objective: lexicographic         # lexicographic | weighted | cost_aware
+#   time_limit: 60                   # seconds per phase
+#   num_workers: 8                   # CP-SAT threads
+#   anytime: false                   # true = return best-so-far at the limit

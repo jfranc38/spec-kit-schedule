@@ -72,8 +72,8 @@
     {
       "task_id": "T005",
       "task_index": 4,
-      "agent_id": "sonnet",
-      "agent_index": 1,
+      "agent_id": "gpt4o",
+      "agent_index": 2,
       "start": 95,
       "end": 130,
       "duration": 35,
@@ -89,8 +89,8 @@
     {
       "task_id": "T006",
       "task_index": 5,
-      "agent_id": "gpt4o",
-      "agent_index": 2,
+      "agent_id": "sonnet",
+      "agent_index": 1,
       "start": 95,
       "end": 130,
       "duration": 35,
@@ -121,29 +121,12 @@
       "required_skill": "api"
     },
     {
-      "task_id": "T012",
-      "task_index": 11,
-      "agent_id": "gpt4o-mini",
-      "agent_index": 3,
-      "start": 130,
-      "end": 155,
-      "duration": 25,
-      "phase": "Polish",
-      "story_id": null,
-      "story_priority": 99,
-      "file_paths": [
-        "tests/test_redirect.py"
-      ],
-      "tokens": 3500,
-      "required_skill": "test"
-    },
-    {
       "task_id": "T011",
       "task_index": 10,
       "agent_id": "gpt4o-mini",
       "agent_index": 3,
-      "start": 155,
-      "end": 180,
+      "start": 150,
+      "end": 175,
       "duration": 25,
       "phase": "Polish",
       "story_id": null,
@@ -204,6 +187,23 @@
       ],
       "tokens": 3500,
       "required_skill": "frontend"
+    },
+    {
+      "task_id": "T012",
+      "task_index": 11,
+      "agent_id": "gpt4o-mini",
+      "agent_index": 3,
+      "start": 175,
+      "end": 200,
+      "duration": 25,
+      "phase": "Polish",
+      "story_id": null,
+      "story_priority": 99,
+      "file_paths": [
+        "tests/test_redirect.py"
+      ],
+      "tokens": 3500,
+      "required_skill": "test"
     },
     {
       "task_id": "T013",
@@ -334,8 +334,8 @@
         {
           "task_id": "T005",
           "task_index": 4,
-          "agent_id": "sonnet",
-          "agent_index": 1,
+          "agent_id": "gpt4o",
+          "agent_index": 2,
           "start": 95,
           "end": 130,
           "duration": 35,
@@ -351,8 +351,8 @@
         {
           "task_id": "T006",
           "task_index": 5,
-          "agent_id": "gpt4o",
-          "agent_index": 2,
+          "agent_id": "sonnet",
+          "agent_index": 1,
           "start": 95,
           "end": 130,
           "duration": 35,
@@ -387,37 +387,20 @@
           ],
           "tokens": 3500,
           "required_skill": "api"
-        },
-        {
-          "task_id": "T012",
-          "task_index": 11,
-          "agent_id": "gpt4o-mini",
-          "agent_index": 3,
-          "start": 130,
-          "end": 155,
-          "duration": 25,
-          "phase": "Polish",
-          "story_id": null,
-          "story_priority": 99,
-          "file_paths": [
-            "tests/test_redirect.py"
-          ],
-          "tokens": 3500,
-          "required_skill": "test"
         }
       ]
     },
     {
       "wave": 6,
-      "start_time": 155,
+      "start_time": 150,
       "tasks": [
         {
           "task_id": "T011",
           "task_index": 10,
           "agent_id": "gpt4o-mini",
           "agent_index": 3,
-          "start": 155,
-          "end": 180,
+          "start": 150,
+          "end": 175,
           "duration": 25,
           "phase": "Polish",
           "story_id": null,
@@ -489,6 +472,29 @@
     },
     {
       "wave": 8,
+      "start_time": 175,
+      "tasks": [
+        {
+          "task_id": "T012",
+          "task_index": 11,
+          "agent_id": "gpt4o-mini",
+          "agent_index": 3,
+          "start": 175,
+          "end": 200,
+          "duration": 25,
+          "phase": "Polish",
+          "story_id": null,
+          "story_priority": 99,
+          "file_paths": [
+            "tests/test_redirect.py"
+          ],
+          "tokens": 3500,
+          "required_skill": "test"
+        }
+      ]
+    },
+    {
+      "wave": 9,
       "start_time": 200,
       "tasks": [
         {
@@ -511,7 +517,7 @@
       ]
     },
     {
-      "wave": 9,
+      "wave": 10,
       "start_time": 225,
       "tasks": [
         {
@@ -562,7 +568,7 @@
       "tasks": [
         "T003",
         "T004",
-        "T005",
+        "T006",
         "T007",
         "T008"
       ],
@@ -578,7 +584,7 @@
       "kappa_utilization": 20.0,
       "cost": 35.0,
       "tasks": [
-        "T006",
+        "T005",
         "T010"
       ],
       "provider": "openai"
@@ -593,8 +599,8 @@
       "kappa_utilization": 25.0,
       "cost": 1.575,
       "tasks": [
-        "T012",
         "T011",
+        "T012",
         "T013"
       ],
       "provider": "openai"
@@ -656,8 +662,12 @@
       "T001"
     ],
     [
-      "T006",
+      "T005",
       "T010"
+    ],
+    [
+      "T006",
+      "T007"
     ],
     [
       "T007",
@@ -669,12 +679,103 @@
     ],
     [
       "T011",
-      "T013"
+      "T012"
     ],
     [
       "T012",
-      "T011"
+      "T013"
     ]
+  ],
+  "rounds": [
+    {
+      "round": 1,
+      "lanes": [
+        {
+          "agent_id": "opus",
+          "tasks": [
+            "T002",
+            "T001"
+          ]
+        },
+        {
+          "agent_id": "sonnet",
+          "tasks": [
+            "T003",
+            "T004",
+            "T006"
+          ]
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "lanes": [
+        {
+          "agent_id": "gpt4o",
+          "tasks": [
+            "T005"
+          ]
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "lanes": [
+        {
+          "agent_id": "sonnet",
+          "tasks": [
+            "T007",
+            "T008"
+          ]
+        },
+        {
+          "agent_id": "gpt4o-mini",
+          "tasks": [
+            "T011",
+            "T012"
+          ]
+        }
+      ]
+    },
+    {
+      "round": 4,
+      "lanes": [
+        {
+          "agent_id": "gpt4o",
+          "tasks": [
+            "T010"
+          ]
+        },
+        {
+          "agent_id": "gemini-flash",
+          "tasks": [
+            "T009"
+          ]
+        }
+      ]
+    },
+    {
+      "round": 5,
+      "lanes": [
+        {
+          "agent_id": "gpt4o-mini",
+          "tasks": [
+            "T013"
+          ]
+        }
+      ]
+    },
+    {
+      "round": 6,
+      "lanes": [
+        {
+          "agent_id": "gemini-flash",
+          "tasks": [
+            "T014"
+          ]
+        }
+      ]
+    }
   ],
   "stats": {
     "horizon": 338,
@@ -690,12 +791,17 @@
     "phase3_status": "OPTIMAL",
     "phase3_status_code": 4,
     "total_solve_time": 0.01,
+    "portfolio_mode": "agents",
+    "total_rounds": 6,
+    "sequential_duration": 530,
+    "barrier_makespan": 328,
+    "speedup": 1.62,
     "makespan": 238,
     "max_load": 200,
     "min_load": 35,
     "total_tasks": 14,
     "total_agents": 5,
-    "total_waves": 9,
+    "total_waves": 10,
     "total_cost": 276.9875,
     "status": "OPTIMAL",
     "quantile_used": 0.5
@@ -704,6 +810,8 @@
   "makespan": 238,
   "max_load": 200,
   "total_cost": 276.9875,
+  "barrier_makespan": 328,
+  "speedup": 1.62,
   "edges": [
     [
       "T003",
@@ -756,6 +864,42 @@
     [
       "T013",
       "T014"
+    ],
+    [
+      "T001",
+      "T011"
+    ],
+    [
+      "T001",
+      "T012"
+    ],
+    [
+      "T001",
+      "T013"
+    ],
+    [
+      "T002",
+      "T011"
+    ],
+    [
+      "T002",
+      "T012"
+    ],
+    [
+      "T002",
+      "T013"
+    ],
+    [
+      "T003",
+      "T011"
+    ],
+    [
+      "T003",
+      "T012"
+    ],
+    [
+      "T003",
+      "T013"
     ]
   ],
   "tasks": [
@@ -764,98 +908,182 @@
       "phase": "Setup",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "design"
+      "required_skill": "design",
+      "description": "Design service architecture in `docs/ADR-001-architecture.md`",
+      "file_paths": [
+        "docs/ADR-001-architecture.md"
+      ],
+      "parallel_flag": true,
+      "done": false
     },
     {
       "id": "T002",
       "phase": "Setup",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "design"
+      "required_skill": "design",
+      "description": "Design URL-encoding scheme in `docs/ADR-002-encoding.md`",
+      "file_paths": [
+        "docs/ADR-002-encoding.md"
+      ],
+      "parallel_flag": true,
+      "done": false
     },
     {
       "id": "T003",
       "phase": "Setup",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "schema"
+      "required_skill": "schema",
+      "description": "Design database schema in `src/models/schema.sql`",
+      "file_paths": [
+        "src/models/schema.sql"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T004",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "schema"
+      "required_skill": "schema",
+      "description": "Implement Link model in `src/models/link.py`",
+      "file_paths": [
+        "src/models/link.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T005",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "backend"
+      "required_skill": "backend",
+      "description": "Implement encoder service in `src/services/encoder.py`",
+      "file_paths": [
+        "src/services/encoder.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T006",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "backend"
+      "required_skill": "backend",
+      "description": "Implement redirect service in `src/services/redirect.py`",
+      "file_paths": [
+        "src/services/redirect.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T007",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "api"
+      "required_skill": "api",
+      "description": "Build shortener API endpoint in `src/api/shorten.py`",
+      "file_paths": [
+        "src/api/shorten.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T008",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "api"
+      "required_skill": "api",
+      "description": "Build redirect API endpoint in `src/api/redirect.py`",
+      "file_paths": [
+        "src/api/redirect.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T009",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "frontend"
+      "required_skill": "frontend",
+      "description": "Build LinkForm component in `src/components/LinkForm.tsx`",
+      "file_paths": [
+        "src/components/LinkForm.tsx"
+      ],
+      "parallel_flag": true,
+      "done": false
     },
     {
       "id": "T010",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "frontend"
+      "required_skill": "frontend",
+      "description": "Build LinkList component in `src/components/LinkList.tsx`",
+      "file_paths": [
+        "src/components/LinkList.tsx"
+      ],
+      "parallel_flag": true,
+      "done": false
     },
     {
       "id": "T011",
       "phase": "Polish",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "test"
+      "required_skill": "test",
+      "description": "Write unit tests for encoder in `tests/test_encoder.py`",
+      "file_paths": [
+        "tests/test_encoder.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T012",
       "phase": "Polish",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "test"
+      "required_skill": "test",
+      "description": "Write unit tests for redirect in `tests/test_redirect.py`",
+      "file_paths": [
+        "tests/test_redirect.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T013",
       "phase": "Polish",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "test"
+      "required_skill": "test",
+      "description": "Write end-to-end tests in `tests/test_e2e.py`",
+      "file_paths": [
+        "tests/test_e2e.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T014",
       "phase": "Polish",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "docs"
+      "required_skill": "docs",
+      "description": "Review architecture and update `docs/architecture.md`",
+      "file_paths": [
+        "docs/architecture.md"
+      ],
+      "parallel_flag": false,
+      "done": false
     }
   ]
 }

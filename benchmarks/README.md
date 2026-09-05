@@ -55,7 +55,7 @@ Each shape has a fixed seed for reproducibility.
 
 ## Greedy baseline
 
-Pure-Python MAQA-style scheduler (no CP-SAT). For each task in topological
+Pure-Python first-available-agent greedy scheduler (no CP-SAT). For each task in topological
 order, picks the eligible agent with the earliest available time, respecting
 κ (task cardinality) and context-budget constraints. Used as a lower-bound
 reference for the Gap% metric. The Kahn’s topological sort uses

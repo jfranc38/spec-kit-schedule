@@ -1,4 +1,4 @@
-"""Pure-Python greedy baseline scheduler (MAQA-style first-available-agent).
+"""Pure-Python greedy baseline scheduler (first-available-agent).
 
 No CP-SAT. Schedules tasks in topological order, assigning each to the
 eligible agent with the earliest available time.

@@ -1,6 +1,6 @@
 # Example portfolio. The scheduler is provider-agnostic: `provider` and
-# `model` are informational strings the executor (e.g. /speckit.implement,
-# MAQA coordinator, custom orchestrator) uses to route each task to the
+# `model` are informational strings the executor (e.g. /speckit-schedule-implement,
+# a custom orchestrator) uses to route each task to the
 # right runner. Mix providers freely — see docs/example-config-mixed.yml
 # for a more diverse example.
 

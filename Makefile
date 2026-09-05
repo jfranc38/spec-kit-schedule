@@ -28,13 +28,20 @@ typecheck: ## Mypy typecheck (non-blocking)
 fmt: ## Autofix lint issues
 	$(UV) run -- ruff check --fix solver tests
 
-smoke: ## End-to-end pipeline against the docs example
+smoke: ## End-to-end: legacy pipeline (docs example) + zero-config CLI plan/next/mark
 	@set -e; \
 	tmp=$$(mktemp -d); \
 	$(UV) run -- python -m solver.parse_tasks docs/example-tasks.md docs/example-config.yml > $$tmp/in.json; \
 	$(UV) run -- python -m solver.scheduler < $$tmp/in.json > $$tmp/out.json; \
 	$(UV) run -- python -m solver.render_schedule $$tmp/out.json example > $$tmp/schedule.md; \
-	echo "smoke OK ($$(wc -l <$$tmp/schedule.md) lines)"; \
+	echo "smoke OK: pipeline ($$(wc -l <$$tmp/schedule.md) lines)"; \
+	mkdir -p $$tmp/proj/.specify/specs/demo; cp tests/fixtures/tasks-speckit-0.16.md $$tmp/proj/.specify/specs/demo/tasks.md; \
+	$(UV) run -- python -m solver plan $$tmp/proj/.specify/specs/demo/tasks.md --workers 3 > $$tmp/plan.txt; \
+	grep -q "Rounds:" $$tmp/plan.txt; \
+	$(UV) run -- python -m solver next $$tmp/proj/.specify/specs/demo/schedule.json > $$tmp/next.txt; \
+	grep -q "^# Round 1 of" $$tmp/next.txt; \
+	$(UV) run -- python -m solver mark $$tmp/proj/.specify/specs/demo/tasks.md T001 T002 T003 >/dev/null; \
+	echo "smoke OK: cli plan/next/mark"; \
 	rm -rf $$tmp
 
 smoke-stress: ## Medium-scale stress smoke (runs the medium benchmark size)

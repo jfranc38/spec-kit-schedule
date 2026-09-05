@@ -60,6 +60,10 @@ def render(
     stats = data.get("stats", {})
     assignments = data.get("assignments", [])
     waves = data.get("waves", [])
+    rounds = data.get("rounds", [])
+    workers_mode = stats.get("portfolio_mode") == "workers"
+    task_files = {t["id"]: t.get("file_paths", []) for t in data.get("tasks", []) or []}
+    task_desc = {t["id"]: t.get("description", "") for t in data.get("tasks", []) or []}
     agent_summary = data.get("agent_summary", [])
     parser_edges = data.get("edges", [])
     resource_edges = data.get("resource_edges", [])
@@ -85,6 +89,13 @@ def render(
         f"Waves: **{stats.get('total_waves', '?')}** | "
         f"Agents: **{stats.get('total_agents', '?')}**"
     )
+    if rounds:
+        lines.append(
+            f"> Rounds: **{len(rounds)}** | "
+            f"Sequential effort: **{stats.get('sequential_duration', '?')}** → "
+            f"parallel: **{stats.get('barrier_makespan', '?')}** time units | "
+            f"Speedup: **{stats.get('speedup', '?')}×**"
+        )
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -104,6 +115,41 @@ def render(
         lines.append("---")
         lines.append("")
 
+    # ── Execution Rounds ──────────────────────────────────────────────
+    # The executable plan: one parallel launch per round, one ordered
+    # segment per lane (subagent). See solver.rounds for the semantics.
+    if rounds:
+        lines.append("## Execution Rounds")
+        lines.append("")
+        lines.append(
+            "Each round is one parallel launch of subagents; every lane runs its "
+            "tasks in order and the next round starts only when the whole round "
+            "is complete. Run it with `/speckit-schedule-implement`."
+        )
+        lines.append("")
+        for rnd in rounds:
+            lanes = rnd.get("lanes", [])
+            n_tasks = sum(len(lane.get("tasks", [])) for lane in lanes)
+            lines.append(
+                f"### Round {rnd.get('round', '?')} — {len(lanes)} lane"
+                f"{'s' if len(lanes) != 1 else ''}, {n_tasks} task{'s' if n_tasks != 1 else ''}"
+            )
+            lines.append("")
+            lines.append("| Lane | Tasks (in order) | Files |")
+            lines.append("|------|------------------|-------|")
+            for lane in lanes:
+                ids = lane.get("tasks", [])
+                lane_paths: list[str] = []
+                for tid in ids:
+                    for fp in task_files.get(tid, []):
+                        if fp not in lane_paths:
+                            lane_paths.append(fp)
+                files_md = ", ".join(f"`{f}`" for f in lane_paths) or "-"
+                lines.append(f"| {lane.get('agent_id', '?')} | {' → '.join(ids)} | {files_md} |")
+            lines.append("")
+        lines.append("---")
+        lines.append("")
+
     # ── Agent Assignments ─────────────────────────────────────────────
     lines.append("## Agent Assignments")
     lines.append("")
@@ -111,11 +157,12 @@ def render(
         budget_pct = ag.get("budget_utilization", 0)
         kappa_pct = ag.get("kappa_utilization", 0)
         model_label = format_agent_model_label(ag)
+        # Synthesised workers have no meaningful budget / κ ceilings.
+        util = "" if workers_mode else f" ({budget_pct}% budget, {kappa_pct}% κ)"
         lines.append(
             f"### {ag['agent_id']} ({model_label}) — "
             f"{ag['task_count']} tasks, "
-            f"{ag['total_tokens']:,} tokens "
-            f"({budget_pct}% budget, {kappa_pct}% κ)"
+            f"{ag['total_tokens']:,} tokens{util}"
         )
         lines.append("")
         agent_tasks = [a for a in assignments if a["agent_id"] == ag["agent_id"]]
@@ -162,17 +209,18 @@ def render(
             "faster agent) is the only way to shorten the project."
         )
         lines.append("")
-        lines.append("| # | Task | Agent | Start | End | Duration | Cumulative |")
-        lines.append("|---|------|-------|-------|-----|----------|------------|")
+        lines.append("| # | Task | Agent | Start | End | Duration | Cumulative | Description |")
+        lines.append("|---|------|-------|-------|-----|----------|------------|-------------|")
         cumulative = 0
         for i, task_id in enumerate(critical_path, 1):
             a = by_id.get(task_id)
             if a is None:
                 continue
             cumulative += a["duration"]
+            desc = str(task_desc.get(task_id, "")).replace("|", "\\|")
             lines.append(
                 f"| {i} | **{task_id}** | {a['agent_id']} | "
-                f"{a['start']} | {a['end']} | {a['duration']} | {cumulative} |"
+                f"{a['start']} | {a['end']} | {a['duration']} | {cumulative} | {desc} |"
             )
         lines.append("")
         lines.append("---")
@@ -286,6 +334,10 @@ def render(
         ("Min agent load (L_min)", f"{min_load if min_load is not None else '?'} time units"),
         ("Load range", f"{load_range} time units"),
         ("Execution waves", stats.get("total_waves", "?")),
+        ("Execution rounds", stats.get("total_rounds", "?")),
+        ("Sequential effort", f"{stats.get('sequential_duration', '?')} time units"),
+        ("Barrier makespan", f"{stats.get('barrier_makespan', '?')} time units"),
+        ("Parallel speedup", f"{stats.get('speedup', '?')}×"),
         ("Horizon", stats.get("horizon", "?")),
         ("Phase 1 time", f"{stats.get('phase1_time', '?')}s"),
         ("Phase 1 status", stats.get("phase1_status", "?")),

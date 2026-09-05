@@ -2,8 +2,12 @@
 """spec-kit-schedule: tasks.md Parser.
 
 Parses a spec-kit tasks.md file into the JSON graph format expected by
-scheduler.py. Handles both the core tasks.md format and the Explicit
-Task Dependencies preset format.
+scheduler.py. Accepts the format ``/speckit.tasks`` generates today
+(``- [ ] T012 [P] [US1] Create User model in src/models/user.py`` — bare
+file paths, ``(Priority: P1)`` story headers, ``### Implementation for
+User Story N`` sub-sections) as well as the backticked-path / ``(depends
+on T###)`` / ``(skill: name)`` annotations documented in
+``docs/tasks-format.md``.
 
 Usage:
     python parse_tasks.py <tasks.md> <schedule-config.yml> [--verbose]
@@ -27,27 +31,31 @@ if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = "solver"  # noqa: A001
 
-import yaml  # type: ignore[import-untyped]  # PyYAML ships no type stubs by default
+import yaml  # type: ignore[import-untyped, unused-ignore]  # PyYAML ships no type stubs by default
 
 from .config_schema import Config
 from .defaults import (
     COMPLEXITY_VERBS,
     CONTEXT_BUDGET_KTOKENS_DEFAULT,
+    DEFAULT_SKILL_RULES,
     KAPPA_DEFAULT,
     SPEED_FACTOR_DEFAULT,
     STORY_PRIORITY_DEFAULT,
     TOKEN_ESTIMATES,
+    ZERO_CONFIG_TIME_LIMIT_SECONDS,
+    zero_config_num_workers,
 )
 from .i18n import t
-from .i18n_catalog import WARN_PARALLEL_WRITE_CONFLICT
+from .i18n_catalog import WARN_HEURISTIC_EDGE_DROPPED, WARN_PARALLEL_WRITE_CONFLICT
 from .validation import (
     ScheduleInputError,
     find_cycle,
     normalize_path,
 )
 from .warnings_collector import WarningCollector
+from .workers import synthesize_workers
 
-__all__ = ["EdgeOrigin", "parse_tasks_md", "main"]
+__all__ = ["EdgeOrigin", "extract_file_paths", "parse_tasks_md", "main"]
 
 log = logging.getLogger(__name__)
 
@@ -65,24 +73,28 @@ class EdgeOrigin:
     TDD = "tdd"
 
 
+# Heuristic origins may be dropped to break a cycle; explicit and phase
+# edges encode user intent / spec-kit semantics and are never dropped.
+_HEURISTIC_ORIGINS = frozenset({EdgeOrigin.SAME_FILE, EdgeOrigin.TDD})
+
+
 # ───────────────────────────────────────────────────────────────────────
 # Regex patterns for task line parsing
 # ───────────────────────────────────────────────────────────────────────
 
-# Core format:  - [ ] T### [P] [USn] <action> in <path>
-# Extended:     - [ ] T### [P] [USn] <action> in <path> (depends on T###, T###)
+# spec-kit format:  - [ ] T### [P?] [USn?] <description with file path>
+# Tags may appear in either order ([P] [US1] or [US1] [P]).
 TASK_RE = re.compile(
-    r"^-\s+\[[ xX]?\]\s+"
-    r"(?P<id>T\d{3,4})\s+"
-    r"(?:\[P\]\s+)?"
-    r"(?:\[(?P<story>US\d+)\]\s+)?"
-    r"(?P<desc>.+?)"
-    r"(?:\s+in\s+`(?P<path>[^`]+)`)?"
-    r"(?:\s+\(depends\s+on\s+(?P<deps>[^)]+)\))?"
-    r"\s*$"
+    r"^-\s+\[(?P<check>[ xX]?)\]\s+"
+    r"(?P<id>T\d{3,4})\b"
+    r"(?P<tags>(?:\s+\[(?:P|US\d+)\])*)"
+    r"\s+(?P<desc>.+?)\s*$"
 )
+_STORY_TAG_RE = re.compile(r"\[(US\d+)\]")
+_PARALLEL_TAG_RE = re.compile(r"\[P\]")
 
-PARALLEL_RE = re.compile(r"\[P\]")
+# Trailing annotations, accepted in any order anywhere after the description.
+DEPENDS_RE = re.compile(r"\(\s*depends\s+on\s+(?P<deps>[^)]+)\)", re.I)
 
 # Inline skill annotation: ``(skill: <name>)``. Lowercase identifier matches the
 # existing skill-naming convention used in skill_rules / agent skills lists.
@@ -93,18 +105,31 @@ EXPLICIT_SKILL_RE = re.compile(r"\(skill:\s*([a-z][a-z0-9_-]*)\s*\)")
 # Phase headers — keywords anchored to heading body (after optional
 # "Phase N:" / "N." prefix). Matching the whole heading avoids
 # "Advanced Setup Instructions" being read as a Setup phase.
-_PHASE_PREFIX = r"#{1,4}\s+(?:Phase\s+\d+[:.\-]?\s+|\d+[.)]\s+)?"
+_PHASE_PREFIX = r"(?P<hashes>#{1,4})\s+(?:Phase\s+\d+[:.\-]?\s+|\d+[.)]\s+)?"
 PHASE_SETUP_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Setup|Environment|Configuration)\b", re.I)
 PHASE_FOUND_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Foundation|Foundational|Core|Base)\b", re.I)
 PHASE_IMPL_RE = re.compile(
     rf"^{_PHASE_PREFIX}(?:Implementation|Implement|Build|Development|Develop)\b", re.I
 )
-PHASE_STORY_RE = re.compile(rf"^{_PHASE_PREFIX}(?:User\s+Story|US)\s*(\d+)\b", re.I)
+PHASE_STORY_RE = re.compile(rf"^{_PHASE_PREFIX}(?:User\s+Story|US)\s*(?P<num>\d+)\b", re.I)
 PHASE_POLISH_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Polish|Cleanup|Final|Integration)\b", re.I)
 
-PRIORITY_RE = re.compile(r"\(P(\d+)\)")
+# Sub-sections inside a user story phase (spec-kit tasks-template.md):
+#   ### Tests for User Story 1 (OPTIONAL ...)
+#   ### Implementation for User Story 1
+# They refine the current story; they never change the phase.
+STORY_SUBHEADER_RE = re.compile(
+    r"^#{1,6}\s+(?:Tests?|Implementation|Impl)\s+for\s+User\s+Story\s+(?P<num>\d+)\b", re.I
+)
+_HEADER_RE = re.compile(r"^(?P<hashes>#{1,6})\s+\S")
+
+# ``(P1)`` (docs/example-tasks.md) and ``(Priority: P1)`` (spec-kit template).
+PRIORITY_RE = re.compile(r"\((?:Priority:\s*)?P(\d+)\)", re.I)
+
+# Backticked path-like tokens: contain an extension or a slash.
 PATH_IN_BACKTICKS_RE = re.compile(r"`([^`]*(?:\.[\w]+|/[\w]+))`")
-VERB_RE = re.compile(r"^(?:T\d{3,4}\s+(?:\[P\]\s+)?(?:\[US\d+\]\s+)?)?(\w+)", re.I)
+_BACKTICK_SPAN_RE = re.compile(r"`[^`]*`")
+VERB_RE = re.compile(r"^(\w+)")
 
 # Action verbs that denote a write on the target file. Used to spot
 # parallel-flag misuse (two [P] tasks writing the same file).
@@ -122,6 +147,144 @@ _WRITE_VERBS = {
     "migrate",
     "optimize",
 }
+
+
+# ───────────────────────────────────────────────────────────────────────
+# Bare (un-backticked) file path extraction
+# ───────────────────────────────────────────────────────────────────────
+
+_URL_RE = re.compile(r"^[a-z][a-z0-9+.\-]*://", re.I)
+_VERSION_RE = re.compile(r"^v?\d+(?:\.\d+)+$")
+# ``name.ext`` — name may itself contain dots (``user_service.test.ts``).
+_BARE_FILE_RE = re.compile(r"^[\w.\-@+~]+\.[A-Za-z][A-Za-z0-9]{0,9}$")
+# Anything with a slash that looks like a relative path (``src/api/x.py``,
+# ``docs/``, ``frontend/src/[component].tsx``).
+_BARE_DIRPATH_RE = re.compile(r"^\.?[\w.\-@+~\[\]{}]+(?:/[\w.\-@+~\[\]{}*]*)+$")
+_STRIP_LEADING = "([{<\"'"
+_STRIP_TRAILING = ".,;:!?)]}>\"'"
+# Words that commonly precede a file path in a task description.
+_PATH_PREPOSITIONS = frozenset({"in", "into", "to", "at", "under", "from", "on", "within"})
+# Dotted tokens that are not files (lower-cased comparison).
+_NOT_PATHS = frozenset(
+    {
+        "e.g",
+        "i.e",
+        "etc",
+        "vs",
+        "cf",
+        "node.js",
+        "next.js",
+        "nuxt.js",
+        "vue.js",
+        "react.js",
+        "express.js",
+        "nest.js",
+        "three.js",
+        "d3.js",
+        "angular.js",
+        "ember.js",
+        "alpine.js",
+        "chart.js",
+        "moment.js",
+        "socket.io",
+        "asp.net",
+        "vs.code",
+    }
+)
+# Extensions accepted even when no preposition precedes the token.
+_KNOWN_EXTS = frozenset(
+    {
+        "py", "pyi", "js", "mjs", "cjs", "ts", "tsx", "jsx", "json", "yml", "yaml",
+        "toml", "ini", "cfg", "env", "md", "rst", "txt", "sql", "css", "scss", "sass",
+        "less", "html", "htm", "sh", "bash", "zsh", "go", "rs", "java", "kt", "kts",
+        "rb", "php", "cs", "cpp", "cc", "c", "h", "hpp", "swift", "m", "mm", "xml",
+        "lock", "proto", "graphql", "gql", "vue", "svelte", "tf", "conf", "properties",
+        "gradle", "csproj", "sln", "ex", "exs", "erl", "hs", "scala", "clj", "lua",
+        "pl", "r", "jl", "dart", "ipynb", "csv", "sqlite", "db", "tsv",
+    }
+)  # fmt: skip
+# Extension-less canonical filenames.
+_CANONICAL_FILES = frozenset(
+    {
+        "Makefile", "Dockerfile", "Procfile", "Rakefile", "Gemfile", "Jenkinsfile",
+        "Vagrantfile", "LICENSE", "README", "CHANGELOG", "CODEOWNERS",
+        ".gitignore", ".env", ".dockerignore", ".editorconfig", ".gitattributes",
+    }
+)  # fmt: skip
+
+
+def _bare_path_candidate(token: str, prev_word: str) -> str | None:
+    """Return the path a whitespace-delimited *token* denotes, or ``None``."""
+    tok = token.lstrip(_STRIP_LEADING)
+    # Keep a trailing "/" (directory); strip sentence punctuation otherwise.
+    keep_slash = tok.endswith("/")
+    tok = tok.rstrip(_STRIP_TRAILING)
+    if keep_slash and not tok.endswith("/"):
+        tok = tok + "/"
+    if not tok or tok in ("/", "./", "../") or _URL_RE.match(tok):
+        return None
+    if tok in _CANONICAL_FILES:
+        return tok
+    if "/" in tok:
+        if not _BARE_DIRPATH_RE.match(tok):
+            return None
+        # Prose also uses slashes ("models/entities", "and/or"): require a
+        # file extension, a directory marker, nesting, or a preposition.
+        last = tok.rsplit("/", 1)[1]
+        looks_like_file = "." in last and _BARE_FILE_RE.match(last) is not None
+        if (
+            looks_like_file
+            or tok.endswith("/")
+            or tok.count("/") >= 2
+            or prev_word in _PATH_PREPOSITIONS
+        ):
+            return tok
+        return None
+    if not _BARE_FILE_RE.match(tok) or _VERSION_RE.match(tok):
+        return None
+    if tok.lower() in _NOT_PATHS:
+        return None
+    ext = tok.rsplit(".", 1)[1].lower()
+    if ext in _KNOWN_EXTS or prev_word in _PATH_PREPOSITIONS:
+        return tok
+    return None
+
+
+def extract_file_paths(text: str) -> list[str]:
+    """Return normalised, de-duplicated file paths mentioned in *text*.
+
+    Backticked tokens with an extension or slash are always paths. Bare
+    tokens are paths when they contain a slash, are a canonical filename
+    (``Makefile``), or look like ``name.ext`` with a known source
+    extension or a preceding preposition (``in``, ``to``, …). URLs,
+    version numbers and framework names (``Node.js``) are excluded.
+    Directory tokens keep their trailing slash so ``skill_rules``
+    patterns like ``docs/`` still match.
+    """
+    raw: list[str] = list(PATH_IN_BACKTICKS_RE.findall(text))
+    words = _BACKTICK_SPAN_RE.sub(" ", text).split()
+    prev = ""
+    for word in words:
+        candidate = _bare_path_candidate(word, prev)
+        if candidate is not None:
+            raw.append(candidate)
+        prev = word.lower().strip(_STRIP_LEADING + _STRIP_TRAILING)
+
+    seen: set[str] = set()
+    out: list[str] = []
+    for fp in raw:
+        normalized = normalize_path(fp)
+        if fp.endswith("/") and not normalized.endswith("/"):
+            normalized += "/"
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            out.append(normalized)
+    return out
+
+
+# ───────────────────────────────────────────────────────────────────────
+# Config, skills, complexity
+# ───────────────────────────────────────────────────────────────────────
 
 
 def _lower_verbs(verbs_map: dict[str, list[str]]) -> dict[str, list[str]]:
@@ -166,25 +329,6 @@ def classify_complexity(
     return "medium"
 
 
-def _detect_phase(line: str) -> tuple[str, str | None, int] | None:
-    """Return (phase, story_id, priority) or None if line is not a header."""
-    if PHASE_SETUP_RE.match(line):
-        return ("Setup", None, STORY_PRIORITY_DEFAULT)
-    if PHASE_FOUND_RE.match(line):
-        return ("Foundational", None, STORY_PRIORITY_DEFAULT)
-    if PHASE_IMPL_RE.match(line):
-        return ("Implementation", None, STORY_PRIORITY_DEFAULT)
-    m = PHASE_STORY_RE.match(line)
-    if m:
-        num = m.group(1)
-        pm = PRIORITY_RE.search(line)
-        priority = int(pm.group(1)) if pm else STORY_PRIORITY_DEFAULT
-        return (f"User Story {num}", f"US{num}", priority)
-    if PHASE_POLISH_RE.match(line):
-        return ("Polish", None, STORY_PRIORITY_DEFAULT)
-    return None
-
-
 def _merge_config(config: dict[str, Any]) -> dict[str, Any]:
     """Validate config via pydantic, apply defaults, and return a plain dict.
 
@@ -197,6 +341,12 @@ def _merge_config(config: dict[str, Any]) -> dict[str, Any]:
     raw = dict(config)
     raw.setdefault("token_estimates", dict(TOKEN_ESTIMATES))
     raw.setdefault("complexity_verbs", COMPLEXITY_VERBS)
+    # Zero-config (no ``agents:`` block) gets the canonical skill rules so
+    # the TDD ordering rule can recognise test files. Portfolios that
+    # declare agents keep an empty default: their skill vocabulary is
+    # whatever the agents list, and surprising skills would fail preflight.
+    if not raw.get("agents"):
+        raw.setdefault("skill_rules", [dict(r) for r in DEFAULT_SKILL_RULES])
 
     validated: Config = Config.model_validate(raw)
     cfg = validated.model_dump(mode="python")
@@ -224,13 +374,282 @@ def _merge_config(config: dict[str, Any]) -> dict[str, Any]:
             }
     cfg["token_estimates"] = te
 
-    # Flatten solver sub-dict so existing consumers can do cfg["solver"]["time_limit"].
-    if isinstance(cfg.get("solver"), dict):
-        pass  # already a dict after model_dump
-    else:
+    if not isinstance(cfg.get("solver"), dict):
         cfg["solver"] = {}
 
+    # Zero-config solves favour a fast answer: anytime mode with a short
+    # limit (the warm-start incumbent is always there) and threads bounded
+    # by the machine. Only fill what the user left unset.
+    if not cfg.get("agents"):
+        raw_solver = config.get("solver") or {}
+        zero_config_defaults: dict[str, object] = {
+            "time_limit": ZERO_CONFIG_TIME_LIMIT_SECONDS,
+            "anytime": True,
+            "num_workers": zero_config_num_workers(),
+        }
+        for key, value in zero_config_defaults.items():
+            if key not in raw_solver:
+                cfg["solver"][key] = value
+
     return cfg
+
+
+# ───────────────────────────────────────────────────────────────────────
+# Phase / header detection
+# ───────────────────────────────────────────────────────────────────────
+
+
+def _detect_phase(line: str) -> tuple[str, str | None, int, int] | None:
+    """Return ``(phase, story_id, priority, depth)`` or None if not a phase header."""
+    m = PHASE_SETUP_RE.match(line)
+    if m:
+        return ("Setup", None, STORY_PRIORITY_DEFAULT, len(m.group("hashes")))
+    m = PHASE_FOUND_RE.match(line)
+    if m:
+        return ("Foundational", None, STORY_PRIORITY_DEFAULT, len(m.group("hashes")))
+    m = PHASE_IMPL_RE.match(line)
+    if m:
+        return ("Implementation", None, STORY_PRIORITY_DEFAULT, len(m.group("hashes")))
+    m = PHASE_STORY_RE.match(line)
+    if m:
+        num = m.group("num")
+        pm = PRIORITY_RE.search(line)
+        priority = int(pm.group(1)) if pm else STORY_PRIORITY_DEFAULT
+        return (f"User Story {num}", f"US{num}", priority, len(m.group("hashes")))
+    m = PHASE_POLISH_RE.match(line)
+    if m:
+        return ("Polish", None, STORY_PRIORITY_DEFAULT, len(m.group("hashes")))
+    return None
+
+
+class _PhaseTracker:
+    """Track the current phase while scanning header lines top to bottom."""
+
+    def __init__(self) -> None:
+        self.phase = "Setup"
+        self.story_id: str | None = None
+        self.priority = STORY_PRIORITY_DEFAULT
+        self.depth = 0
+        self._story_priority: dict[str, int] = {}
+
+    def observe(self, line: str, line_num: int) -> bool:
+        """Update state if *line* is a header. Returns True when it was one."""
+        sub = STORY_SUBHEADER_RE.match(line)
+        if sub is not None:
+            story = f"US{sub.group('num')}"
+            self.phase = f"User Story {sub.group('num')}"
+            self.story_id = story
+            self.priority = self._story_priority.get(story, STORY_PRIORITY_DEFAULT)
+            log.debug("line %d: story sub-section → %s", line_num, story)
+            return True
+
+        header = _HEADER_RE.match(line)
+        if header is None:
+            return False
+        depth = len(header.group("hashes"))
+        hit = _detect_phase(line)
+        if hit is None:
+            return True
+        # Deeper headers under a user story are sub-sections ("### Tests",
+        # "### Implementation"): they must not change the story context.
+        if self.story_id is not None and depth > self.depth:
+            log.debug("line %d: sub-section under %s ignored", line_num, self.phase)
+            return True
+        self.phase, self.story_id, self.priority, self.depth = hit
+        if self.story_id is not None:
+            self._story_priority[self.story_id] = self.priority
+        log.debug(
+            "line %d: phase → %s (story=%s, pri=%d)",
+            line_num,
+            self.phase,
+            self.story_id,
+            self.priority,
+        )
+        return True
+
+
+# ───────────────────────────────────────────────────────────────────────
+# Edge construction helpers
+# ───────────────────────────────────────────────────────────────────────
+
+
+class _EdgeSet:
+    """Insertion-ordered edge set with per-edge origin and removal support."""
+
+    def __init__(self) -> None:
+        self._order: list[tuple[int, int]] = []
+        self.origins: dict[tuple[int, int], str] = {}
+
+    def add(self, src: int, dst: int, origin: str) -> None:
+        if src == dst:
+            return
+        key = (src, dst)
+        if key in self.origins:
+            return
+        self._order.append(key)
+        self.origins[key] = origin
+
+    def remove(self, key: tuple[int, int]) -> None:
+        self.origins.pop(key, None)
+
+    def __contains__(self, key: tuple[int, int]) -> bool:
+        return key in self.origins
+
+    def pairs(self) -> list[tuple[int, int]]:
+        return [k for k in self._order if k in self.origins]
+
+
+def _break_heuristic_cycles(
+    n: int,
+    edges: _EdgeSet,
+    tasks: list[dict[str, Any]],
+    warnings: WarningCollector,
+) -> None:
+    """Drop same-file / TDD edges that close a cycle; explicit-only cycles are fatal."""
+    while True:
+        cycle = find_cycle(n, edges.pairs())
+        if cycle is None:
+            return
+        pairs = list(zip(cycle, cycle[1:], strict=False))
+        names = " → ".join(tasks[i]["id"] for i in cycle)
+        heuristic = [p for p in pairs if edges.origins.get(p) in _HEURISTIC_ORIGINS]
+        if not heuristic:
+            origins = [edges.origins.get(p, "?") for p in pairs]
+            raise ScheduleInputError(t("cycle_detected", names=names, origins=origins))
+        for src, dst in heuristic:
+            origin = edges.origins[(src, dst)]
+            edges.remove((src, dst))
+            warnings.add(
+                WARN_HEURISTIC_EDGE_DROPPED,
+                t(
+                    WARN_HEURISTIC_EDGE_DROPPED,
+                    origin=origin,
+                    src=tasks[src]["id"],
+                    dst=tasks[dst]["id"],
+                    names=names,
+                ),
+                origin=origin,
+                src=tasks[src]["id"],
+                dst=tasks[dst]["id"],
+            )
+
+
+def _phase_boundary(
+    members: list[int],
+    edges: _EdgeSet,
+) -> tuple[list[int], list[int]]:
+    """Return ``(sources, sinks)`` of a phase w.r.t. its intra-phase edges."""
+    member_set = set(members)
+    has_pred = dict.fromkeys(members, False)
+    has_succ = dict.fromkeys(members, False)
+    for src, dst in edges.pairs():
+        if src in member_set and dst in member_set:
+            has_succ[src] = True
+            has_pred[dst] = True
+    sources = [i for i in members if not has_pred[i]]
+    sinks = [i for i in members if not has_succ[i]]
+    return sources, sinks
+
+
+def _add_phase_barriers(
+    tasks: list[dict[str, Any]],
+    edges: _EdgeSet,
+) -> None:
+    """Every task of phase N precedes every task of phase N+1 (transitively).
+
+    Chain: ``Setup → Foundational → {each User Story} → Polish``. User
+    stories hang off the last present prerequisite phase and are not
+    ordered among themselves; Polish waits for every story (or for the
+    prerequisite chain when there are no stories). ``Implementation``
+    is a display bucket outside the chain — order it with explicit
+    ``(depends on …)`` annotations.
+    """
+
+    def _story_index(phase_name: str) -> int:
+        match = re.search(r"\d+", phase_name)
+        return int(match.group()) if match else 0
+
+    phase_tasks: dict[str, list[int]] = defaultdict(list)
+    for td in tasks:
+        phase_tasks[td["phase"]].append(td["index"])
+
+    story_phases = sorted(
+        (p for p in phase_tasks if p.startswith("User Story")), key=_story_index
+    )
+    boundary = {p: _phase_boundary(idxs, edges) for p, idxs in phase_tasks.items()}
+
+    def _barrier(before: str, after: str) -> None:
+        for src in boundary[before][1]:
+            for dst in boundary[after][0]:
+                edges.add(src, dst, EdgeOrigin.PHASE)
+
+    prereq_chain = [p for p in ("Setup", "Foundational") if p in phase_tasks]
+    for before, after in zip(prereq_chain, prereq_chain[1:], strict=False):
+        _barrier(before, after)
+    last_prereq = prereq_chain[-1] if prereq_chain else None
+
+    for story in story_phases:
+        if last_prereq is not None:
+            _barrier(last_prereq, story)
+
+    if "Polish" in phase_tasks:
+        if story_phases:
+            for story in story_phases:
+                _barrier(story, "Polish")
+        elif last_prereq is not None:
+            _barrier(last_prereq, "Polish")
+
+
+# ───────────────────────────────────────────────────────────────────────
+# Main parser
+# ───────────────────────────────────────────────────────────────────────
+
+
+def _parse_task_line(
+    m: re.Match[str],
+    line_num: int,
+    tracker: _PhaseTracker,
+) -> dict[str, Any]:
+    """Build the raw task record for one matched checklist line."""
+    tags = m.group("tags") or ""
+    story_tag = _STORY_TAG_RE.search(tags)
+    desc = m.group("desc").strip()
+
+    explicit_deps: list[str] = []
+    dep_match = DEPENDS_RE.search(desc)
+    if dep_match is not None:
+        explicit_deps = [
+            d.strip() for d in dep_match.group("deps").split(",") if d.strip().startswith("T")
+        ]
+        desc = (desc[: dep_match.start()] + desc[dep_match.end() :]).strip()
+
+    # ``(skill: <name>)`` — first match wins on multi-annotated lines
+    # (deliberately rare; documented as undefined behaviour). Stripped so
+    # it does not leak into verb detection or path scanning.
+    explicit_skill: str | None = None
+    skill_match = EXPLICIT_SKILL_RE.search(desc)
+    if skill_match is not None:
+        explicit_skill = skill_match.group(1)
+        desc = (desc[: skill_match.start()] + desc[skill_match.end() :]).strip()
+    desc = re.sub(r"\s{2,}", " ", desc)
+
+    vm = VERB_RE.match(desc)
+    verb = vm.group(1) if vm else "implement"
+
+    return {
+        "id": m.group("id"),
+        "done": (m.group("check") or "").lower() == "x",
+        "phase": tracker.phase,
+        "story_id": story_tag.group(1) if story_tag else tracker.story_id,
+        "story_priority": tracker.priority,
+        "parallel_flag": _PARALLEL_TAG_RE.search(tags) is not None,
+        "file_paths": extract_file_paths(desc),
+        "explicit_skill": explicit_skill,
+        "explicit_deps": explicit_deps,
+        "action_verb": verb,
+        "description": desc,
+        "source_line": line_num,
+    }
 
 
 def parse_tasks_md(
@@ -241,9 +660,11 @@ def parse_tasks_md(
     """Parse tasks.md and config into solver-ready JSON.
 
     Raises ScheduleInputError on duplicate task ids, unknown dependency
-    references, or cycles in the resulting DAG. The parser is strict
-    on purpose: silent skips have been a recurring source of invisible
-    schedule bugs.
+    references, or cycles made of explicit / phase edges. Cycles that
+    involve a heuristic edge (same-file order, TDD rule) are broken by
+    dropping that edge with a warning — the user's explicit ``depends
+    on`` order wins. The parser is otherwise strict on purpose: silent
+    skips have been a recurring source of invisible schedule bugs.
     """
     warnings = warnings or WarningCollector()
     cfg = _merge_config(config)
@@ -258,100 +679,43 @@ def parse_tasks_md(
 
     tasks: list[dict[str, Any]] = []
     task_ids: set[str] = set()
-    current_phase = "Setup"
-    current_story_id: str | None = None
-    current_priority = STORY_PRIORITY_DEFAULT
+    tracker = _PhaseTracker()
+    in_fence = False
 
     for line_num, line in enumerate(lines, start=1):
-        phase_hit = _detect_phase(line)
-        if phase_hit is not None:
-            current_phase, current_story_id, current_priority = phase_hit
-            log.debug(
-                "line %d: phase → %s (story=%s, pri=%d)",
-                line_num,
-                current_phase,
-                current_story_id,
-                current_priority,
-            )
+        # Fenced code blocks (spec-kit's "Parallel Example" section) may
+        # contain "# Setup …" comments or task-like lines — never headers
+        # or tasks.
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
             continue
-
+        if in_fence:
+            continue
+        if tracker.observe(line, line_num):
+            continue
         m = TASK_RE.match(line)
         if not m:
             continue
 
-        task_id = m.group("id")
-        if task_id in task_ids:
-            raise ScheduleInputError(t("duplicate_task_id", task_id=task_id, line=line_num))
-        task_ids.add(task_id)
+        td = _parse_task_line(m, line_num, tracker)
+        if td["id"] in task_ids:
+            raise ScheduleInputError(t("duplicate_task_id", task_id=td["id"], line=line_num))
+        task_ids.add(td["id"])
+        td["index"] = len(tasks)
 
-        story = m.group("story") or current_story_id
-        desc = m.group("desc").strip()
-        explicit_path = m.group("path")
-        deps_str = m.group("deps")
-        parallel = bool(PARALLEL_RE.search(line))
+        inferred_skill = infer_skill(td["file_paths"], skill_rules, default_skill)
+        td["required_skill"] = td["explicit_skill"] or inferred_skill
 
-        # Pull any inline ``(skill: <name>)`` annotation BEFORE the rest of the
-        # description-driven extraction. The first match wins on multi-annotated
-        # lines (deliberately rare; documented as undefined behaviour). The
-        # annotation is stripped from ``desc`` so it doesn't leak into verb
-        # detection or backtick-path scanning.
-        explicit_skill: str | None = None
-        skill_match = EXPLICIT_SKILL_RE.search(desc)
-        if skill_match is not None:
-            explicit_skill = skill_match.group(1)
-            desc = (desc[: skill_match.start()] + desc[skill_match.end() :]).strip()
-
-        # File paths: explicit + any backticked paths in the description.
-        raw_paths: list[str] = []
-        if explicit_path:
-            raw_paths.append(explicit_path)
-        raw_paths.extend(PATH_IN_BACKTICKS_RE.findall(desc))
-        seen: set[str] = set()
-        file_paths: list[str] = []
-        for fp in raw_paths:
-            normalized = normalize_path(fp)
-            if normalized not in seen:
-                seen.add(normalized)
-                file_paths.append(normalized)
-
-        inferred_skill = infer_skill(file_paths, skill_rules, default_skill)
-        skill = explicit_skill if explicit_skill is not None else inferred_skill
-
-        vm = VERB_RE.match(desc)
-        verb = vm.group(1) if vm else "implement"
-        complexity = classify_complexity(verb, complexity_verbs)
-        estimate = token_est.get(
-            complexity,
-            token_est.get("medium", {"mean": TOKEN_ESTIMATES["medium"], "std_dev": 0}),
+        complexity = classify_complexity(td["action_verb"], complexity_verbs)
+        # ``_merge_config`` normalised every estimate to ``{mean, std_dev}``.
+        estimate: dict[str, int] = (
+            token_est.get(complexity)
+            or token_est.get("medium")
+            or {"mean": TOKEN_ESTIMATES["medium"], "std_dev": 0}
         )
-        if isinstance(estimate, dict):
-            tokens = int(estimate["mean"])
-            token_std_dev = int(estimate.get("std_dev", 0))
-        else:
-            tokens = int(estimate)
-            token_std_dev = 0
-
-        explicit_deps: list[str] = []
-        if deps_str:
-            explicit_deps = [d.strip() for d in deps_str.split(",") if d.strip().startswith("T")]
-
-        tasks.append(
-            {
-                "id": task_id,
-                "phase": current_phase,
-                "story_id": story,
-                "story_priority": current_priority,
-                "parallel_flag": parallel,
-                "file_paths": file_paths,
-                "required_skill": skill,
-                "estimated_tokens": tokens,
-                "token_std_dev": token_std_dev,
-                "action_verb": verb,
-                "explicit_deps": explicit_deps,
-                "description": desc,
-                "source_line": line_num,
-            }
-        )
+        td["estimated_tokens"] = int(estimate["mean"])
+        td["token_std_dev"] = int(estimate.get("std_dev", 0))
+        tasks.append(td)
 
     if not tasks:
         raise ScheduleInputError(t("no_tasks_found", path=tasks_path))
@@ -360,19 +724,7 @@ def parse_tasks_md(
 
     # ── Build edges ───────────────────────────────────────────────────
     id_to_idx = {td["id"]: i for i, td in enumerate(tasks)}
-    edges: list[list[str]] = []
-    edge_set: set[tuple[int, int]] = set()
-    edge_origins: dict[tuple[int, int], str] = {}
-
-    def add_edge(src_idx: int, dst_idx: int, origin: str) -> None:
-        if src_idx == dst_idx:
-            return
-        key = (src_idx, dst_idx)
-        if key in edge_set:
-            return
-        edges.append([tasks[src_idx]["id"], tasks[dst_idx]["id"]])
-        edge_set.add(key)
-        edge_origins[key] = origin
+    edges = _EdgeSet()
 
     # (a) Explicit dependencies — fail hard on unknown references.
     missing_deps: list[tuple[str, str, int]] = []
@@ -381,76 +733,63 @@ def parse_tasks_md(
             if dep_id not in id_to_idx:
                 missing_deps.append((td["id"], dep_id, td["source_line"]))
                 continue
-            add_edge(id_to_idx[dep_id], i, EdgeOrigin.EXPLICIT)
+            edges.add(id_to_idx[dep_id], i, EdgeOrigin.EXPLICIT)
     if missing_deps:
         details = "; ".join(
             t("unresolved_dep", task_id=tid, line=ln, dep=dep) for tid, dep, ln in missing_deps
         )
         raise ScheduleInputError(t("unresolved_deps_summary", details=details))
 
-    # (b) Phase ordering: last task of phase N → first task of phase N+1.
-    def _user_story_index(phase_name: str) -> int:
-        match = re.search(r"\d+", phase_name)
-        if match is None:
-            return 0
-        return int(match.group())
-
-    story_phases = sorted(
-        {td["phase"] for td in tasks if td["phase"].startswith("User Story")},
-        key=_user_story_index,
-    )
-    phase_order = ["Setup", "Foundational", *story_phases, "Polish"]
-
-    phase_tasks: dict[str, list[int]] = defaultdict(list)
-    for i, td in enumerate(tasks):
-        phase_tasks[td["phase"]].append(i)
-
-    for phase in phase_order:
-        if phase not in phase_tasks:
-            continue
-        idxs = phase_tasks[phase]
-        if phase == "Foundational" and "Setup" in phase_tasks:
-            add_edge(phase_tasks["Setup"][-1], idxs[0], EdgeOrigin.PHASE)
-        elif phase in story_phases and "Foundational" in phase_tasks:
-            add_edge(phase_tasks["Foundational"][-1], idxs[0], EdgeOrigin.PHASE)
-        elif phase == "Polish":
-            for sp in story_phases:
-                if sp in phase_tasks:
-                    add_edge(phase_tasks[sp][-1], idxs[0], EdgeOrigin.PHASE)
-            if story_phases == [] and "Foundational" in phase_tasks:
-                add_edge(phase_tasks["Foundational"][-1], idxs[0], EdgeOrigin.PHASE)
-
-    # (c) Same-file write order within a story scope.
-    story_file_writers: dict[tuple[str, str], list[int]] = defaultdict(list)
+    # (b) Same-file write order within a story / phase scope.
+    scope_file_writers: dict[tuple[str, str], list[int]] = defaultdict(list)
     for i, td in enumerate(tasks):
         if td["parallel_flag"]:
             continue
         for fp in td["file_paths"]:
-            key = (td["story_id"] or td["phase"], fp)
-            story_file_writers[key].append(i)
-
-    for writers in story_file_writers.values():
+            scope_file_writers[(td["story_id"] or td["phase"], fp)].append(i)
+    for writers in scope_file_writers.values():
         for k in range(len(writers) - 1):
-            add_edge(writers[k], writers[k + 1], EdgeOrigin.SAME_FILE)
+            edges.add(writers[k], writers[k + 1], EdgeOrigin.SAME_FILE)
 
-    # (d) TDD rule: index tasks by (story, file, is_test) so the join is
-    # O(n) instead of O(n²) for large projects with many test+impl pairs.
-    test_idx: dict[tuple[str | None, str], list[int]] = defaultdict(list)
-    impl_idx: dict[tuple[str | None, str], list[int]] = defaultdict(list)
+    # (c) TDD rule within the same scope: test tasks precede implementation
+    # tasks that touch the same file. Indexed so the join is O(n).
+    test_idx: dict[tuple[str, str], list[int]] = defaultdict(list)
+    impl_idx: dict[tuple[str, str], list[int]] = defaultdict(list)
     for i, td in enumerate(tasks):
         bucket = test_idx if td["required_skill"] == "test" else impl_idx
         for fp in td["file_paths"]:
-            bucket[(td["story_id"], fp)].append(i)
+            bucket[(td["story_id"] or td["phase"], fp)].append(i)
     for key, test_tasks in test_idx.items():
         for impl in impl_idx.get(key, ()):
             for test in test_tasks:
-                add_edge(test, impl, EdgeOrigin.TDD)
+                edges.add(test, impl, EdgeOrigin.TDD)
 
-    # ── Cycle check ───────────────────────────────────────────────────
-    cycle = find_cycle(len(tasks), edge_set)
+    # (c') spec-kit "tests FIRST": inside a user story, test tasks declared
+    # before an implementation task precede it. Declaration order is never
+    # reversed, so a trailing "write unit tests" task stays where it is.
+    story_tests: dict[str, list[int]] = defaultdict(list)
+    for i, td in enumerate(tasks):
+        if td["story_id"] is None:
+            continue
+        if td["required_skill"] == "test":
+            story_tests[td["story_id"]].append(i)
+            continue
+        for test in story_tests[td["story_id"]]:
+            edges.add(test, i, EdgeOrigin.TDD)
+
+    # Heuristic edges may contradict explicit intent — resolve before the
+    # phase barriers are derived from the intra-phase structure.
+    _break_heuristic_cycles(len(tasks), edges, tasks, warnings)
+
+    # (d) Phase barriers: Setup → Foundational → {stories} → Polish.
+    _add_phase_barriers(tasks, edges)
+
+    cycle = find_cycle(len(tasks), edges.pairs())
     if cycle is not None:
         names = " → ".join(tasks[i]["id"] for i in cycle)
-        origins = [edge_origins.get((a, b), "?") for a, b in zip(cycle, cycle[1:], strict=False)]
+        origins = [
+            edges.origins.get((a, b), "?") for a, b in zip(cycle, cycle[1:], strict=False)
+        ]
         raise ScheduleInputError(t("cycle_detected", names=names, origins=origins))
 
     # ── Parallel-flag sanity: two [P] tasks writing the same file ─────
@@ -471,14 +810,31 @@ def parse_tasks_md(
             )
 
     # ── Agents ────────────────────────────────────────────────────────
+    # Zero-config: no ``agents:`` block → N identical subagent lanes.
+    if not cfg["agents"]:
+        cfg["agents"] = synthesize_workers(
+            len(tasks),
+            sum(td["estimated_tokens"] for td in tasks),
+            workers=int(cfg.get("workers", 3)),
+            max_tasks_per_worker=int(cfg.get("max_tasks_per_worker", 0)),
+            warnings=warnings,
+        )
+        # Synthesised budgets are already raw tokens; declared agents use
+        # kilotokens (×1000 below). Mark them so the loop does not rescale.
+        for ac in cfg["agents"]:
+            ac["_raw_budget"] = True
+
     agents_out: list[dict[str, Any]] = []
     for ac in cfg["agents"]:
+        budget = int(ac.get("context_budget", CONTEXT_BUDGET_KTOKENS_DEFAULT))
+        if not ac.get("_raw_budget"):
+            budget *= 1000
         agent_dict: dict[str, Any] = {
             "id": ac["id"],
             "model": ac.get("model", "unknown"),
             "skills": list(ac["skills"]),
             "kappa": int(ac.get("kappa", KAPPA_DEFAULT)),
-            "context_budget": int(ac.get("context_budget", CONTEXT_BUDGET_KTOKENS_DEFAULT) * 1000),
+            "context_budget": budget,
             "speed_factor": float(ac.get("speed_factor", SPEED_FACTOR_DEFAULT)),
             "price_per_1k_tokens": float(ac.get("price_per_1k_tokens", 0.0)),
         }
@@ -491,26 +847,28 @@ def parse_tasks_md(
 
     solver_cfg = dict(cfg["solver"])
 
-    tasks_out: list[dict[str, Any]] = []
-    for td in tasks:
-        tasks_out.append(
-            {
-                "id": td["id"],
-                "phase": td["phase"],
-                "story_id": td["story_id"],
-                "story_priority": td["story_priority"],
-                "parallel_flag": td["parallel_flag"],
-                "file_paths": td["file_paths"],
-                "required_skill": td["required_skill"],
-                "estimated_tokens": td["estimated_tokens"],
-                "token_std_dev": td["token_std_dev"],
-                "action_verb": td["action_verb"],
-            }
-        )
+    tasks_out: list[dict[str, Any]] = [
+        {
+            "id": td["id"],
+            "phase": td["phase"],
+            "story_id": td["story_id"],
+            "story_priority": td["story_priority"],
+            "parallel_flag": td["parallel_flag"],
+            "file_paths": td["file_paths"],
+            "required_skill": td["required_skill"],
+            "estimated_tokens": td["estimated_tokens"],
+            "token_std_dev": td["token_std_dev"],
+            "action_verb": td["action_verb"],
+            "description": td["description"],
+            "done": td["done"],
+            "source_line": td["source_line"],
+        }
+        for td in tasks
+    ]
 
     return {
         "tasks": tasks_out,
-        "edges": edges,
+        "edges": [[tasks[s]["id"], tasks[d]["id"]] for s, d in edges.pairs()],
         "agents": agents_out,
         "config": solver_cfg,
         "warnings": warnings.as_list(),

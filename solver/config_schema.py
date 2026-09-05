@@ -21,26 +21,29 @@ __all__ = [
     "default_config_path",
     "load_config",
     "resolve_config_path",
+    "existing_config_path",
 ]
 
 import logging
 from pathlib import Path
 from typing import Annotated
 
-import yaml  # type: ignore[import-untyped]  # PyYAML ships no type stubs by default
+import yaml  # type: ignore[import-untyped, unused-ignore]  # PyYAML ships no type stubs by default
 from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, PositiveInt, field_validator
 
-from ._paths import migrate_legacy_config, schedule_config_path
+from ._paths import migrate_legacy_config, scaffolded_config_path, schedule_config_path
 from .defaults import (
     COST_WEIGHT_DEFAULT,
     DEFAULT_SKILL,
     HORIZON_MULTIPLIER,
     MAKESPAN_WEIGHT,
+    MAX_TASKS_PER_WORKER_DEFAULT,
     NUM_WORKERS,
     OBJECTIVE,
     RANDOM_SEED_DEFAULT,
     TIME_LIMIT_SECONDS,
     TOKEN_UNIT,
+    WORKERS_DEFAULT,
     ObjectiveMode,
 )
 from .validation import ScheduleInputError
@@ -124,6 +127,15 @@ class SolverOptions(BaseModel):
 class Config(BaseModel):
     """Top-level schedule-config.yml schema.
 
+    Two shapes are valid:
+
+    * **Zero-config / workers mode** — no ``agents:`` block. ``workers``
+      identical subagent lanes are synthesised at parse time
+      (:func:`solver.workers.synthesize_workers`); ``max_tasks_per_worker``
+      optionally caps each lane.
+    * **Advanced portfolio** — an explicit ``agents:`` list with skills,
+      κ, context budgets and prices. ``workers`` is ignored.
+
     extra="allow" preserves forward compatibility with unknown top-level
     keys (e.g. the `output:` block) and keys added by future agents without
     breaking existing installs.
@@ -131,7 +143,9 @@ class Config(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    agents: list[AgentConfig] = Field(min_length=1)
+    agents: list[AgentConfig] = []
+    workers: PositiveInt = WORKERS_DEFAULT
+    max_tasks_per_worker: NonNegativeInt = MAX_TASKS_PER_WORKER_DEFAULT
     skill_rules: list[SkillRule] = []
     default_skill: str = DEFAULT_SKILL
     token_estimates: dict[str, TokenEstimateLike] = {}
@@ -142,6 +156,11 @@ class Config(BaseModel):
     # zero-arg at runtime — pydantic fills the unset fields from each field's
     # own default. The cast keeps the code path unchanged.
     solver: SolverOptions = Field(default_factory=SolverOptions)  # type: ignore[arg-type]
+
+    @property
+    def workers_mode(self) -> bool:
+        """True when no explicit portfolio was declared."""
+        return not self.agents
 
     @field_validator("token_estimates", mode="before")
     @classmethod
@@ -198,6 +217,20 @@ def resolve_config_path(
             return candidate
     migrate_legacy_config(project)
     return default_config_path(project)
+
+
+def existing_config_path(project: Path | None = None) -> Path | None:
+    """Return the config file the planner should read, or ``None`` (zero-config).
+
+    Order: ``.specify/schedule/schedule-config.yml`` (after the legacy
+    migration), then the copy spec-kit scaffolds on install at
+    ``.specify/extensions/schedule/schedule-config.yml``.
+    """
+    migrate_legacy_config(project)
+    for candidate in (schedule_config_path(project), scaffolded_config_path(project)):
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def load_config(path: str | Path | None = None, *, project: Path | None = None) -> Config:

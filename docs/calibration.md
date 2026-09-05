@@ -7,10 +7,10 @@ the first.
 There are **two ways** to feed calibration data:
 
 1. **Runs-directory feedback loop** (v0.6.x Build 2, recommended) — every
-   `/speckit.schedule.run` writes a plan snapshot under
+   `/speckit-schedule-run` writes a plan snapshot under
    `.specify/schedule/runs/<run_id>-plan.json`. You record the observed
    durations to the matching `<run_id>-actual.jsonl`, and
-   `/speckit.schedule.calibrate` aggregates the pairs in place. No
+   `python -m solver.calibrate` aggregates the pairs in place. No
    manual JSONL schema, no separate orchestrator integration.
 2. **Flat `runs.jsonl` ingestion** (legacy) — emit a single combined
    JSONL file from a custom orchestrator and feed it via
@@ -24,7 +24,7 @@ can be used interchangeably across runs.
 
 ## Quickstart — runs-directory mode (recommended)
 
-Every `/speckit.schedule.run` automatically writes its plan to
+Every `/speckit-schedule-run` automatically writes its plan to
 `.specify/schedule/runs/<run_id>-plan.json` (see
 [Plan capture](#plan-capture-runs-mode) below). After executing a
 batch of runs and recording the observed durations to the matching
@@ -43,7 +43,7 @@ python -m solver.calibrate \
 Or, equivalently, run the slash command:
 
 ```
-/speckit.schedule.calibrate
+python -m solver.calibrate
 ```
 
 If fewer than 3 paired runs exist the command exits with a warning

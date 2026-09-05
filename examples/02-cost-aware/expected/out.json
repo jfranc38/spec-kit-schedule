@@ -389,6 +389,46 @@
       "T008"
     ]
   ],
+  "rounds": [
+    {
+      "round": 1,
+      "lanes": [
+        {
+          "agent_id": "balanced",
+          "tasks": [
+            "T001"
+          ]
+        },
+        {
+          "agent_id": "cheap",
+          "tasks": [
+            "T002",
+            "T003",
+            "T004"
+          ]
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "lanes": [
+        {
+          "agent_id": "balanced",
+          "tasks": [
+            "T005",
+            "T007"
+          ]
+        },
+        {
+          "agent_id": "cheap",
+          "tasks": [
+            "T006",
+            "T008"
+          ]
+        }
+      ]
+    }
+  ],
   "stats": {
     "horizon": 300,
     "heuristic_makespan": 200,
@@ -403,6 +443,11 @@
     "phase3_status": "OPTIMAL",
     "phase3_status_code": 4,
     "total_solve_time": 0.01,
+    "portfolio_mode": "agents",
+    "total_rounds": 2,
+    "sequential_duration": 270,
+    "barrier_makespan": 200,
+    "speedup": 1.35,
     "makespan": 200,
     "max_load": 200,
     "min_load": 0,
@@ -417,6 +462,8 @@
   "makespan": 200,
   "max_load": 200,
   "total_cost": 24.0,
+  "barrier_makespan": 200,
+  "speedup": 1.35,
   "edges": [
     [
       "T002",
@@ -441,6 +488,22 @@
     [
       "T006",
       "T008"
+    ],
+    [
+      "T001",
+      "T006"
+    ],
+    [
+      "T001",
+      "T007"
+    ],
+    [
+      "T002",
+      "T006"
+    ],
+    [
+      "T002",
+      "T007"
     ]
   ],
   "tasks": [
@@ -449,56 +512,104 @@
       "phase": "Setup",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "frontend"
+      "required_skill": "frontend",
+      "description": "Configure linter in `.eslintrc.json`",
+      "file_paths": [
+        ".eslintrc.json"
+      ],
+      "parallel_flag": true,
+      "done": false
     },
     {
       "id": "T002",
       "phase": "Setup",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "schema"
+      "required_skill": "schema",
+      "description": "Define database schema in `src/models/schema.sql`",
+      "file_paths": [
+        "src/models/schema.sql"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T003",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "backend"
+      "required_skill": "backend",
+      "description": "Implement core service in `src/services/core.py`",
+      "file_paths": [
+        "src/services/core.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T004",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "api"
+      "required_skill": "api",
+      "description": "Build CRUD API in `src/api/crud.py`",
+      "file_paths": [
+        "src/api/crud.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T005",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "frontend"
+      "required_skill": "frontend",
+      "description": "Build admin dashboard in `src/components/AdminDashboard.tsx`",
+      "file_paths": [
+        "src/components/AdminDashboard.tsx"
+      ],
+      "parallel_flag": true,
+      "done": false
     },
     {
       "id": "T006",
       "phase": "Polish",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "test"
+      "required_skill": "test",
+      "description": "Write integration tests in `tests/test_integration.py`",
+      "file_paths": [
+        "tests/test_integration.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T007",
       "phase": "Polish",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "review"
+      "required_skill": "review",
+      "description": "Review architecture and update `docs/architecture.md`",
+      "file_paths": [
+        "docs/architecture.md"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T008",
       "phase": "Polish",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "schema"
+      "required_skill": "schema",
+      "description": "Optimize database indexes in `src/models/schema.sql`",
+      "file_paths": [
+        "src/models/schema.sql"
+      ],
+      "parallel_flag": false,
+      "done": false
     }
   ]
 }

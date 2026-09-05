@@ -15,12 +15,19 @@ __all__ = [
     "TOKEN_ESTIMATES",
     "COMPLEXITY_VERBS",
     "DEFAULT_SKILL",
+    "DEFAULT_SKILL_RULES",
     "TOKEN_UNIT",
     "TOKENS_PER_KILOTOKEN",
     "HORIZON_MULTIPLIER",
     "TIME_LIMIT_SECONDS",
     "NUM_WORKERS",
     "KAPPA_DEFAULT",
+    "WORKERS_DEFAULT",
+    "MAX_TASKS_PER_WORKER_DEFAULT",
+    "WILDCARD_SKILL",
+    "SUBAGENT_MODEL",
+    "ZERO_CONFIG_TIME_LIMIT_SECONDS",
+    "zero_config_num_workers",
     "CONTEXT_BUDGET_KTOKENS_DEFAULT",
     "SPEED_FACTOR_DEFAULT",
     "MAKESPAN_WEIGHT",
@@ -159,6 +166,35 @@ COMPLEXITY_VERBS: dict[str, list[str]] = {
 
 DEFAULT_SKILL = "backend"
 
+# Canonical path-fragment → skill rules applied when a config declares no
+# ``agents:`` block (zero-config workers mode). The parser only needs them
+# to tell test files apart (TDD ordering); the remaining tags are kept so an
+# advanced portfolio can reuse the list verbatim. Longest match wins, so
+# ``test_`` beats ``src/`` even though both are substrings.
+DEFAULT_SKILL_RULES: tuple[dict[str, str], ...] = (
+    {"pattern": "tests/", "skill": "test"},
+    {"pattern": "test/", "skill": "test"},
+    {"pattern": "__tests__/", "skill": "test"},
+    {"pattern": "test_", "skill": "test"},
+    {"pattern": "_test.py", "skill": "test"},
+    {"pattern": ".test.", "skill": "test"},
+    {"pattern": ".spec.", "skill": "test"},
+    {"pattern": "spec/", "skill": "test"},
+    {"pattern": "src/models/", "skill": "schema"},
+    {"pattern": "migrations/", "skill": "schema"},
+    {"pattern": "src/api/", "skill": "api"},
+    {"pattern": "src/services/", "skill": "backend"},
+    {"pattern": "src/components/", "skill": "frontend"},
+    {"pattern": "src/pages/", "skill": "frontend"},
+    {"pattern": "src/hooks/", "skill": "frontend"},
+    {"pattern": ".css", "skill": "frontend"},
+    {"pattern": ".tsx", "skill": "frontend"},
+    {"pattern": ".jsx", "skill": "frontend"},
+    {"pattern": "docs/", "skill": "review"},
+    {"pattern": "README", "skill": "review"},
+    {"pattern": ".md", "skill": "review"},
+)
+
 TOKEN_UNIT = 100
 # Conversion factor between raw tokens and the per-1k pricing units used by
 # agent ``price_per_1k_tokens``. A small constant, but giving it a name keeps
@@ -193,6 +229,21 @@ STATUS_INFEASIBLE: Final[str] = "INFEASIBLE"
 STATUS_UNKNOWN: Final[str] = "UNKNOWN"
 
 KAPPA_DEFAULT = 10
+
+# Zero-config portfolio (no ``agents:`` block): N identical subagent lanes.
+WORKERS_DEFAULT = 3
+# 0 = no cardinality cap per lane.
+MAX_TASKS_PER_WORKER_DEFAULT = 0
+# Skill tag meaning "this agent may run any task".
+WILDCARD_SKILL = "*"
+# ``model`` recorded on synthesised workers: the user's AI assistant runs
+# each lane as a subagent, so there is no model string to pass through.
+SUBAGENT_MODEL = "subagent"
+# Zero-config solves run in anytime mode with a short per-phase limit: the
+# warm-start incumbent is always available and CP-SAT usually finds the
+# optimum in well under a second — the rest of the budget only buys the
+# optimality proof. Two phases (makespan, then load balance) ⇒ ≤ 20 s.
+ZERO_CONFIG_TIME_LIMIT_SECONDS = 10
 CONTEXT_BUDGET_KTOKENS_DEFAULT = 16
 SPEED_FACTOR_DEFAULT = 1.0
 STOCHASTIC_QUANTILE_DEFAULT = 0.5
@@ -203,6 +254,13 @@ RANDOM_SEED_DEFAULT = 42
 # Sentinel priority for tasks not pinned to a user story. Higher = lower
 # priority in the heuristic's tiebreak order.
 STORY_PRIORITY_DEFAULT = 99
+
+
+def zero_config_num_workers() -> int:
+    """CP-SAT worker threads for zero-config solves: ``min(8, cpu_count)``."""
+    import os
+
+    return max(1, min(NUM_WORKERS, os.cpu_count() or 1))
 
 
 def palette_for(

@@ -209,6 +209,37 @@
       "T006"
     ]
   ],
+  "rounds": [
+    {
+      "round": 1,
+      "lanes": [
+        {
+          "agent_id": "backend",
+          "tasks": [
+            "T003",
+            "T004"
+          ]
+        },
+        {
+          "agent_id": "tester",
+          "tasks": [
+            "T005"
+          ]
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "lanes": [
+        {
+          "agent_id": "tester",
+          "tasks": [
+            "T006"
+          ]
+        }
+      ]
+    }
+  ],
   "stats": {
     "horizon": 143,
     "heuristic_makespan": 95,
@@ -220,6 +251,11 @@
     "phase2_status": "OPTIMAL",
     "phase2_status_code": 4,
     "total_solve_time": 0.01,
+    "portfolio_mode": "agents",
+    "total_rounds": 2,
+    "sequential_duration": 120,
+    "barrier_makespan": 95,
+    "speedup": 1.26,
     "makespan": 95,
     "max_load": 70,
     "min_load": 50,
@@ -233,13 +269,15 @@
       "fixed_count": 0,
       "completed_count": 2,
       "added_count": 0,
-      "reused_from": "/private/tmp/out.json"
+      "reused_from": "/Users/jcfranco/GitHub/spec-kit-schedule/examples/03-replan/expected/out.json"
     }
   },
   "warnings": [],
   "makespan": 95,
   "max_load": 70,
   "total_cost": 0.0,
+  "barrier_makespan": 95,
+  "speedup": 1.26,
   "edges": [
     [
       "T003",
@@ -256,28 +294,52 @@
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "backend"
+      "required_skill": "backend",
+      "description": "Implement worker pool in `src/services/workers.py`",
+      "file_paths": [
+        "src/services/workers.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T004",
       "phase": "Implementation",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "backend"
+      "required_skill": "backend",
+      "description": "Build CLI entry point in `src/cli.py`",
+      "file_paths": [
+        "src/cli.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     },
     {
       "id": "T005",
       "phase": "Polish",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "test"
+      "required_skill": "test",
+      "description": "Write unit tests in `tests/test_core.py`",
+      "file_paths": [
+        "tests/test_core.py"
+      ],
+      "parallel_flag": true,
+      "done": false
     },
     {
       "id": "T006",
       "phase": "Polish",
       "story_id": null,
       "story_priority": 99,
-      "required_skill": "test"
+      "required_skill": "test",
+      "description": "Write integration tests in `tests/test_cli.py`",
+      "file_paths": [
+        "tests/test_cli.py"
+      ],
+      "parallel_flag": false,
+      "done": false
     }
   ]
 }

@@ -2,20 +2,18 @@ schema_version: "1.0"
 
 extension:
   id: "schedule"
-  name: "Spec Kit Schedule — CP-SAT Agent Orchestrator"
-  version: "0.6.2"
-  description: "Optimal multi-agent task scheduling via CP-SAT solver with DAG precedence, hallucination-aware caps, file-conflict avoidance, stochastic durations, replanning, and interactive HTML output. v0.6.0: encapsulated state under .specify/, idempotent /speckit.schedule.run with auto-bootstrap, AI-agent-aware portfolio discovery"
+  name: "Spec Kit Schedule — parallel subagent rounds"
+  version: "0.7.0"
+  description: "Zero-config planner that turns tasks.md into optimal parallel rounds for subagents (CP-SAT, critical-path aware, file-conflict safe) and an implement command that runs them round by round with tasks.md checkboxes as the single source of progress."
   author: "Julio César Franco Ardila"
   repository: "https://github.com/jfranc38/spec-kit-schedule"
   license: "MIT"
   homepage: "https://github.com/jfranc38/spec-kit-schedule"
 
-# Python package dependencies live in pyproject.toml — the spec-kit
-# extension manifest's `requires.tools[]` is for external CLI tools and
-# MCP servers, not for Python imports. Run `uv sync --extra dev` (or
-# `bin/install.sh`) once after cloning to bootstrap them.
+# Python dependencies live in pyproject.toml / uv.lock and are installed
+# into a private environment under the extension directory the first time
+# a command runs (bin/speckit-schedule). `specify` itself installs nothing.
 requires:
-  # Tested against spec-kit 0.4.x; no known incompatibilities with newer majors yet.
   speckit_version: ">=0.4.0"
   tools:
     - name: "python3"
@@ -24,41 +22,44 @@ requires:
 
 provides:
   commands:
-    # Command IDs follow the canonical pattern
-    # ^speckit\.[a-z0-9-]+\.[a-z0-9-]+$ — three dotted segments where
-    # the middle segment matches `extension.id` ("schedule").
+    # Command ids follow ^speckit\.<extension id>\.<verb>$. spec-kit registers
+    # them as skills invoked with hyphens (e.g. /speckit-schedule-run).
     - name: "speckit.schedule.run"
       file: "commands/schedule.md"
-      description: "Parse tasks.md, solve CP-SAT model, produce schedule.md with agent assignments and wave diagram"
+      description: "Plan tasks.md into parallel subagent rounds → schedule.md + schedule.json (zero config)"
       aliases:
+        - "speckit.schedule.plan"
         - "speckit.schedule.solve"
-    - name: "speckit.schedule.portfolio"
-      file: "commands/portfolio.md"
-      description: "Define or edit the agent portfolio (models, skills, capacity caps)"
-    - name: "speckit.schedule.visualize"
-      file: "commands/visualize.md"
-      description: "Render the solved schedule as a Gantt chart and DAG diagram"
-    - name: "speckit.schedule.calibrate"
-      file: "commands/calibrate.md"
-      description: "Recalibrate speed_factor and token_estimates from accumulated plan/actual logs in .specify/schedule/runs/"
+    - name: "speckit.schedule.implement"
+      file: "commands/implement.md"
+      description: "Run the planned rounds with parallel subagents; progress tracked in tasks.md checkboxes; resumable"
     - name: "speckit.schedule.status"
       file: "commands/status.md"
-      description: "Self-diagnose installation state — distinguishes real problems from expected pre-first-run state"
+      description: "Self-diagnose the installation (files, hook, solver env, optional config, run history)"
+  # Scaffolded by `specify extension add` to
+  # .specify/extensions/schedule/schedule-config.yml (preserved on update).
+  # Two knobs, both optional; the file is equivalent to zero-config as shipped.
+  config:
+    - name: "schedule-config.yml"
+      template: "config-template.yml"
+      description: "workers / max_tasks_per_worker (advanced agents: portfolio commented out)"
 
-# Optional opt-in hook fired by spec-kit immediately after `/speckit.tasks`.
-# Because `optional: true`, the agent surfaces the prompt and the user
-# decides whether to proceed — no auto-execution. Mirrors the canonical
-# pattern used by the bundled `git` extension.
+# Optional hooks: the core command surfaces the prompt and the user decides.
 hooks:
   after_tasks:
     command: speckit.schedule.run
     optional: true
-    prompt: "Generate an optimal CP-SAT schedule from the new tasks?"
-    description: "Suggest running the scheduler after task generation"
+    prompt: "Plan these tasks into parallel subagent rounds?"
+    description: "Suggest planning right after task generation"
+  after_converge:
+    command: speckit.schedule.run
+    optional: true
+    prompt: "tasks.md changed — re-plan the parallel rounds?"
+    description: "Suggest re-planning after converge appends tasks"
 
 tags:
   - "scheduling"
   - "optimization"
   - "multi-agent"
-  - "operations-research"
+  - "subagents"
   - "parallel-execution"
