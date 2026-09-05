@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import stat
 import statistics
 import subprocess
 import sys
@@ -565,3 +566,13 @@ class TestCalibrateEdgeCases:
         # Just make sure it doesn't error
         report = calibrate(runs_path, config_path, dry_run=True, confidence_threshold=1)
         assert isinstance(report, CalibrationReport)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes")
+def test_calibrate_keeps_the_config_file_mode(tmp_path: Path) -> None:
+    rows = [_make_run(f"T{j:03d}", "backend-1", predicted=40.0, actual=32.0) for j in range(10)]
+    runs_path = _write_runs(tmp_path, rows)
+    config_path = _write_config(tmp_path)
+    config_path.chmod(0o664)
+    calibrate(runs_path, config_path, dry_run=False, confidence_threshold=5, ema_alpha=0.3)
+    assert stat.S_IMODE(config_path.stat().st_mode) == 0o664

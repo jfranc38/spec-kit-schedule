@@ -388,6 +388,13 @@ class TestExistingConfigPath:
         scaffolded.write_text("workers: 2\n", encoding="utf-8")
         assert existing_config_path(root) == scaffolded
 
+    def test_load_config_none_finds_the_scaffolded_copy(self, tmp_path: Path) -> None:
+        root = self._project(tmp_path)
+        scaffolded = root / ".specify" / "extensions" / "schedule" / "schedule-config.yml"
+        scaffolded.parent.mkdir(parents=True)
+        scaffolded.write_text("workers: 2\n", encoding="utf-8")
+        assert load_config(None, project=root).workers == 2
+
     def test_user_config_wins_over_scaffolded(self, tmp_path: Path) -> None:
         root = self._project(tmp_path)
         for rel in (".specify/extensions/schedule", ".specify/schedule"):

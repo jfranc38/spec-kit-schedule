@@ -28,8 +28,8 @@ from typing import Any
 import yaml  # type: ignore[import-untyped, unused-ignore]  # PyYAML ships no type stubs by default
 
 from ._paths import project_root
-from .briefs import BriefContext, render_brief, render_round
-from .config_schema import existing_config_path
+from .briefs import BriefContext, format_blocked, parse_report, render_brief, render_round
+from .config_schema import resolve_config_path
 from .defaults import STATUS_FEASIBLE, STATUS_OPTIMAL
 from .i18n import t
 from .parse_tasks import parse_tasks_md
@@ -72,10 +72,9 @@ def _load_raw_config(explicit: str | None, project_dir: Path) -> tuple[Path | No
         if not path.is_file():
             raise ScheduleInputError(t("cli_config_not_found", path=path))
     else:
-        found = existing_config_path(project_root(project_dir))
-        if found is None:
+        path = resolve_config_path(None, project=project_root(project_dir))
+        if not path.is_file():
             return None, {}
-        path = found
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
@@ -162,24 +161,21 @@ def cmd_plan(args: argparse.Namespace) -> int:
         "task_ids": [task["id"] for task in parsed["tasks"]],
     }
 
+    print(format_inline_summary(result, feature_name=feature))
+    if result.get("status") not in (STATUS_OPTIMAL, STATUS_FEASIBLE):
+        return EXIT_NOT_SOLVED  # nothing to run, so nothing is written
+
     schedule_json = out_dir / SCHEDULE_JSON
     schedule_json.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-
-    solved = result.get("status") in (STATUS_OPTIMAL, STATUS_FEASIBLE)
-    written = [_relpath(schedule_json)]
-    if solved:
-        image_prefix = _try_images(schedule_json, out_dir, feature) if args.images else None
-        schedule_md = out_dir / SCHEDULE_MD
-        schedule_md.write_text(
-            render_markdown(result, feature, image_prefix=image_prefix).rstrip() + "\n",
-            encoding="utf-8",
-        )
-        written.insert(0, _relpath(schedule_md))
-
-    print(format_inline_summary(result, feature_name=feature))
+    image_prefix = _try_images(schedule_json, out_dir, feature) if args.images else None
+    schedule_md = out_dir / SCHEDULE_MD
+    schedule_md.write_text(
+        render_markdown(result, feature, image_prefix=image_prefix).rstrip() + "\n",
+        encoding="utf-8",
+    )
     print()
-    print(t("cli_written", files=", ".join(written)))
-    return EXIT_OK if solved else EXIT_NOT_SOLVED
+    print(t("cli_written", files=f"{_relpath(schedule_md)}, {_relpath(schedule_json)}"))
+    return EXIT_OK
 
 
 # ───────────────────────────────────────────────────────────────────────
@@ -257,8 +253,8 @@ def cmd_next(args: argparse.Namespace) -> int:
             print(json.dumps({"status": "blocked", **block}, indent=2))
         else:
             print(t("cli_blocked"))
-            for b in rnd.blocked:
-                print(f"  - {b.agent_id}: {b.task_id} ← {', '.join(b.waiting_on)}")
+            for b in block["blocked"]:
+                print(f"  - {format_blocked(b)}")
         return EXIT_BLOCKED
 
     if args.format == "json":
@@ -294,7 +290,16 @@ def cmd_mark(args: argparse.Namespace) -> int:
     tasks_path = Path(args.tasks_md)
     if not tasks_path.is_file():
         raise ScheduleInputError(t("cli_tasks_not_found", path=tasks_path))
-    changed = mark_tasks(tasks_path, args.task_ids, done=not args.undo)
+    ids = list(args.task_ids)
+    if args.report:
+        text = sys.stdin.read() if args.report == "-" else Path(args.report).read_text(encoding="utf-8")
+        report = parse_report(text)
+        ids += report["done"]
+        if report["failed"]:
+            print(t("cli_report_failed", ids=", ".join(report["failed"])), file=sys.stderr)
+    if not ids:
+        raise ScheduleInputError(t("cli_mark_no_ids"))
+    changed = mark_tasks(tasks_path, ids, done=not args.undo)
     print(t("cli_marked", n=changed, state="[ ]" if args.undo else "[x]", path=_relpath(tasks_path)))
     return EXIT_OK
 
@@ -339,8 +344,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     mark = sub.add_parser("mark", help="Tick (or untick with --undo) task checkboxes in tasks.md")
     mark.add_argument("tasks_md")
-    mark.add_argument("task_ids", nargs="+", metavar="T###")
+    mark.add_argument("task_ids", nargs="*", metavar="T###")
     mark.add_argument("--undo", action="store_true", help="Set back to [ ]")
+    mark.add_argument(
+        "--report", metavar="FILE",
+        help="Also tick the DONE ids of a subagent report (FILE or - for stdin); FAILED ids stay",
+    )
     mark.set_defaults(func=cmd_mark)
 
     status = sub.add_parser("status", help="Diagnose the installation (see solver.status)")

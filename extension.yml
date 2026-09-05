@@ -3,7 +3,7 @@ schema_version: "1.0"
 extension:
   id: "schedule"
   name: "Spec Kit Schedule — parallel subagent rounds"
-  version: "0.7.1"
+  version: "0.7.2"
   description: "Zero-config planner that turns tasks.md into optimal parallel rounds for subagents (CP-SAT, critical-path aware, file-conflict safe) and an implement command that runs them round by round with tasks.md checkboxes as the single source of progress."
   author: "Julio César Franco Ardila"
   repository: "https://github.com/jfranc38/spec-kit-schedule"
@@ -17,7 +17,7 @@ requires:
   speckit_version: ">=0.4.0"
   tools:
     - name: "python3"
-      version: ">=3.10,<4.0"
+      version: ">=3.10,<3.13"
       required: true
 
 provides:

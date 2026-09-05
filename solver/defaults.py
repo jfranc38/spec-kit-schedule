@@ -29,6 +29,7 @@ __all__ = [
     "SUBAGENT_MODEL",
     "PORTFOLIO_WORKERS",
     "PORTFOLIO_AGENTS",
+    "TASK_ID_PATTERN",
     "ZERO_CONFIG_TIME_LIMIT_SECONDS",
     "zero_config_num_workers",
     "CONTEXT_BUDGET_KTOKENS_DEFAULT",
@@ -245,6 +246,9 @@ SUBAGENT_MODEL = "subagent"
 # ``stats["portfolio_mode"]``: every lane is a synthesized worker, or not.
 PORTFOLIO_WORKERS = "workers"
 PORTFOLIO_AGENTS = "agents"
+# Task ids as spec-kit writes them (T001 … T9999); shared by the parser, the
+# checkbox scanner and the report parser so the three never disagree.
+TASK_ID_PATTERN = r"T\d{3,4}"
 # Zero-config solves run in anytime mode with a short per-phase limit: the
 # warm-start incumbent is always available and CP-SAT usually finds the
 # optimum in well under a second — the rest of the budget only buys the

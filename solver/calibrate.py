@@ -24,6 +24,7 @@ import contextlib
 import json
 import logging
 import os
+import shutil
 import statistics
 import sys
 import tempfile
@@ -380,6 +381,7 @@ def calibrate(
         try:
             with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
                 fh.write(updated_yaml)
+            shutil.copymode(config_path, tmp_path)
             os.replace(str(tmp_path), str(config_path))
         except Exception:
             with contextlib.suppress(OSError):
@@ -804,6 +806,7 @@ def calibrate_from_runs(
         try:
             with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
                 fh.write(updated_yaml)
+            shutil.copymode(config_path, tmp_path)
             os.replace(str(tmp_path), str(config_path))
         except Exception:
             with contextlib.suppress(OSError):

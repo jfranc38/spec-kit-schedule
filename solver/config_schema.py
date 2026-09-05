@@ -214,10 +214,11 @@ def resolve_config_path(
     Behaviour:
 
     * If ``path`` is provided AND exists → return it.
-    * Otherwise migrate any legacy ``./schedule-config.yml`` to the
-      encapsulated location (one-shot, see
-      :func:`solver._paths.migrate_legacy_config`) and return the
-      encapsulated path. The caller decides whether to error on
+    * Otherwise migrate any legacy ``./schedule-config.yml`` (one-shot, see
+      :func:`solver._paths.migrate_legacy_config`) and return the config in
+      use — ``.specify/schedule/schedule-config.yml``, else the copy spec-kit
+      scaffolds under ``.specify/extensions/schedule/`` — or the default
+      path when neither exists. The caller decides whether to error on
       ``not is_file()``.
     """
     if path is not None:
@@ -225,7 +226,7 @@ def resolve_config_path(
         if candidate.is_file():
             return candidate
     migrate_legacy_config(project)
-    return default_config_path(project)
+    return existing_config_path(project) or default_config_path(project)
 
 
 def validate_config(raw: dict[str, Any]) -> Config:
@@ -241,13 +242,11 @@ def validate_config(raw: dict[str, Any]) -> Config:
 
 
 def existing_config_path(project: Path | None = None) -> Path | None:
-    """Return the config file the planner should read, or ``None`` (zero-config).
+    """Return the config file in use, or ``None`` (zero-config). No side effects.
 
-    Order: ``.specify/schedule/schedule-config.yml`` (after the legacy
-    migration), then the copy spec-kit scaffolds on install at
-    ``.specify/extensions/schedule/schedule-config.yml``.
+    Order: ``.specify/schedule/schedule-config.yml``, then the copy spec-kit
+    scaffolds on install at ``.specify/extensions/schedule/schedule-config.yml``.
     """
-    migrate_legacy_config(project)
     for candidate in (schedule_config_path(project), scaffolded_config_path(project)):
         if candidate.is_file():
             return candidate

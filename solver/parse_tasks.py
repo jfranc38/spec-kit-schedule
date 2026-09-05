@@ -41,12 +41,18 @@ from .defaults import (
     KAPPA_DEFAULT,
     SPEED_FACTOR_DEFAULT,
     STORY_PRIORITY_DEFAULT,
+    TASK_ID_PATTERN,
     TOKEN_ESTIMATES,
     ZERO_CONFIG_TIME_LIMIT_SECONDS,
     zero_config_num_workers,
 )
 from .i18n import t
-from .i18n_catalog import WARN_HEURISTIC_EDGE_DROPPED, WARN_PARALLEL_WRITE_CONFLICT
+from .i18n_catalog import (
+    WARN_HEURISTIC_EDGE_DROPPED,
+    WARN_PARALLEL_WRITE_CONFLICT,
+    WARN_UNCLOSED_FENCE,
+)
+from .tasks_md import unfenced_lines
 from .validation import (
     ScheduleInputError,
     find_cycle,
@@ -86,7 +92,7 @@ _HEURISTIC_ORIGINS = frozenset({EdgeOrigin.SAME_FILE, EdgeOrigin.TDD})
 # Tags may appear in either order ([P] [US1] or [US1] [P]).
 TASK_RE = re.compile(
     r"^-\s+\[(?P<check>[ xX]?)\]\s+"
-    r"(?P<id>T\d{3,4})\b"
+    rf"(?P<id>{TASK_ID_PATTERN})\b"
     r"(?P<tags>(?:\s+\[(?:P|US\d+)\])*)"
     r"\s+(?P<desc>.+?)\s*$"
 )
@@ -114,14 +120,6 @@ PHASE_IMPL_RE = re.compile(
 PHASE_STORY_RE = re.compile(rf"^{_PHASE_PREFIX}(?:User\s+Story|US)\s*(?P<num>\d+)\b", re.I)
 PHASE_POLISH_RE = re.compile(rf"^{_PHASE_PREFIX}(?:Polish|Cleanup|Final|Integration)\b", re.I)
 
-# Sub-sections inside a user story phase (spec-kit tasks-template.md):
-#   ### Tests for User Story 1 (OPTIONAL ...)
-#   ### Implementation for User Story 1
-# The depth rule in ``_PhaseTracker`` already keeps them inside their
-# story; this regex covers a sub-header that names a story on its own.
-STORY_SUBHEADER_RE = re.compile(
-    r"^#{1,6}\s+(?:Tests?|Implementation|Impl)\s+for\s+User\s+Story\s+(?P<num>\d+)\b", re.I
-)
 _HEADER_RE = re.compile(r"^(?P<hashes>#{1,6})\s+\S")
 _MULTISPACE_RE = re.compile(r"\s{2,}")
 
@@ -156,6 +154,7 @@ _WRITE_VERBS = {
 # ───────────────────────────────────────────────────────────────────────
 
 _URL_RE = re.compile(r"^[a-z][a-z0-9+.\-]*://", re.I)
+_WIN_PATH_RE = re.compile(r"^[\w.\-@+~]+(?:\\[\w.\-@+~]+)+$")
 _VERSION_RE = re.compile(r"^v?\d+(?:\.\d+)+$")
 # ``name.ext`` — name may itself contain dots (``user_service.test.ts``).
 _BARE_FILE_RE = re.compile(r"^[\w.\-@+~]+\.[A-Za-z][A-Za-z0-9]{0,9}$")
@@ -220,6 +219,9 @@ def _bare_path_candidate(token: str, prev_word: str) -> str | None:
     tok = tok.rstrip(_STRIP_TRAILING)
     if keep_slash and not tok.endswith("/"):
         tok = tok + "/"
+    # Hand-written Windows separators (``src\models\user.py``).
+    if "\\" in tok and "/" not in tok and _WIN_PATH_RE.match(tok):
+        tok = tok.replace("\\", "/")
     if not tok or tok in ("/", "./", "../") or _URL_RE.match(tok):
         return None
     if tok in _CANONICAL_FILES:
@@ -425,19 +427,9 @@ class _PhaseTracker:
         self.story_id: str | None = None
         self.priority = STORY_PRIORITY_DEFAULT
         self.depth = 0
-        self._story_priority: dict[str, int] = {}
 
     def observe(self, line: str, line_num: int) -> bool:
         """Update state if *line* is a header. Returns True when it was one."""
-        sub = STORY_SUBHEADER_RE.match(line)
-        if sub is not None:
-            story = f"US{sub.group('num')}"
-            self.phase = f"User Story {sub.group('num')}"
-            self.story_id = story
-            self.priority = self._story_priority.get(story, STORY_PRIORITY_DEFAULT)
-            log.debug("line %d: story sub-section → %s", line_num, story)
-            return True
-
         header = _HEADER_RE.match(line)
         if header is None:
             return False
@@ -452,8 +444,6 @@ class _PhaseTracker:
             return True
         self.phase, self.story_id, self.priority = hit
         self.depth = depth
-        if self.story_id is not None:
-            self._story_priority[self.story_id] = self.priority
         log.debug(
             "line %d: phase → %s (story=%s, pri=%d)",
             line_num,
@@ -494,21 +484,24 @@ def _break_heuristic_cycles(
         if not heuristic:
             origins = [edges.get(p, "?") for p in pairs]
             raise ScheduleInputError(t("cycle_detected", names=names, origins=origins))
-        for src, dst in heuristic:
-            origin = edges.pop((src, dst))
-            warnings.add(
+        # One edge per pass (the loop re-checks); prefer the one running
+        # against declaration order so tasks.md keeps its stated order.
+        backward = sorted(p for p in heuristic if p[0] > p[1])
+        src, dst = backward[0] if backward else min(heuristic)
+        origin = edges.pop((src, dst))
+        warnings.add(
+            WARN_HEURISTIC_EDGE_DROPPED,
+            t(
                 WARN_HEURISTIC_EDGE_DROPPED,
-                t(
-                    WARN_HEURISTIC_EDGE_DROPPED,
-                    origin=origin,
-                    src=tasks[src]["id"],
-                    dst=tasks[dst]["id"],
-                    names=names,
-                ),
                 origin=origin,
                 src=tasks[src]["id"],
                 dst=tasks[dst]["id"],
-            )
+                names=names,
+            ),
+            origin=origin,
+            src=tasks[src]["id"],
+            dst=tasks[dst]["id"],
+        )
 
 
 def _phase_boundary(
@@ -657,17 +650,13 @@ def parse_tasks_md(
     tasks: list[dict[str, Any]] = []
     task_ids: set[str] = set()
     tracker = _PhaseTracker()
-    in_fence = False
+    # Fenced code (spec-kit's "Parallel Example") may contain "# Setup …"
+    # comments or task-like lines — never headers or tasks.
+    kept, unclosed = unfenced_lines(lines)
+    if unclosed is not None:
+        warnings.add(WARN_UNCLOSED_FENCE, t(WARN_UNCLOSED_FENCE, line=unclosed), line=unclosed)
 
-    for line_num, line in enumerate(lines, start=1):
-        # Fenced code blocks (spec-kit's "Parallel Example" section) may
-        # contain "# Setup …" comments or task-like lines — never headers
-        # or tasks.
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
+    for line_num, line in kept:
         if tracker.observe(line, line_num):
             continue
         m = TASK_RE.match(line)
@@ -812,9 +801,6 @@ def parse_tasks_md(
         if ac.get("provider") is not None:
             agent_dict["provider"] = ac["provider"]
         agents_out.append(agent_dict)
-
-    if not agents_out:
-        raise ScheduleInputError(t("empty_agents"))
 
     solver_cfg = dict(cfg["solver"])
 

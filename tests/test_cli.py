@@ -13,7 +13,7 @@ import pytest
 import yaml
 
 from solver.briefs import parse_report
-from solver.cli import EXIT_BLOCKED, EXIT_INPUT_ERROR, EXIT_OK, main
+from solver.cli import EXIT_BLOCKED, EXIT_INPUT_ERROR, EXIT_NOT_SOLVED, EXIT_OK, main
 from solver.parse_tasks import parse_tasks_md
 from solver.tasks_md import mark_tasks, scan_checkboxes
 from solver.validation import ScheduleInputError
@@ -225,7 +225,8 @@ class TestNextMarkLoop:
         sched = tmp_path / "schedule.json"
         sched.write_text(json.dumps(plan), encoding="utf-8")
         assert main(["next", str(sched)]) == EXIT_BLOCKED
-        assert "BLOCKED" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "BLOCKED" in out and "w: T001 waits on T009" in out
 
     def test_missing_or_invalid_plan(self, tmp_path: Path, capsys) -> None:
         assert main(["next", str(tmp_path / "schedule.json")]) == EXIT_INPUT_ERROR
@@ -239,20 +240,52 @@ class TestNextMarkLoop:
 class TestMark:
     def test_mark_undo_idempotent(self, tmp_path: Path, capsys) -> None:
         tasks = tmp_path / "tasks.md"
-        tasks.write_text(
-            "## Setup\n- [ ] T001 Do a in a.py\n- [x] T002 Do b in b.py\n"
-            "  - [ ] T003 Nested in c.py\n",
-            encoding="utf-8",
-        )
-        assert main(["mark", str(tasks), "T001", "T002", "T003"]) == EXIT_OK
-        assert "Marked 2 task(s) as [x]" in capsys.readouterr().out
-        assert scan_checkboxes(tasks) == {"T001": True, "T002": True, "T003": True}
+        tasks.write_text("## Setup\n- [ ] T001 Do a in a.py\n- [x] T002 Do b in b.py\n", encoding="utf-8")
+        assert main(["mark", str(tasks), "T001", "T002"]) == EXIT_OK
+        assert "Marked 1 task(s) as [x]" in capsys.readouterr().out
+        assert scan_checkboxes(tasks) == {"T001": True, "T002": True}
         assert mark_tasks(tasks, ["T001"]) == 0  # already done
         assert main(["mark", str(tasks), "--undo", "T002"]) == EXIT_OK
         assert scan_checkboxes(tasks)["T002"] is False
-        # Nested indentation preserved.
-        assert "  - [x] T003 Nested in c.py" in tasks.read_text(encoding="utf-8")
 
+    def test_checkbox_grammar_matches_the_parser(self, tmp_path: Path) -> None:
+        # Indented bullets and fenced examples are not tasks for the parser, so
+        # scan/mark must not see them either — otherwise `next` reports
+        # "tasks.md changed" forever on an unchanged file.
+        tasks = tmp_path / "tasks.md"
+        tasks.write_text(
+            "## Setup\n- [ ] T001 Do a in a.py\n  - [ ] T002 Sub-bullet in b.py\n"
+            "```\n- [ ] T003 Example in c.py\n```\n- [ ] T004 Do d in d.py\n",
+            encoding="utf-8",
+        )
+        parsed_ids = [t["id"] for t in parse_tasks_md(str(tasks), {})["tasks"]]
+        assert parsed_ids == ["T001", "T004"]
+        assert list(scan_checkboxes(tasks)) == parsed_ids
+        with pytest.raises(ScheduleInputError, match="T002"):
+            mark_tasks(tasks, ["T002"])
+        assert mark_tasks(tasks, ["T004"]) == 1
+        assert "- [ ] T003 Example" in tasks.read_text(encoding="utf-8")
+
+    def test_mark_from_a_subagent_report(self, tmp_path: Path, capsys) -> None:
+        tasks = tmp_path / "tasks.md"
+        tasks.write_text(
+            "- [ ] T001 a in a.py\n- [ ] T002 b in b.py\n- [ ] T003 c in c.py\n", encoding="utf-8"
+        )
+        report = tmp_path / "report.txt"
+        report.write_text(
+            "Implemented.\nDONE: T001 T002\nFAILED: T002 tests red\nTOUCHED: a.py\nNOTES: -\n",
+            encoding="utf-8",
+        )
+        assert main(["mark", str(tasks), "--report", str(report)]) == EXIT_OK
+        out, err = capsys.readouterr()
+        assert "Marked 1 task(s)" in out
+        assert "T002" in err  # reported FAILED → left unticked
+        assert scan_checkboxes(tasks) == {"T001": True, "T002": False, "T003": False}
+
+    def test_mark_needs_ids_or_a_report(self, tmp_path: Path) -> None:
+        tasks = tmp_path / "tasks.md"
+        tasks.write_text("- [ ] T001 a in a.py\n", encoding="utf-8")
+        assert main(["mark", str(tasks)]) == EXIT_INPUT_ERROR
     def test_unknown_id_changes_nothing(self, tmp_path: Path, capsys) -> None:
         tasks = tmp_path / "tasks.md"
         original = "## Setup\n- [ ] T001 Do a in a.py\n"
@@ -379,3 +412,18 @@ class TestInvalidKnobs:
             assert "\nERROR: " in "\n" + capsys.readouterr().err  # after any solver WARN lines
         finally:
             out.chmod(0o700)
+
+
+class TestPlanNotSolved:
+    def test_no_schedule_json_when_unsolved(self, project: Path, monkeypatch, capsys) -> None:
+        import solver.cli as cli_mod
+
+        monkeypatch.setattr(
+            cli_mod,
+            "solve_from_json",
+            lambda parsed: {"status": "INFEASIBLE", "assignments": [], "stats": {}, "warnings": []},
+        )
+        tasks = project / ".specify" / "specs" / "004-demo" / "tasks.md"
+        assert main(["plan", str(tasks)]) == EXIT_NOT_SOLVED
+        assert not (tasks.parent / "schedule.json").exists()
+        assert "INFEASIBLE" in capsys.readouterr().out

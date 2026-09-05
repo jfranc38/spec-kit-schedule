@@ -108,7 +108,8 @@ NOTES: -
 ```
 
 `solver/briefs.py:parse_report` extracts the three lists (case-insensitive,
-`FAILED` wins over `DONE` for the same id).
+`FAILED` wins over `DONE` for the same id); `python -m solver mark
+<tasks.md> --report <file|->` applies it.
 
 ## The orchestrator loop (`commands/implement.md`)
 
@@ -142,6 +143,6 @@ Invariants the protocol relies on:
 
 | Verb | 0 | 1 | 2 | 3 |
 |------|---|---|---|---|
-| `plan` | schedule written | INFEASIBLE / UNKNOWN (summary printed) | input error | — |
+| `plan` | schedule written | INFEASIBLE / UNKNOWN (summary printed, nothing written) | input error | — |
 | `next` | round printed, or `DONE` | — | stale, missing or unsolved plan, missing tasks.md | blocked |
 | `mark` | done | — | unknown id / missing file | — |

@@ -94,11 +94,21 @@ MESSAGES: dict[str, dict[str, str]] = {
     "heuristic_edge_dropped": {
         "en": (
             "Dropped the {origin} edge {src} → {dst} to break the dependency cycle "
-            "{names}; the explicit 'depends on' order wins."
+            "{names}; declaration order and explicit 'depends on' clauses win."
         ),
         "es": (
             "Se eliminó la arista {origin} {src} → {dst} para romper el ciclo de "
-            "dependencias {names}; prevalece el orden explícito de 'depends on'."
+            "dependencias {names}; prevalecen el orden de declaración y las cláusulas 'depends on'."
+        ),
+    },
+    "unclosed_fence": {
+        "en": (
+            "A ``` code fence opened at line {line} is never closed; everything "
+            "after it was ignored."
+        ),
+        "es": (
+            "Un bloque ``` abierto en la línea {line} nunca se cierra; se ignoró "
+            "todo lo que sigue."
         ),
     },
     "workers_raised": {
@@ -173,16 +183,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": (
             "No se encontraron tareas en {path}. Verifique que el archivo use el "
             "formato `- [ ] T### ...`."
-        ),
-    },
-    "empty_agents": {
-        "en": (
-            "No agents declared in config. Add at least one agent to the "
-            "'agents:' list."
-        ),
-        "es": (
-            "No se declararon agentes en la configuración. Agregue al menos un "
-            "agente a la lista 'agents:'."
         ),
     },
     "task_no_skill": {
@@ -444,6 +444,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Marked {n} task(s) as {state} in {path}",
         "es": "Se marcaron {n} tarea(s) como {state} en {path}",
     },
+    "cli_report_failed": {
+        "en": "Reported FAILED, left unticked: {ids}",
+        "es": "Reportadas como FAILED, sin marcar: {ids}",
+    },
+    "cli_mark_no_ids": {
+        "en": "mark needs task ids or --report FILE",
+        "es": "mark necesita ids de tarea o --report ARCHIVO",
+    },
     "mark_unknown_task": {
         "en": "Unknown task id(s) {ids} in {path}; nothing was changed.",
         "es": "ID(s) de tarea desconocido(s) {ids} en {path}; no se cambió nada.",
@@ -464,6 +472,7 @@ WARN_ANYTIME_TIMEOUT: Final = "anytime_timeout"
 WARN_COST_SCALE_UNDERFLOW: Final = "cost_scale_underflow"
 WARN_HEURISTIC_EDGE_DROPPED: Final = "heuristic_edge_dropped"
 WARN_PARALLEL_WRITE_CONFLICT: Final = "parallel_write_conflict"
+WARN_UNCLOSED_FENCE: Final = "unclosed_fence"
 WARN_PHASE2_FALLBACK: Final = "phase2_fallback"
 WARN_PHASE3_FALLBACK: Final = "phase3_fallback"
 WARN_WORKERS_RAISED: Final = "workers_raised"

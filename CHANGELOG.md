@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.7.2] - 2026-09-05
+
+Closes every decision left open by the 0.7.1 refinement pass. Zero
+known debt: each item below has a test.
+
+### Fixed
+- `next` could report "tasks.md changed since the plan was made" forever
+  on an unchanged file: the checkbox scanner counted indented bullets and
+  fenced examples the parser ignores. Parser, scanner and `mark` now share
+  one task-line grammar (`TASK_ID_PATTERN`, `tasks_md.unfenced_lines`).
+- `load_config(None)` ignored the config spec-kit scaffolds under
+  `.specify/extensions/schedule/`; `resolve_config_path` is the single
+  resolver and knows both locations (`existing_config_path` is now pure).
+- The cycle breaker dropped every heuristic edge of a cycle; it drops one
+  per pass, the one running against declaration order, so `tasks.md`
+  keeps its stated order.
+- An unclosed ``` fence silently swallowed the rest of `tasks.md`; it is
+  reported (`unclosed_fence` warning with the opening line).
+- `plan` wrote a `schedule.json` that `next` then refused when the solve
+  was INFEASIBLE/UNKNOWN; nothing is written now.
+- Hand-written Windows paths (`src\models\user.py`) are extracted from
+  task descriptions.
+- `calibrate` reset the config file's mode to 0600 on rewrite.
+
+### Added
+- `mark --report FILE|-`: ticks the DONE ids of a subagent's reply and
+  leaves FAILED ids alone (`briefs.parse_report` wired to the CLI).
+
+### Changed
+- Blocked lanes render the same way in `next` and in the briefs.
+- `bin/install.sh` downloads the uv installer to a file over pinned TLS
+  instead of piping `curl` into `sh`.
+- `extension.yml` declares python `>=3.10,<3.13`, matching `pyproject`.
+- Removed: `bin/check-deps.sh` (no callers since 0.7.0), the
+  `STORY_SUBHEADER_RE` branch (the depth rule covers spec-kit's template)
+  and the unreachable `empty_agents` guard.
+
 ## [0.7.1] - 2026-09-05
 
 Refinement pass over the 0.7.0 change: nine reachable bugs fixed with a

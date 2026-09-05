@@ -72,6 +72,7 @@ from .result.extract import (
     _build_node_weighted_graph,
     _finalize_result,
     _node_weighted_longest_path_length,
+    id_edge_list,
 )
 from .validation import (
     ScheduleInputError,
@@ -621,7 +622,7 @@ def _decorate_result(
     """
     tasks = prepared.tasks
     result["stats"]["quantile_used"] = prepared.config.stochastic_quantile
-    result["edges"] = [[tasks[s].id, tasks[d].id] for s, d in prepared.edges]
+    result["edges"] = id_edge_list(tasks, prepared.edges)
     result["tasks"] = [
         {
             "id": task.id,

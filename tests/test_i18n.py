@@ -19,12 +19,12 @@ from solver.i18n_catalog import (
 
 class TestTranslate:
     def test_known_key_en(self):
-        msg = t("empty_agents")
-        assert "agents" in msg.lower()
+        msg = t("no_tasks_found", path="tasks.md")
+        assert "tasks" in msg.lower()
 
     def test_known_key_es(self):
-        msg = t("empty_agents", lang="es")
-        assert "agente" in msg.lower()
+        msg = t("no_tasks_found", lang="es", path="tasks.md")
+        assert "tarea" in msg.lower()
 
     def test_placeholder_interpolation(self):
         msg = t("duplicate_task_id", task_id="T001", line=42)
@@ -85,8 +85,8 @@ class TestMissingKey:
         # (captured only if logging is set up; we just verify no exception)
 
     def test_missing_lang_falls_back_to_en(self):
-        result = t("empty_agents", lang="zh")
-        en_result = t("empty_agents", lang="en")
+        result = t("no_tasks_found", lang="zh", path="tasks.md")
+        en_result = t("no_tasks_found", lang="en", path="tasks.md")
         assert result == en_result
 
     def test_missing_key_with_missing_lang(self):
@@ -141,7 +141,6 @@ REQUIRED_KEYS = [
     "phase3_fallback",
     "cost_scale_underflow",
     "no_tasks_found",
-    "empty_agents",
     "task_no_skill",
     "phase1_infeasible_proven",
     "phase1_infeasible_lb_exceeds_horizon",

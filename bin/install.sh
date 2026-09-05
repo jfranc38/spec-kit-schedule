@@ -73,7 +73,12 @@ ensure_uv() {
     return
   fi
   log "uv not found; installing from astral.sh ..."
-  curl -LsSf https://astral.sh/uv/install.sh | sh
+  local installer
+  installer="$(mktemp)"
+  curl --proto '=https' --tlsv1.2 -LsSf https://astral.sh/uv/install.sh -o "$installer" \
+    || die "could not download the uv installer; install uv manually (https://docs.astral.sh/uv/) and re-run."
+  sh "$installer"
+  rm -f "$installer"
   # Refresh PATH for the rest of the script.
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
   command -v uv >/dev/null 2>&1 || die "uv installation failed; install it manually (https://docs.astral.sh/uv/) and re-run."

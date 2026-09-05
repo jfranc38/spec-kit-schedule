@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 import networkx as nx
@@ -417,6 +417,11 @@ def _build_agent_summary(
     return summary
 
 
+def id_edge_list(tasks: Sequence[Task], edges: Iterable[tuple[int, int]]) -> list[list[str]]:
+    """Index pairs → ``[[src_id, dst_id], …]`` as the result envelope lists them."""
+    return [[tasks[s].id, tasks[d].id] for s, d in edges]
+
+
 def _finalize_result(
     solver: cp_model.CpSolver,
     bundle: ModelBundle,
@@ -446,8 +451,7 @@ def _finalize_result(
 
     # Execution rounds (barrier batches for a subagent orchestrator) and
     # the honest speedup figure derived from them. See ``solver.rounds``.
-    id_edges = [[tasks[s].id, tasks[d].id] for s, d in edges]
-    preds = predecessor_map([task.id for task in tasks], id_edges, resource_edges)
+    preds = predecessor_map([task.id for task in tasks], id_edge_list(tasks, edges), resource_edges)
     rounds = build_rounds(lane_queues(assignments), preds)
     duration_of = {a["task_id"]: int(a["duration"]) for a in assignments}
     sequential = sum(duration_of.values())

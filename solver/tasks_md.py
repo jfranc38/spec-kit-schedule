@@ -10,7 +10,7 @@ Both helpers are deliberately tiny: one regex over the lines, no parser.
 
 from __future__ import annotations
 
-__all__ = ["mark_tasks", "scan_checkboxes"]
+__all__ = ["mark_tasks", "scan_checkboxes", "unfenced_lines"]
 
 import contextlib
 import os
@@ -20,18 +20,39 @@ import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 
+from .defaults import TASK_ID_PATTERN
 from .i18n import t
 from .validation import ScheduleInputError
 
-# Prefix of a task line up to and including the id; the checkbox state is
-# the single character inside the brackets.
-_CHECKBOX_RE = re.compile(r"^(?P<lead>\s*-\s+\[)(?P<state>[ xX]?)(?P<rest>\]\s+(?P<id>T\d{3,4})\b)")
+# A task line as the parser sees it: a top-level ``- [ ] T###`` bullet; the
+# checkbox state is the single character inside the brackets.
+_CHECKBOX_RE = re.compile(
+    rf"^(?P<lead>-\s+\[)(?P<state>[ xX]?)(?P<rest>\]\s+(?P<id>{TASK_ID_PATTERN})\b)"
+)
+
+
+def unfenced_lines(lines: Iterable[str]) -> tuple[list[tuple[int, str]], int | None]:
+    """``(kept, unclosed)``: ``(1-based line number, line)`` pairs outside ``` fences.
+
+    Fence lines are dropped. ``unclosed`` is the line number of a fence that
+    never closes (everything after it was skipped), else ``None``.
+    """
+    kept: list[tuple[int, str]] = []
+    opened: int | None = None
+    for num, line in enumerate(lines, start=1):
+        if line.lstrip().startswith("```"):
+            opened = None if opened is not None else num
+            continue
+        if opened is None:
+            kept.append((num, line))
+    return kept, opened
 
 
 def scan_checkboxes(path: str | Path) -> dict[str, bool]:
     """Return ``{task_id: done}`` in file order (first occurrence wins)."""
     out: dict[str, bool] = {}
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
+    kept, _ = unfenced_lines(Path(path).read_text(encoding="utf-8").splitlines())
+    for _num, line in kept:
         m = _CHECKBOX_RE.match(line)
         if m is None:
             continue
@@ -67,14 +88,15 @@ def mark_tasks(path: str | Path, task_ids: Iterable[str], *, done: bool = True) 
     remaining = set(wanted)
     changed = 0
     lines = text.split("\n")
-    for i, line in enumerate(lines):
+    kept, _ = unfenced_lines(lines)
+    for num, line in kept:
         m = _CHECKBOX_RE.match(line)
         if m is None or m.group("id") not in remaining:
             continue
         remaining.discard(m.group("id"))
         if (m.group("state") or " ").lower() == target:
             continue
-        lines[i] = f"{m.group('lead')}{target}{line[m.end('state'):]}"
+        lines[num - 1] = f"{m.group('lead')}{target}{line[m.end('state'):]}"
         changed += 1
     if not changed:
         return 0

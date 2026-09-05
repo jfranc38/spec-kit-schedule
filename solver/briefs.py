@@ -20,6 +20,7 @@ from __future__ import annotations
 
 __all__ = [
     "BriefContext",
+    "format_blocked",
     "lane_files",
     "parse_report",
     "render_brief",
@@ -32,12 +33,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from ._render_helpers import lane_files, task_index
+from .defaults import TASK_ID_PATTERN
 
 REPORT_DONE = "DONE:"
 REPORT_FAILED = "FAILED:"
 REPORT_TOUCHED = "TOUCHED:"
 
-_TASK_ID_RE = re.compile(r"\bT\d{3,4}\b")
+_TASK_ID_RE = re.compile(rf"\b{TASK_ID_PATTERN}\b")
 
 
 @dataclass(frozen=True)
@@ -193,16 +195,18 @@ def render_round(
     blocked = list(round_block.get("blocked", []) or [])
     if blocked:
         head += ["", "Blocked lanes (their next task waits on another lane):", ""]
-        head += [
-            f"- {b['agent_id']}: {b['task_id']} waits on {', '.join(b['waiting_on'])}"
-            for b in blocked
-        ]
+        head += [f"- {format_blocked(b)}" for b in blocked]
     parts = ["\n".join(head)]
     for lane in lanes:
         parts.append("---\n\n" + render_brief(
             plan, round_block, lane, context=context, total_rounds=total_rounds
         ))
     return "\n\n".join(parts).rstrip() + "\n"
+
+
+def format_blocked(blocked: Mapping[str, Any]) -> str:
+    """One line for a lane whose next task waits on another lane."""
+    return f"{blocked['agent_id']}: {blocked['task_id']} waits on {', '.join(blocked['waiting_on'])}"
 
 
 def parse_report(text: str) -> dict[str, list[str]]:

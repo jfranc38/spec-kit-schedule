@@ -347,9 +347,14 @@ class TestCycleResolutionAcrossPhases:
             self.STORY_IMPL
             + "- [ ] T002 [US1] Add unit tests for service in tests/test_svc.py and src/svc.py\n"
         )
-        edges = _parse(p)["edges"]
+        result = _parse(p)
+        edges = result["edges"]
         assert ["T001", "T002"] in edges
         assert len(edges) == len({tuple(e) for e in edges})
+        # One heuristic edge per pass, the one running against declaration
+        # order (tdd T002→T001); the same-file edge stays.
+        assert [w["code"] for w in result["warnings"]] == ["heuristic_edge_dropped"]
+        assert result["warnings"][0]["context"]["origin"] == "tdd"
 
     def test_backward_tdd_edge_across_phases_is_dropped_not_fatal(self, write_tasks) -> None:
         # [P] removes the same-file edge; only tdd (Polish→US1) + the phase
@@ -381,3 +386,16 @@ class TestEdgeRulesWithoutFixtureCoverage:
             "## Phase 4: Polish\n- [ ] T003 Add docs in docs/README.md\n"
         )
         assert _parse(p)["edges"] == [["T001", "T002"], ["T002", "T003"]]
+
+
+class TestInputShapes:
+    def test_backslash_paths_are_extracted(self) -> None:
+        assert extract_file_paths("Create model in src\\models\\user.py") == ["src/models/user.py"]
+
+    def test_unclosed_fence_swallows_the_rest_with_a_warning(self, write_tasks) -> None:
+        p = write_tasks("## Setup\n- [ ] T001 a in src/a.py\n```bash\n- [ ] T002 b in src/b.py\n")
+        result = _parse(p)
+        assert [t["id"] for t in result["tasks"]] == ["T001"]
+        assert [(w["code"], w["context"]["line"]) for w in result["warnings"]] == [
+            ("unclosed_fence", 3)
+        ]

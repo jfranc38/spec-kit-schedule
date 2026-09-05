@@ -50,9 +50,8 @@ from ._paths import (
     extension_code_dir,
     project_root,
     runs_dir,
-    scaffolded_config_path,
-    schedule_config_path,
 )
+from .config_schema import existing_config_path
 from .defaults import WORKERS_DEFAULT
 
 log = logging.getLogger(__name__)
@@ -298,14 +297,9 @@ def _check_config(root: Path) -> StatusItem:
     v0.7.0+: the file is not required — without it the planner uses
     three identical subagent lanes. Its absence is therefore ``ok``.
     """
-    raw: str | None = None
-    cfg = schedule_config_path(root)
-    for candidate in (cfg, scaffolded_config_path(root)):
-        raw = _safe_read_text(candidate)
-        if raw is not None:
-            cfg = candidate
-            break
-    if raw is None:
+    cfg = existing_config_path(root)
+    raw = _safe_read_text(cfg) if cfg is not None else None
+    if raw is None or cfg is None:
         return StatusItem(
             name="Config (optional)",
             state="ok",

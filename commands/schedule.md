@@ -56,7 +56,7 @@ when the whole round is complete. No configuration file is needed.
 | Code | Meaning | What to do |
 |------|---------|------------|
 | 0 | Plan written | Relay the summary. |
-| 1 | No schedule (INFEASIBLE / UNKNOWN) | Show the printed diagnostic; usually only reachable with an advanced `agents:` portfolio whose caps are too tight. |
+| 1 | No schedule (INFEASIBLE / UNKNOWN); nothing written | Show the printed diagnostic; usually only reachable with an advanced `agents:` portfolio whose caps are too tight. |
 | 2 | Input error | Show the message verbatim — it names the line / task (duplicate id, unknown `depends on`, contradictory dependency cycle, missing file). |
 
 ## Optional configuration
