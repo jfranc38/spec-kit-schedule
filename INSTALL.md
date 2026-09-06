@@ -1,4 +1,4 @@
-# Installation — v0.7.2
+# Installation — v0.7.3
 
 `spec-kit-schedule` is a spec-kit extension. Install it with the
 `specify` CLI; the Python solver environment bootstraps itself the first
@@ -14,7 +14,7 @@ time a command runs.
 ## 1. From a tagged release (recommended)
 
 ```bash
-specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.7.2.zip
+specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.7.3.zip
 ```
 
 Then, in a feature that already has a `tasks.md`:

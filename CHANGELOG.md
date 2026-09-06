@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.3] - 2026-09-06
+
+### Fixed
+- `mark <tasks.md> --undo T002` (ids after an option) was rejected on
+  Python 3.10 and 3.11 with "unrecognized arguments"; argparse there does
+  not fill a `nargs="*"` positional after an option. The CLI folds such
+  ids back into the list on every supported Python. CI on 3.10/3.11 is
+  green again (0.7.2 shipped with that job red).
+
 ## [0.7.2] - 2026-09-05
 
 Closes every decision left open by the 0.7.1 refinement pass. Zero

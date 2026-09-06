@@ -358,7 +358,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _build_parser().parse_args(argv)
+    parser = _build_parser()
+    args, extra = parser.parse_known_args(argv)
+    if extra:
+        # Python < 3.12 leaves ids after an option unconsumed
+        # (``mark tasks.md --undo T002``); they belong to the positional list.
+        if args.command == "mark" and not any(tok.startswith("-") for tok in extra):
+            args.task_ids = [*args.task_ids, *extra]
+        else:
+            parser.error(f"unrecognized arguments: {' '.join(extra)}")
     logging.basicConfig(
         level=logging.DEBUG if getattr(args, "verbose", False) else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
