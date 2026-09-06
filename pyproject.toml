@@ -63,7 +63,7 @@ dev = [
 ]
 viz = [
     "matplotlib>=3.7,<4",
-    "plotly>=5,<7",
+    "plotly>=5,<8",
 ]
 
 [project.scripts]
