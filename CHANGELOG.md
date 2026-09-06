@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.4] - 2026-09-06
+
+### Fixed
+- Installing from the release zip (`specify extension add --from …`)
+  left `bin/speckit-schedule` without the executable bit, so every slash
+  command failed with "permission denied". The command files now run the
+  wrapper through `bash` and test for its existence, not its mode; a
+  test keeps it that way. Verified against spec-kit 0.16.4 and 1.0.4.
+
 ## [0.7.3] - 2026-09-06
 
 ### Fixed

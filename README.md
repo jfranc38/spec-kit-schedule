@@ -13,7 +13,7 @@
 ## In 30 seconds
 
 ```
-specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.7.3.zip
+specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.7.4.zip
 
 /speckit.tasks                 # spec-kit generates tasks.md as usual
 /speckit-schedule-run          # plan: 25 tasks → 4 rounds × 3 subagents, 2.6× faster
@@ -155,7 +155,7 @@ invocable with `python -m` for pipelines.
 
 ```bash
 # From a tagged release (recommended)
-specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.7.3.zip
+specify extension add schedule --from https://github.com/jfranc38/spec-kit-schedule/archive/refs/tags/v0.7.4.zip
 
 # Local development checkout
 git clone https://github.com/jfranc38/spec-kit-schedule

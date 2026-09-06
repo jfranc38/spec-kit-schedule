@@ -30,8 +30,8 @@ when the whole round is complete. No configuration file is needed.
    every later run takes seconds):
 
    ```bash
-   EXT=".specify/extensions/schedule"; [ -x "$EXT/bin/speckit-schedule" ] || EXT="."
-   "$EXT/bin/speckit-schedule" plan "$FEATURE_DIR/tasks.md" <flags>
+   EXT=".specify/extensions/schedule"; [ -f "$EXT/bin/speckit-schedule" ] || EXT="."
+   bash "$EXT/bin/speckit-schedule" plan "$FEATURE_DIR/tasks.md" <flags>
    ```
 
    Translate the user input into flags — do not pass free text through.

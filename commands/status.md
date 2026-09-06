@@ -25,7 +25,7 @@ Run this and surface the report verbatim (it never needs the solver
 environment, so it works on a fresh install too):
 
 ```bash
-EXT=".specify/extensions/schedule"; [ -x "$EXT/bin/speckit-schedule" ] || EXT="."
+EXT=".specify/extensions/schedule"; [ -f "$EXT/bin/speckit-schedule" ] || EXT="."
 if [ -x "$EXT/.venv/bin/python" ]; then PY="$EXT/.venv/bin/python"; else PY="python3"; fi
 (cd "$EXT" && "$PY" -m solver.status)
 ```

@@ -25,7 +25,7 @@ are the only writer of `tasks.md` and the only one who runs `git`.
 1. Locate the feature: `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks` → `FEATURE_DIR`. Set:
 
    ```bash
-   EXT=".specify/extensions/schedule"; [ -x "$EXT/bin/speckit-schedule" ] || EXT="."
+   EXT=".specify/extensions/schedule"; [ -f "$EXT/bin/speckit-schedule" ] || EXT="."
    SKS="$EXT/bin/speckit-schedule"
    PLAN="$FEATURE_DIR/schedule.json"; TASKS="$FEATURE_DIR/tasks.md"
    ```
@@ -45,7 +45,7 @@ Repeat until `next` prints `DONE`:
 1. **Get the round.**
 
    ```bash
-   "$SKS" next "$PLAN" "$TASKS"
+   bash "$SKS" next "$PLAN" "$TASKS"
    ```
 
    Exit 0 prints `# Round k of N` with a table (lane → tasks → files)
@@ -86,7 +86,7 @@ Repeat until `next` prints `DONE`:
 4. **Record progress** — only tasks reported DONE:
 
    ```bash
-   "$SKS" mark "$TASKS" T001 T002 ...
+   bash "$SKS" mark "$TASKS" T001 T002 ...
    ```
 
    Or hand over the subagent's reply and let `mark --report reply.txt`
